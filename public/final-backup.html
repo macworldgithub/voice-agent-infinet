@@ -67,47 +67,25 @@
       display: flex; flex-direction: column; gap: clamp(10px, 3vw, 14px);
       scroll-behavior: smooth;
     }
-    .bubble-row {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-    }
-    .bubble-row.user {
-      align-items: flex-end;
-    }
+    .bubble-row { display: flex; align-items: flex-end; gap: 9px; }
     .msg {
-      max-width: 84%;
-      padding: clamp(9px, 2.8vw, 12px) clamp(12px, 3.5vw, 15px);
-      border-radius: 15px;
-      line-height: 1.45;
-      font-size: clamp(13.5px, 3.4vw, 14.5px);
-      animation: appear 0.24s ease-out forwards;
-      opacity: 0;
-      transform: translateY(8px);
+      max-width: 84%; padding: clamp(9px, 2.8vw, 12px) clamp(12px, 3.5vw, 15px);
+      border-radius: 15px; line-height: 1.45; font-size: clamp(13.5px, 3.4vw, 14.5px);
+      animation: appear 0.24s ease-out forwards; opacity: 0; transform: translateY(8px);
       word-break: break-word;
     }
-    .msg.agent {
-      background: rgba(255,255,255,0.045);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 15px 15px 15px 5px;
+    .msg.agent { align-self: flex-start; background: rgba(255,255,255,0.045); border: 1px solid rgba(255,255,255,0.08); border-radius: 15px 15px 15px 5px; }
+    .msg.user { align-self: flex-end; background: linear-gradient(135deg, var(--accent-2), var(--accent)); color: white; border-radius: 15px 15px 5px 15px; }
+    .avatar {
+      width: 38px; height: 38px; border-radius: 10px; background: #0f1e38;
+      color: #a5f3fc; font-weight: 600; font-size: 15px;
+      display: grid; place-items: center; flex-shrink: 0;
     }
-    .msg.user {
-      background: linear-gradient(135deg, var(--accent-2), var(--accent));
-      color: white;
-      border-radius: 15px 15px 5px 15px;
-    }
-    .meta {
-      margin-top: 4px;
-      font-size: clamp(10px, 2.7vw, 11px);
-      color: var(--muted);
-      opacity: 0.8;
-    }
-    .bubble-row.user .meta {
-      text-align: right;
-    }
+    .meta { margin-top: 4px; font-size: clamp(10px, 2.7vw, 11px); color: var(--muted); opacity: 0.8; }
 
     @keyframes appear { to { opacity:1; transform:none; } }
 
+    /* Name Collection Card - Exactly like the screenshot */
     .name-card {
       background: var(--glass);
       border: 1px solid rgba(255,255,255,0.09);
@@ -116,7 +94,6 @@
       margin: 15px 0;
       box-shadow: 0 8px 32px rgba(0,0,0,0.4);
       animation: appear 0.3s ease-out;
-      max-width: 84%;
     }
     .name-card h4 { margin-bottom: 12px; color: #f0fdfa; font-size: 15.5px; }
     .name-card label { display: block; font-size: 13px; margin: 12px 0 6px; color: var(--muted); }
@@ -156,35 +133,6 @@
     }
     .btn:hover:not(:disabled) { opacity: 0.94; transform: translateY(-1px); }
     .btn:disabled { opacity: 0.48; cursor: not-allowed; }
-
-    .typing-indicator {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 16px;
-      background: rgba(255,255,255,0.03);
-      border-radius: 18px 18px 18px 4px;
-      font-size: 14px;
-      color: var(--muted);
-      max-width: 84%;
-    }
-    .typing-dots {
-      display: flex;
-      gap: 4px;
-    }
-    .typing-dot {
-      width: 6px;
-      height: 6px;
-      background: var(--muted);
-      border-radius: 50%;
-      animation: typing 1.4s infinite ease-in-out;
-    }
-    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
-    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes typing {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-6px); }
-    }
   </style>
 </head>
 <body>
@@ -202,17 +150,15 @@
         <span id="statusText">Online</span>
       </div>
     </div>
-
     <div class="messages-wrap">
       <div id="messages" class="messages" aria-live="polite"></div>
     </div>
-
     <div class="composer">
       <div class="input-wrap">
-        <textarea id="txt" placeholder="Type your message…" aria-label="Chat message input"></textarea>
+        <textarea id="txt" placeholder="Type your message… " aria-label="Chat message input"></textarea>
         <div class="hint">
           <span id="charCount">0</span>
-          <span>Shift + Enter to send</span>
+          <span>Enter to send</span>
         </div>
       </div>
       <button class="btn" id="send">Send</button>
@@ -246,100 +192,91 @@
 
       function addMessage({ from = 'agent', text = '', meta = '' }) {
         const row = document.createElement('div');
-        row.className = `bubble-row ${from === 'user' ? 'user' : ''}`;
-
+        row.className = 'bubble-row';
         const msg = document.createElement('div');
         msg.className = `msg ${from}`;
-        msg.innerHTML = from === 'agent' ? renderMarkdown(text) : escapeHtml(text);
-
+        msg.innerHTML = `<div class="text">${from === 'agent' ? renderMarkdown(text) : escapeHtml(text)}</div>`;
+        if (from === 'agent') {
+          const av = document.createElement('div');
+          av.className = 'avatar';
+          av.textContent = 'I';
+          row.append(av, msg);
+        } else {
+          row.append(msg);
+        }
         const metaEl = document.createElement('div');
         metaEl.className = 'meta';
         metaEl.textContent = meta || timeNow();
-
-        row.append(msg, metaEl);
+        row.appendChild(metaEl);
         messagesEl.appendChild(row);
         messagesEl.scrollTop = messagesEl.scrollHeight;
-      }
-
-      function showTyping() {
-        const row = document.createElement('div');
-        row.className = 'bubble-row';
-        row.innerHTML = `
-          <div class="typing-indicator">
-            <span>Thinking</span>
-            <div class="typing-dots">
-              <div class="typing-dot"></div>
-              <div class="typing-dot"></div>
-              <div class="typing-dot"></div>
-            </div>
-          </div>
-        `;
-        messagesEl.appendChild(row);
-        messagesEl.scrollTop = messagesEl.scrollHeight;
-        return row;
       }
 
       function setBusy(isBusy) {
         busy = isBusy;
         sendBtn.disabled = isBusy;
-        txt.disabled = isBusy;
       }
 
+      // ==================== NAME COLLECTION CARD (Exactly like screenshot) ====================
       function showNameCard() {
         const cardHTML = `
-          <div class="name-card">
-            <h4>Nice to meet you, I'm...</h4>
-            <input type="text" id="fullName" placeholder="John Doe" />
-            <label>But you can call me...</label>
-            <input type="text" id="preferredName" placeholder="John" />
-            <button id="nameContinue">Continue</button>
+          <div class="bubble-row">
+            <div class="name-card">
+              <h4>Nice to meet you, I'm...</h4>
+              <input type="text" id="fullName" placeholder="John Doe" />
+
+              <label>But you can call me...</label>
+              <input type="text" id="preferredName" placeholder="John" />
+
+              <button id="nameContinue">Continue</button>
+            </div>
           </div>`;
 
-        const temp = document.createElement('div');
-        temp.innerHTML = cardHTML;
-        const card = temp.firstElementChild;
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = cardHTML;
+        const card = tempDiv.firstElementChild;
         messagesEl.appendChild(card);
         messagesEl.scrollTop = messagesEl.scrollHeight;
 
         const fullInput = document.getElementById('fullName');
         const prefInput = document.getElementById('preferredName');
-        const btn = document.getElementById('nameContinue');
+        const continueBtn = document.getElementById('nameContinue');
 
+        // Auto-fill first name when typing full name
         fullInput.addEventListener('input', () => {
           const words = fullInput.value.trim().split(/\s+/);
           prefInput.value = words[0] || '';
         });
 
-        btn.addEventListener('click', async () => {
-          const full = fullInput.value.trim();
-          let pref = prefInput.value.trim();
+        continueBtn.addEventListener('click', async () => {
+          const fullName = fullInput.value.trim();
+          let preferredName = prefInput.value.trim();
 
-          if (!full) {
+          if (!fullName) {
             alert("Please enter your full name");
             return;
           }
-          if (!pref) pref = full.split(' ')[0];
+          if (!preferredName) preferredName = fullName.split(' ')[0];
 
-          card.remove();
+          card.style.display = 'none';
 
-          addMessage({ from: 'user', text: `My full name is ${full}. You can call me ${pref}.` });
+          addMessage({ from: 'user', text: `My full name is ${fullName}. You can call me ${preferredName}.` });
 
-          try {
-            const res = await fetch('/api/chat/message', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                sessionId,
-                message: `Nice to meet you! My full name is ${full}. But you can call me ${pref}.`,
-                channel: 'web'
-              })
-            });
-            const data = await res.json();
-            if (data?.text) addMessage({ from: 'agent', text: data.text });
-          } catch {}
+          const res = await fetch('/api/chat/message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionId,
+              message: `Nice to meet you! My full name is ${fullName}. But you can call me ${preferredName}.`,
+              channel: 'web'
+            })
+          });
+          const data = await res.json();
+          if (data?.text) addMessage({ from: 'agent', text: data.text });
         });
       }
 
+      // ==================== Send Message ====================
       async function sendMessage() {
         const message = txt.value.trim();
         if (!message || busy) return;
@@ -349,7 +286,15 @@
         txt.value = '';
         document.getElementById('charCount').textContent = '0';
 
-        const typing = showTyping();
+        const typingRow = document.createElement('div');
+        typingRow.className = 'bubble-row';
+        typingRow.innerHTML = `
+          <div class="typing-container" style="background: linear-gradient(135deg, rgba(59,130,246,0.07), rgba(0,194,179,0.06)); padding:10px 16px; border-radius:18px 18px 18px 4px;">
+            <span class="typing-text">Thinking</span>
+            <div class="typing-dots"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>
+          </div>`;
+        messagesEl.appendChild(typingRow);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
 
         try {
           const res = await fetch('/api/chat/message', {
@@ -358,10 +303,10 @@
             body: JSON.stringify({ sessionId, message, channel: 'web' })
           });
           const data = await res.json();
-          typing.remove();
+          typingRow.remove();
           if (data?.text) addMessage({ from: 'agent', text: data.text });
-        } catch {
-          typing.remove();
+        } catch (err) {
+          typingRow.remove();
           addMessage({ from: 'agent', text: 'Sorry — something went wrong. Try again?' });
         } finally {
           setBusy(false);
@@ -370,6 +315,7 @@
         }
       }
 
+      // ==================== INIT ====================
       async function init() {
         setBusy(true);
         try {
@@ -378,8 +324,10 @@
           const data = await res.json();
           sessionId = data.sessionId;
           addMessage({ from: 'agent', text: data.text || 'Hey, I am InfiNET Broadband. I\'d love for us to get to know each other a bit better.' });
+
+          // Show name card exactly like the screenshot
           setTimeout(showNameCard, 800);
-        } catch {
+        } catch (err) {
           addMessage({ from: 'agent', text: 'Connection issue. Please try again later.' });
         } finally {
           setBusy(false);
@@ -387,17 +335,8 @@
       }
 
       sendBtn.onclick = sendMessage;
-
-      txt.onkeydown = e => {
-        if (e.key === 'Enter' && e.shiftKey) {
-          e.preventDefault();
-          sendMessage();
-        }
-      };
-
-      txt.oninput = () => {
-        document.getElementById('charCount').textContent = txt.value.length;
-      };
+      txt.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
+      txt.oninput = () => document.getElementById('charCount').textContent = txt.value.length;
 
       await init();
       txt.focus();
