@@ -108,31 +108,6 @@
 
     @keyframes appear { to { opacity:1; transform:none; } }
 
-    .name-card {
-      background: var(--glass);
-      border: 1px solid rgba(255,255,255,0.09);
-      border-radius: 18px;
-      padding: 20px;
-      margin: 15px 0;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-      animation: appear 0.3s ease-out;
-      max-width: 84%;
-    }
-    .name-card h4 { margin-bottom: 12px; color: #f0fdfa; font-size: 15.5px; }
-    .name-card label { display: block; font-size: 13px; margin: 12px 0 6px; color: var(--muted); }
-    .name-card input {
-      width: 100%; padding: 12px; border-radius: 12px;
-      background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.09);
-      color: white; font-size: 15px;
-    }
-    .name-card input:focus { border-color: var(--accent); outline: none; }
-    .name-card button {
-      margin-top: 18px; width: 100%; padding: 14px;
-      background: linear-gradient(90deg, var(--accent-2), var(--accent));
-      border: none; border-radius: 12px; color: white; font-weight: 600; font-size: 15px; cursor: pointer;
-    }
-    .name-card button:disabled { opacity: 0.5; cursor: not-allowed; }
-
     .composer {
       padding: clamp(10px, 3vw, 14px) var(--spacing);
       background: rgba(0,0,0,0.28);
@@ -285,61 +260,6 @@
         txt.disabled = isBusy;
       }
 
-      function showNameCard() {
-        const cardHTML = `
-          <div class="name-card">
-            <h4>Nice to meet you, I'm...</h4>
-            <input type="text" id="fullName" placeholder="John Doe" />
-            <label>But you can call me...</label>
-            <input type="text" id="preferredName" placeholder="John" />
-            <button id="nameContinue">Continue</button>
-          </div>`;
-
-        const temp = document.createElement('div');
-        temp.innerHTML = cardHTML;
-        const card = temp.firstElementChild;
-        messagesEl.appendChild(card);
-        messagesEl.scrollTop = messagesEl.scrollHeight;
-
-        const fullInput = document.getElementById('fullName');
-        const prefInput = document.getElementById('preferredName');
-        const btn = document.getElementById('nameContinue');
-
-        fullInput.addEventListener('input', () => {
-          const words = fullInput.value.trim().split(/\s+/);
-          prefInput.value = words[0] || '';
-        });
-
-        btn.addEventListener('click', async () => {
-          const full = fullInput.value.trim();
-          let pref = prefInput.value.trim();
-
-          if (!full) {
-            alert("Please enter your full name");
-            return;
-          }
-          if (!pref) pref = full.split(' ')[0];
-
-          card.remove();
-
-          addMessage({ from: 'user', text: `My full name is ${full}. You can call me ${pref}.` });
-
-          try {
-            const res = await fetch('/api/chat/message', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                sessionId,
-                message: `Nice to meet you! My full name is ${full}. But you can call me ${pref}.`,
-                channel: 'web'
-              })
-            });
-            const data = await res.json();
-            if (data?.text) addMessage({ from: 'agent', text: data.text });
-          } catch {}
-        });
-      }
-
       async function sendMessage() {
         const message = txt.value.trim();
         if (!message || busy) return;
@@ -377,8 +297,7 @@
           if (!res.ok) throw new Error();
           const data = await res.json();
           sessionId = data.sessionId;
-          addMessage({ from: 'agent', text: data.text || 'Hey, I am InfiNET Broadband. I\'d love for us to get to know each other a bit better.' });
-          setTimeout(showNameCard, 800);
+          addMessage({ from: 'agent', text: data.text || 'Hello, thank you for contacting InfiNET Broadband. I am your AI assistant. Nice to meet you.' });
         } catch {
           addMessage({ from: 'agent', text: 'Connection issue. Please try again later.' });
         } finally {
