@@ -1053,6 +1053,7 @@ class SplynxApiClient {
       headers.Authorization = this.getSignatureAuthHeader();
     }
     const url = `${this.baseUrl}${endpoint}`;
+    console.log(`Making [${method}] to ${endpoint} with data:`, data ? (data instanceof FormData ? 'FormData object' : data) : 'no data');
     try {
       const config = { method, url, headers, params, ...(data && { data }) };
       const response = await axios(config);
@@ -1063,7 +1064,7 @@ class SplynxApiClient {
         await this.renewAccessToken();
         return this.request(method, endpoint, data, params);
       }
-      console.error(`[${method}] ${endpoint} failed:`, err.response?.data || err.message);
+      console.error(`[${method}] ${endpoint} failed with data:`, data ? (data instanceof FormData ? 'FormData object' : data) : 'no data', 'error:', err.response?.data || err.message);
       throw err.response?.data || err;
     }
   }
@@ -1708,10 +1709,16 @@ app.post("/api/voice", upload.single("audio"), async (req, res) => {
         }
       } else if (funcName === "create_ticket") {
         try {
-          const formData = objectToFormData(args);
+          let fixedArgs = {...args};
+          if (typeof fixedArgs.message === 'string') {
+            fixedArgs.message = { message: fixedArgs.message };
+          }
+          const formData = objectToFormData(fixedArgs);
+          console.log('Creating ticket with args:', JSON.stringify(fixedArgs));
           const response = await splynx.request('POST', 'admin/support/tickets', formData);
           toolContent = JSON.stringify({ success: true, ticket_id: response.id });
         } catch (err) {
+          console.error('Create ticket failed with args:', JSON.stringify(args), 'error:', err);
           toolContent = JSON.stringify({ success: false, error: err.message || 'Failed to create ticket' });
         }
       } else if (funcName === "get_ticket_types") {
@@ -1830,10 +1837,16 @@ app.post("/api/chat/message", async (req, res) => {
         }
       } else if (funcName === "create_ticket") {
         try {
-          const formData = objectToFormData(args);
+          let fixedArgs = {...args};
+          if (typeof fixedArgs.message === 'string') {
+            fixedArgs.message = { message: fixedArgs.message };
+          }
+          const formData = objectToFormData(fixedArgs);
+          console.log('Creating ticket with args:', JSON.stringify(fixedArgs));
           const response = await splynx.request('POST', 'admin/support/tickets', formData);
           toolContent = JSON.stringify({ success: true, ticket_id: response.id });
         } catch (err) {
+          console.error('Create ticket failed with args:', JSON.stringify(args), 'error:', err);
           toolContent = JSON.stringify({ success: false, error: err.message || 'Failed to create ticket' });
         }
       } else if (funcName === "get_ticket_types") {
