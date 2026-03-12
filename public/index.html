@@ -119,9 +119,16 @@
       width: 100%; min-height: 46px; max-height: 140px; resize: vertical;
       padding: 11px 13px; border-radius: 13px;
       background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.09);
-      color: inherit; font: inherit; outline: none; line-height: 1.42;
+      color: inherit; 
+      font: inherit;
+      font-size: 16px; /* ← This prevents iOS Safari from auto-zooming on focus */
+      outline: none; 
+      line-height: 1.42;
     }
-    textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2.5px rgba(0,194,179,0.22); }
+    textarea:focus { 
+      border-color: var(--accent); 
+      box-shadow: 0 0 0 2.5px rgba(0,194,179,0.22); 
+    }
     .hint { font-size: clamp(10px, 2.7vw, 11.5px); color: var(--muted); display: flex; justify-content: space-between; padding: 0 5px; }
     .btn {
       background: linear-gradient(90deg, var(--accent-2), var(--accent));
