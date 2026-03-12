@@ -2,7 +2,6 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <!-- keep viewport but do not disable zoom via maximum-scale (accessibility) -->
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>InfiNET Support Chat</title>
   <style>
@@ -16,12 +15,12 @@
       --radius: 16px;
       --fs-base: clamp(13.5px, 3.1vw, 15px);
       --spacing: clamp(10px, 3vw, 16px);
-      /* --vh will be set by JS to the actual viewport height (1% unit) */
+      /* --vh will be updated by JS to the real viewport height unit */
       --vh: 1vh;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       font-size: var(--fs-base);
       color: #f1f5f9;
-      -webkit-text-size-adjust: 100%; /* prevent unexpected text size adjustments on iOS */
+      -webkit-text-size-adjust: 100%; /* avoid iOS text-size auto adjustments */
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -41,7 +40,6 @@
 
     .widget {
       width: min(100%, 420px);
-      /* use dynamic vh on mobile via --vh; desktop keeps original height calculation */
       height: min(calc(var(--vh, 1vh) * 96), 760px);
       border-radius: 20px;
       background: var(--glass);
@@ -80,7 +78,7 @@
       flex: 1; overflow-y: auto; padding: var(--spacing);
       display: flex; flex-direction: column; gap: clamp(10px, 3vw, 14px);
       scroll-behavior: smooth;
-      -webkit-overflow-scrolling: touch; /* smooth scrolling on iOS */
+      -webkit-overflow-scrolling: touch;
     }
     .bubble-row {
       display: flex;
@@ -117,87 +115,70 @@
       color: var(--muted);
       opacity: 0.8;
     }
-    .bubble-row.user .meta {
-      text-align: right;
-    }
+    .bubble-row.user .meta { text-align: right; }
 
     @keyframes appear { to { opacity:1; transform:none; } }
 
+    /* Composer: keep original horizontal layout, allow children to stretch so Send matches input height */
     .composer {
       padding: clamp(10px, 3vw, 14px) var(--spacing);
       background: rgba(0,0,0,0.28);
-      display: flex; gap: 10px; flex-shrink: 0;
+      display: flex;
+      gap: 10px;
+      flex-shrink: 0;
       border-top: 1px solid rgba(255,255,255,0.07);
-      align-items: flex-end;
+      align-items: stretch; /* restored so the send button stretches to match textarea height (like your reference) */
     }
     .input-wrap { flex: 1; display: flex; flex-direction: column; gap: 5px; }
 
-    /* keep textarea desktop look unchanged, but ensure mobile uses >=16px */
     textarea {
-      width: 100%; min-height: 46px; max-height: 140px; resize: vertical;
-      padding: 11px 13px; border-radius: 13px;
-      background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.09);
+      width: 100%;
+      min-height: 46px;
+      max-height: 140px;
+      resize: vertical;
+      padding: 11px 13px;
+      border-radius: 13px;
+      background: rgba(255,255,255,0.035);
+      border: 1px solid rgba(255,255,255,0.09);
       color: inherit; font: inherit; outline: none; line-height: 1.42;
-      /* keep the default font-size inherited (desktop) unless overwritten by mobile media query below */
+      /* default font-size is inherited */
     }
     textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2.5px rgba(0,194,179,0.22); }
+
     .hint { font-size: clamp(10px, 2.7vw, 11.5px); color: var(--muted); display: flex; justify-content: space-between; padding: 0 5px; }
 
-    /* BUTTON: restored vertical padding so it matches the original (older) visual size */
+    /* Keep the exact Send button style from your reference: padding: 0 18px */
     .btn {
       background: linear-gradient(90deg, var(--accent-2), var(--accent));
       border: none;
-      /* vertical padding same as textarea to preserve original size */
-      padding: 11px 18px;
+      padding: 0 18px;          /* <-- same as your reference code */
       border-radius: 12px;
       color: white; font-weight: 600; font-size: clamp(13px, 3.4vw, 14.5px);
       min-width: 62px; cursor: pointer;
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      align-self: stretch;     /* stretch vertically to match textarea height (keeps the same visual size) */
     }
     .btn:hover:not(:disabled) { opacity: 0.94; transform: translateY(-1px); }
     .btn:disabled { opacity: 0.48; cursor: not-allowed; }
 
     .typing-indicator {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 16px;
-      background: rgba(255,255,255,0.03);
-      border-radius: 18px 18px 18px 4px;
-      font-size: 14px;
-      color: var(--muted);
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 16px; background: rgba(255,255,255,0.03);
+      border-radius: 18px 18px 18px 4px; font-size: 14px; color: var(--muted);
       max-width: 84%;
     }
-    .typing-dots {
-      display: flex;
-      gap: 4px;
-    }
-    .typing-dot {
-      width: 6px;
-      height: 6px;
-      background: var(--muted);
-      border-radius: 50%;
-      animation: typing 1.4s infinite ease-in-out;
-    }
+    .typing-dots { display: flex; gap: 4px; }
+    .typing-dot { width: 6px; height: 6px; background: var(--muted); border-radius: 50%; animation: typing 1.4s infinite ease-in-out; }
     .typing-dot:nth-child(2) { animation-delay: 0.2s; }
     .typing-dot:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes typing {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-6px); }
-    }
+    @keyframes typing { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
 
-    /**
-     * MOBILE-SPECIFIC ADJUSTMENTS (only applied for narrow viewports)
-     * - Use a fixed, inset widget so it remains above the keyboard.
-     * - Ensure textarea font-size is >= 16px to avoid browser zoom on focus.
-     * - Respect safe-area insets.
-     */
+    /* MOBILE-SPECIFIC */
     @media (max-width: 720px) {
       body { padding: 0; }
 
-      /* Fix the widget to screen edges on mobile while keeping desktop unchanged */
       .widget {
         position: fixed;
         left: 8px;
@@ -206,37 +187,27 @@
         bottom: calc(env(safe-area-inset-bottom) + 8px);
         width: auto;
         height: auto;
-        /* height uses --vh from JS: the CSS top/bottom and this height combine to match original layout */
         max-height: calc(var(--vh, 1vh) * 96);
         border-radius: 14px;
       }
 
-      /* Make sure composer won't be hidden behind the keyboard; allow small extra bottom padding */
       .composer {
         padding-bottom: calc(env(safe-area-inset-bottom) + 10px);
         z-index: 5;
       }
 
-      /* Ensure textarea uses at least 16px (prevents mobile auto-zoom) */
-      textarea {
-        font-size: 16px;
-        min-height: 54px;
-      }
+      /* ensure >=16px on mobile to prevent browser auto-zoom */
+      textarea { font-size: 16px; min-height: 54px; }
 
-      /* Keep button visually aligned with textarea on mobile by increasing its vertical size too */
-      .btn {
-        /* match vertical feel when textarea grows on mobile */
-        padding: 11px 18px;
-      }
+      /* keep send button same padding but let it stretch vertically with composer */
+      .btn { padding: 0 18px; }
 
-      /* Give messages some extra bottom padding so the last message isn't hidden behind composer */
       .messages { padding-bottom: calc(var(--spacing) + 10px); }
     }
 
-    /* optional: prevent the mobile browser from zooming fonts in landscape smaller devices */
     @media (orientation: landscape) and (max-height: 420px) {
       textarea { font-size: 16px; }
-      .btn { padding: 10px 18px; }
+      .btn { padding: 0 18px; }
     }
   </style>
 </head>
@@ -364,7 +335,6 @@
           addMessage({ from: 'agent', text: 'Sorry — something went wrong. Try again?' });
         } finally {
           setBusy(false);
-          // keep focus on the textarea (mobile browsers will keep keyboard open if appropriate)
           txt.focus();
           scrollToBottom();
         }
@@ -388,7 +358,6 @@
       sendBtn.addEventListener('click', sendMessage);
 
       txt.addEventListener('keydown', e => {
-        // Enter + Shift to send, not plain Enter (consistent with your original behaviour)
         if (e.key === 'Enter' && e.shiftKey) {
           e.preventDefault();
           sendMessage();
@@ -399,86 +368,51 @@
         document.getElementById('charCount').textContent = txt.value.length;
       });
 
-      // Scroll helpers
       function scrollToBottom() {
-        // Use requestAnimationFrame to ensure layout has settled
         window.requestAnimationFrame(() => {
           messagesEl.scrollTop = messagesEl.scrollHeight;
         });
       }
 
-      // === MOBILE VIEWPORT / KEYBOARD HANDLING ====================================================
-      // Set a CSS variable (--vh) to the real viewport height (1% unit) using visualViewport if available.
-      // This avoids relying on 100vh which can be unreliable on mobile with keyboards and address bars.
+      // MOBILE: dynamic --vh to handle address bar/keyboard changes
       function updateVh() {
         const vHeight = (window.visualViewport && window.visualViewport.height) ? window.visualViewport.height : window.innerHeight;
-        // set --vh to 1% of the viewport height (px value for better precision)
         document.documentElement.style.setProperty('--vh', (vHeight * 0.01) + 'px');
       }
 
-      // Listen to resizing from visualViewport (more accurate when keyboard opens)
       if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', () => {
-          updateVh();
-          // Keep messages visible when keyboard changes viewport
-          scrollToBottom();
-        });
-        window.visualViewport.addEventListener('scroll', () => {
-          // iOS sometimes scrolls viewport; ensure our variable matches
-          updateVh();
-        });
+        window.visualViewport.addEventListener('resize', () => { updateVh(); scrollToBottom(); });
+        window.visualViewport.addEventListener('scroll', () => { updateVh(); });
       } else {
-        // fallback
-        window.addEventListener('resize', () => {
-          updateVh();
-          scrollToBottom();
-        });
+        window.addEventListener('resize', () => { updateVh(); scrollToBottom(); });
       }
 
-      // When the input gains focus, ensure the last message and composer are visible.
       txt.addEventListener('focus', () => {
-        // update the viewport variable (keyboard may be opening)
         updateVh();
-        // small delay to allow keyboard to animate in; adjust as necessary
         setTimeout(scrollToBottom, 50);
         setTimeout(scrollToBottom, 300);
       });
 
-      // Also handle blur to reset vh (keyboard dismissed)
       txt.addEventListener('blur', () => {
-        // on blur update again
-        setTimeout(() => {
-          updateVh();
-        }, 80);
+        setTimeout(updateVh, 80);
       });
 
-      // initialize --vh on load
       updateVh();
 
-      // ensure we scroll to bottom whenever DOM content changes (e.g. messages added)
-      // MutationObserver is simple and robust to detect new message nodes.
-      const observer = new MutationObserver(() => {
-        scrollToBottom();
-      });
-      observer.observe(messagesEl, { childList: true, subtree: false });
+      // auto-scroll when messages change
+      const observer = new MutationObserver(() => { scrollToBottom(); });
+      observer.observe(messagesEl, { childList: true });
 
-      // initialize chat session
       init();
 
-      // Keep focus on textarea after init on mobile for convenience
       window.addEventListener('load', () => {
-        // small delay to let layout settle
         setTimeout(() => {
           if (!txt.disabled) txt.focus();
           scrollToBottom();
         }, 100);
       });
 
-      // Expose a small helper for debugging from the browser console:
-      window._infinetChatHelpers = {
-        updateVh,
-        scrollToBottom
-      };
+      window._infinetChatHelpers = { updateVh, scrollToBottom };
     })();
   </script>
 </body>
