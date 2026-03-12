@@ -142,11 +142,19 @@
     }
     textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2.5px rgba(0,194,179,0.22); }
     .hint { font-size: clamp(10px, 2.7vw, 11.5px); color: var(--muted); display: flex; justify-content: space-between; padding: 0 5px; }
+
+    /* BUTTON: restored vertical padding so it matches the original (older) visual size */
     .btn {
       background: linear-gradient(90deg, var(--accent-2), var(--accent));
-      border: none; padding: 0 18px; border-radius: 12px;
+      border: none;
+      /* vertical padding same as textarea to preserve original size */
+      padding: 11px 18px;
+      border-radius: 12px;
       color: white; font-weight: 600; font-size: clamp(13px, 3.4vw, 14.5px);
       min-width: 62px; cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
     }
     .btn:hover:not(:disabled) { opacity: 0.94; transform: translateY(-1px); }
     .btn:disabled { opacity: 0.48; cursor: not-allowed; }
@@ -215,6 +223,12 @@
         min-height: 54px;
       }
 
+      /* Keep button visually aligned with textarea on mobile by increasing its vertical size too */
+      .btn {
+        /* match vertical feel when textarea grows on mobile */
+        padding: 11px 18px;
+      }
+
       /* Give messages some extra bottom padding so the last message isn't hidden behind composer */
       .messages { padding-bottom: calc(var(--spacing) + 10px); }
     }
@@ -222,6 +236,7 @@
     /* optional: prevent the mobile browser from zooming fonts in landscape smaller devices */
     @media (orientation: landscape) and (max-height: 420px) {
       textarea { font-size: 16px; }
+      .btn { padding: 10px 18px; }
     }
   </style>
 </head>
