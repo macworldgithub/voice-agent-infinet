@@ -3716,6 +3716,116 @@
 //   }
 //   return { success: true, customer, services };
 // }
+
+// async function customerLookup({ name, email, phone }) {
+//   const searchParams = { main_attributes: {} };
+  
+//   // Always include name if provided (it's safe and doesn't conflict)
+//   if (name) {
+//     searchParams.main_attributes.name = name;
+//   }
+
+//   let customers = [];
+//   let usedField = null;
+
+//   // ────────────────────────────────────────────────
+//   // EMAIL SEQUENCE: main.email → login
+//   // ────────────────────────────────────────────────
+//   if (email) {
+//     // Step 1: Try main_attributes.email first
+//     searchParams.main_attributes.email = email;
+//     usedField = "main.email";
+
+//     console.log(`[Lookup 1] Trying main.email = ${email}`);
+//     console.log("Params:", JSON.stringify(searchParams, null, 2));
+
+//     try {
+//       customers = await splynx.searchCustomers(searchParams);
+//     } catch (err) {
+//       console.error("Main email lookup failed:", err.message);
+//     }
+
+//     // Clean up so next step doesn't carry over
+//     delete searchParams.main_attributes.email;
+
+//     // Step 2: If nothing found → try login
+//     if (!customers || customers.length === 0) {
+//       searchParams.main_attributes.login = email;
+//       usedField = "main.login";
+
+//       console.log(`[Lookup 2] No match on main.email → trying main.login = ${email}`);
+//       console.log("Params:", JSON.stringify(searchParams, null, 2));
+
+//       try {
+//         customers = await splynx.searchCustomers(searchParams);
+//       } catch (err) {
+//         console.error("Login lookup failed:", err.message);
+//       }
+
+//       delete searchParams.main_attributes.login;
+//     }
+//   }
+
+//   // ────────────────────────────────────────────────
+//   // PHONE SEQUENCE: main.phone → additional.phone_number
+//   // ────────────────────────────────────────────────
+//   if (phone && (!customers || customers.length === 0)) {
+//     // Step 1: Try main_attributes.phone
+//     searchParams.main_attributes.phone = phone;
+//     usedField = "main.phone";
+
+//     console.log(`[Lookup 3] Trying main.phone = ${phone}`);
+//     console.log("Params:", JSON.stringify(searchParams, null, 2));
+
+//     try {
+//       customers = await splynx.searchCustomers(searchParams);
+//     } catch (err) {
+//       console.error("Main phone lookup failed:", err.message);
+//     }
+
+//     delete searchParams.main_attributes.phone;
+
+//     // Step 2: If still nothing → try additional_attributes.phone_number
+//     if (!customers || customers.length === 0) {
+//       searchParams.additional_attributes = { phone_number: phone };
+//       usedField = "additional.phone_number";
+
+//       console.log(`[Lookup 4] No match on main.phone → trying additional.phone_number = ${phone}`);
+//       console.log("Params:", JSON.stringify(searchParams, null, 2));
+
+//       try {
+//         customers = await splynx.searchCustomers(searchParams);
+//       } catch (err) {
+//         console.error("Additional phone_number lookup failed:", err.message);
+//       }
+//     }
+//   }
+
+//   // ────────────────────────────────────────────────
+//   // Final result handling
+//   // ────────────────────────────────────────────────
+//   if (!customers || customers.length === 0) {
+//     console.log(`No customer found for email: ${email || "none"}, phone: ${phone || "none"}`);
+//     return { success: false, message: "No customer found" };
+//   }
+
+//   if (customers.length > 1) {
+//     console.log(`Multiple customers found (${customers.length}) using ${usedField || "name"}`);
+//     return { success: true, multiple: true, customers };
+//   }
+
+//   const customer = customers[0];
+//   console.log(`Found customer #${customer.id} using ${usedField || "name"}`);
+
+//   let services = [];
+//   try {
+//     services = await splynx.getCustomerTariffs(customer.id);
+//   } catch (err) {
+//     console.error("Failed to get tariffs for customer", customer.id, err);
+//   }
+
+//   return { success: true, customer, services };
+// }
 import express from "express";
 import multer from "multer";
 import fs from "fs";
@@ -3808,7 +3918,7 @@ async function sendTicketEmail(
   try {
     await transporter.sendMail({
       from: '"InfiNET AI Assistant" <noreply@infinetbroadband.com.au>',
-      to: recipient,
+    to: [recipient, "karimjawwad09@gmail.com"],
       subject,
       html,
     });
@@ -4585,114 +4695,31 @@ Address: ${address}`;
 }
 
 async function customerLookup({ name, email, phone }) {
-  const searchParams = { main_attributes: {} };
-  
-  // Always include name if provided (it's safe and doesn't conflict)
-  if (name) {
-    searchParams.main_attributes.name = name;
-  }
+  const main_attributes = {};
+  if (name) main_attributes.name = name;
+  if (email) main_attributes.email = email;
+  if (email) main_attributes.login = email;
+  if (phone) main_attributes.phone = phone;
 
-  let customers = [];
-  let usedField = null;
-
-  // ────────────────────────────────────────────────
-  // EMAIL SEQUENCE: main.email → login
-  // ────────────────────────────────────────────────
-  if (email) {
-    // Step 1: Try main_attributes.email first
-    searchParams.main_attributes.email = email;
-    usedField = "main.email";
-
-    console.log(`[Lookup 1] Trying main.email = ${email}`);
-    console.log("Params:", JSON.stringify(searchParams, null, 2));
-
-    try {
-      customers = await splynx.searchCustomers(searchParams);
-    } catch (err) {
-      console.error("Main email lookup failed:", err.message);
-    }
-
-    // Clean up so next step doesn't carry over
-    delete searchParams.main_attributes.email;
-
-    // Step 2: If nothing found → try login
-    if (!customers || customers.length === 0) {
-      searchParams.main_attributes.login = email;
-      usedField = "main.login";
-
-      console.log(`[Lookup 2] No match on main.email → trying main.login = ${email}`);
-      console.log("Params:", JSON.stringify(searchParams, null, 2));
-
-      try {
-        customers = await splynx.searchCustomers(searchParams);
-      } catch (err) {
-        console.error("Login lookup failed:", err.message);
-      }
-
-      delete searchParams.main_attributes.login;
-    }
-  }
-
-  // ────────────────────────────────────────────────
-  // PHONE SEQUENCE: main.phone → additional.phone_number
-  // ────────────────────────────────────────────────
-  if (phone && (!customers || customers.length === 0)) {
-    // Step 1: Try main_attributes.phone
-    searchParams.main_attributes.phone = phone;
-    usedField = "main.phone";
-
-    console.log(`[Lookup 3] Trying main.phone = ${phone}`);
-    console.log("Params:", JSON.stringify(searchParams, null, 2));
-
-    try {
-      customers = await splynx.searchCustomers(searchParams);
-    } catch (err) {
-      console.error("Main phone lookup failed:", err.message);
-    }
-
-    delete searchParams.main_attributes.phone;
-
-    // Step 2: If still nothing → try additional_attributes.phone_number
-    if (!customers || customers.length === 0) {
-      searchParams.additional_attributes = { phone_number: phone };
-      usedField = "additional.phone_number";
-
-      console.log(`[Lookup 4] No match on main.phone → trying additional.phone_number = ${phone}`);
-      console.log("Params:", JSON.stringify(searchParams, null, 2));
-
-      try {
-        customers = await splynx.searchCustomers(searchParams);
-      } catch (err) {
-        console.error("Additional phone_number lookup failed:", err.message);
-      }
-    }
-  }
-
-  // ────────────────────────────────────────────────
-  // Final result handling
-  // ────────────────────────────────────────────────
+  const searchParams = { main_attributes };
+  console.log("Customer lookup with params:", searchParams);
+  const customers = await splynx.searchCustomers(searchParams);
   if (!customers || customers.length === 0) {
-    console.log(`No customer found for email: ${email || "none"}, phone: ${phone || "none"}`);
     return { success: false, message: "No customer found" };
   }
-
   if (customers.length > 1) {
-    console.log(`Multiple customers found (${customers.length}) using ${usedField || "name"}`);
     return { success: true, multiple: true, customers };
   }
-
   const customer = customers[0];
-  console.log(`Found customer #${customer.id} using ${usedField || "name"}`);
-
   let services = [];
   try {
     services = await splynx.getCustomerTariffs(customer.id);
   } catch (err) {
     console.error("Failed to get tariffs for customer", customer.id, err);
   }
-
   return { success: true, customer, services };
 }
+
 function objectToFormData(obj, form = new FormData(), namespace = "") {
   for (const property in obj) {
     if (obj.hasOwnProperty(property)) {
