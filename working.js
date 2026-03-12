@@ -24,14 +24,6 @@ if (!OPENAI_API_KEY) {
   process.exit(1);
 }
 
-// ────────────────────────────────────────────────
-// SPARKPOST SMTP CONFIG (from your message)
-// Add these 4 lines to your .env file:
-// SMTP_HOST=smtp.sparkpostmail.com
-// SMTP_PORT=587
-// SMTP_USER=SMTP_Injection
-// SMTP_PASS=4fb2awfawfaf
-// ────────────────────────────────────────────────
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || "smtp.sparkpostmail.com",
   port: parseInt(process.env.SMTP_PORT || "587"),
