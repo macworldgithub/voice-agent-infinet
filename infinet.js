@@ -3962,18 +3962,21 @@ class SplynxApiClient {
     this.refreshTokenExpiration = 0;
     this.useAccessToken = config.USE_ACCESS_TOKEN !== false;
   }
+
   generateSignature(nonce) {
     const data = nonce + this.apiKey;
     const hmac = crypto.createHmac("sha256", this.apiSecret);
     hmac.update(data);
     return hmac.digest("hex").toUpperCase();
   }
+
   getSignatureAuthHeader() {
     const nonce = Math.round((Date.now() / 1000) * 100);
     const signature = this.generateSignature(nonce);
     const params = { key: this.apiKey, nonce, signature };
     return `Splynx-EA (${new URLSearchParams(params).toString()})`;
   }
+
   async generateAccessToken() {
     try {
       const nonce = Math.floor(Date.now() / 1000);
@@ -3995,13 +3998,11 @@ class SplynxApiClient {
       console.log("✅ Splynx Access token generated");
       return data;
     } catch (err) {
-      console.error(
-        "Token generation failed:",
-        err.response?.data || err.message,
-      );
+      console.error("Token generation failed:", err.response?.data || err.message);
       throw err;
     }
   }
+
   async renewAccessToken() {
     if (!this.refreshToken) throw new Error("No refresh token available");
     try {
@@ -4025,63 +4026,96 @@ class SplynxApiClient {
       throw err;
     }
   }
+
   isTokenExpired(bufferSeconds = 30) {
     return Date.now() / 1000 + bufferSeconds > this.accessTokenExpiration;
   }
+
+  // ==================== BULLETPROOF REQUEST METHOD ====================
   async request(method, endpoint, data = null, params = {}) {
-    let headers = {};
-    if (data && !(data instanceof FormData)) {
+  let headers = {};
+
+  if (data) {
+    if (typeof data.getHeaders === "function") {
+      console.log("✅ FormData detected — setting correct multipart headers");
+      Object.assign(headers, data.getHeaders());
+    } else if (data instanceof URLSearchParams) {
+      console.log("✅ URLSearchParams detected — using application/x-www-form-urlencoded");
+      headers["Content-Type"] = "application/x-www-form-urlencoded";
+    } else {
       headers["Content-Type"] = "application/json";
     }
-    if (this.useAccessToken && this.accessToken) {
-      if (this.isTokenExpired()) {
-        console.log("Token expired → renewing...");
-        await this.renewAccessToken();
-      }
-      headers.Authorization = `Splynx-EA (access_token=${this.accessToken})`;
-    } else {
-      headers.Authorization = this.getSignatureAuthHeader();
+  }
+
+  // Authorization (unchanged)
+  if (this.useAccessToken && this.accessToken) {
+    if (this.isTokenExpired()) {
+      console.log("Token expired → renewing...");
+      await this.renewAccessToken();
     }
-    const url = `${this.baseUrl}${endpoint}`;
-    console.log(
-      `Making [${method}] to ${endpoint} with data:`,
-      data ? (data instanceof FormData ? "FormData object" : data) : "no data",
-    );
-    try {
-      const config = { method, url, headers, params, ...(data && { data }) };
-      const response = await axios(config);
-      return response.data;
+    headers.Authorization = `Splynx-EA (access_token=${this.accessToken})`;
+  } else {
+    headers.Authorization = this.getSignatureAuthHeader();
+  }
+
+  const url = `${this.baseUrl}${endpoint}`;
+  console.log(
+    `Making [${method}] to ${endpoint} with data:`,
+    data
+      ? data instanceof URLSearchParams
+        ? "URLSearchParams"
+        : typeof data.getHeaders === "function"
+        ? "FormData object"
+        : data
+      : "no data"
+  );
+
+  try {
+    const config = {
+      method,
+      url,
+      headers,
+      params,
+      ...(data && {
+        data: data instanceof URLSearchParams ? data.toString() : data,
+      }),
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+    };
+
+    const response = await axios(config);
+    return response.data;
     } catch (err) {
       if (err.response?.status === 401) {
         console.warn("401 → retrying after renew...");
         await this.renewAccessToken();
         return this.request(method, endpoint, data, params);
       }
+
       console.error(
-        `[${method}] ${endpoint} failed with data:`,
-        data
-          ? data instanceof FormData
-            ? "FormData object"
-            : data
-          : "no data",
+        `[${method}] ${endpoint} failed`,
         "error:",
-        err.response?.data || err.message,
+        err.response?.data || err.message
       );
       throw err.response?.data || err;
     }
   }
+  // =================================================================
+
   async listInternetTariffs(params = {}) {
     return this.request("GET", "admin/tariffs/internet", null, params);
   }
+
   async searchCustomers(searchParams) {
     return this.request("GET", "admin/customers/customer", null, searchParams);
   }
+
   async getCustomerTariffs(customerId, params = {}) {
     return this.request(
       "GET",
       `admin/customers/customer-tariffs/${customerId}`,
       null,
-      params,
+      params
     );
   }
 }
@@ -4743,6 +4777,27 @@ function objectToFormData(obj, form = new FormData(), namespace = "") {
   }
   return form;
 }
+// Replace the old objectToFormData function with this
+function objectToUrlEncoded(obj, params = new URLSearchParams(), namespace = "") {
+  for (const property in obj) {
+    if (!obj.hasOwnProperty(property)) continue;
+    const formKey = namespace ? `${namespace}[${property}]` : property;
+    const value = obj[property];
+
+    if (value === undefined || value === null) continue;
+
+    if (typeof value === "object" && !Array.isArray(value)) {
+      objectToUrlEncoded(value, params, formKey);
+    } else if (Array.isArray(value)) {
+      value.forEach((item) => params.append(`${formKey}[]`, item));
+    } else {
+      // Boolean → 0/1 (better for Splynx), everything else string
+      const valStr = typeof value === "boolean" ? (value ? "1" : "0") : String(value);
+      params.append(formKey, valStr);
+    }
+  }
+  return params;
+}
 
 // ────────────────────────────────────────────────
 // AGENT ENDPOINTS (with email notification added)
@@ -4879,13 +4934,15 @@ app.post("/api/voice", upload.single("audio"), async (req, res) => {
           if (typeof fixedArgs.message === "string") {
             fixedArgs.message = { message: fixedArgs.message };
           }
-          const formData = objectToFormData(fixedArgs);
-          console.log("Creating ticket with args:", JSON.stringify(fixedArgs));
-          const response = await splynx.request(
-            "POST",
-            "admin/support/tickets",
-            formData,
-          );
+          // NEW — FIXED
+const urlEncoded = objectToUrlEncoded(fixedArgs);
+console.log("Creating ticket with args:", JSON.stringify(fixedArgs));
+
+const response = await splynx.request(
+  "POST",
+  "admin/support/tickets",
+  urlEncoded   // ← now URLSearchParams
+);
 
           toolContent = JSON.stringify({
             success: true,
@@ -5079,13 +5136,15 @@ app.post("/api/chat/message", async (req, res) => {
           if (typeof fixedArgs.message === "string") {
             fixedArgs.message = { message: fixedArgs.message };
           }
-          const formData = objectToFormData(fixedArgs);
-          console.log("Creating ticket with args:", JSON.stringify(fixedArgs));
-          const response = await splynx.request(
-            "POST",
-            "admin/support/tickets",
-            formData,
-          );
+          // NEW — FIXED
+const urlEncoded = objectToUrlEncoded(fixedArgs);
+console.log("Creating ticket with args:", JSON.stringify(fixedArgs));
+
+const response = await splynx.request(
+  "POST",
+  "admin/support/tickets",
+  urlEncoded   // ← now URLSearchParams
+);
 
           toolContent = JSON.stringify({
             success: true,
