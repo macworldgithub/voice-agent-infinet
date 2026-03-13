@@ -4363,64 +4363,6 @@ General Advice
 Always advise customers to check current pricing and availability via the address checker or support@infinetbroadband.com.au as promotions may change.
 `;
 
-// const SYSTEM_PROMPT = `
-// You are a concise, professional voice/chat assistant for ${BRAND}.
-// Handle four call types / chat intents: support, sales, general, account.
-// STRICT RULES:
-// - ALWAYS reply in English.
-// - Keep replies short and focused; ask for remaining missing info concisely.
-// - Collect structured fields when appropriate and do not re-ask for already collected fields.
-// - If the user has a preferredName in collected fields, ALWAYS address them warmly by that name in every response.
-// - Do NOT say anything like "we will connect you to a sales agent", "transferring you to support", "handover to human", "I'll put you through" or similar phrases.
-// - When enough information is collected per the flow below, call the create_ticket tool with appropriate parameters (generate subject based on the conversation, use issueSummary or leadInterest in the message body).
-// - After create_ticket succeeds, reply with the exact message including the ticket ID: "Thank you [preferredName]! I have raised a ticket for you. You will receive the ticket details via email shortly. Our team will contact you shortly."
-// - Use the Knowledge base below to answer questions concisely.
-// - For support issues, if issueSummary is not collected, ask: "Please provide a brief description of the issue." Once a basic description is provided, immediately ask for additional high-level details to help our support team (e.g. "Any more details like when it started, symptoms, or error messages?"). Combine everything into the final issueSummary.
-// - Use get_ticket_types, get_ticket_groups, get_ticket_statuses if you need IDs for types, groups, statuses when creating tickets.
-// - To verify existing customers or lookup account, use the customer_lookup tool with name, email, or phone. If multiple matches, ask for more details. If no match, politely say you can't find the account and switch to sales flow if appropriate. NEVER create tickets for non-customers.
-// - For existing customer flows (support/accounts), ask for name, email, or phone to lookup the account. Use the looked up customer_id for tickets.
-// INITIAL FLOW - follow these steps exactly:
-// 1. After the initial greeting and collecting preferredName, ask: "Are you a new InfiNET customer or an existing one?"
-// 2. If they say new (or similar), ask: "Would you like to learn more about InfiNET Broadband, or how may I assist you with our services today?"
-//    - If they want to know more, explain briefly: "InfiNET Broadband is a reliable provider of high-speed internet services in Australia, offering NBN, OptiComm, and other technologies with unlimited data plans." Then proceed to sales flow by asking: "How can I help you with our services today?"
-//    - If they choose help or sales, proceed directly to sales flow.
-// 3. If they say existing (or similar), ask: "How may we help you today? Would it be sales, support, or accounts?"
-// 4. Based on their intent, proceed to the corresponding flow. If they are not an existing customer and choose support or accounts, politely explain: "Support and accounts are for existing customers. If you're interested in our services, let's proceed with sales." and switch to sales flow.
-// SALES FLOW - follow these steps exactly (for new or interested users):
-// 1. Ask: "Great! Are you interested in residential or business plans?"
-// 2. After they reply (residential or business) → Ask: "Would you like NBN or OptiComm plans?"
-// 3. After they reply (NBN or OptiComm) → Ask: "To check the best plans for you, what's your full address (street, suburb, state and postcode)?"
-// 4. Immediately call the check_address_availability tool with the address.
-// 5. After tool result → Show available NBN and OptiComm plans concisely (use live data only). Highlight or note plans matching their NBN/OptiComm preference and residential/business choice.
-// 6. Ask: "Which plan interests you? Please reply with the plan title or speed (e.g. 100/20 Fast)."
-// 7. After they select a plan → Confirm and collect remaining: email, and confirm address if not already collected.
-// 8. Use extract_call_fields to capture leadInterest as the selected plan title/speed.
-// 9. When ALL details collected (preferredName, email, leadInterest, address) → Call create_ticket with subject like "Sales Inquiry for [leadInterest]", message body including all collected details, lead_id: 0 if new, reporter_type: 'api', priority: 'medium', type_id: appropriate from get_ticket_types (e.g., for sales).
-// SUPPORT FLOW (for existing customers only):
-// - First, ask for name, email, or phone, then call customer_lookup to get customer_id and services.
-// - If not found, say "Sorry, I couldn't find your account. Are you sure you're an existing customer?" and switch to sales if needed.
-// - Answer any question (including generic issues like "my internet is not working", "modem issue", speeds, setup, etc.) using the Knowledge base.
-// - If the issue cannot be fully resolved in chat or the user wants further help → Ask for issueSummary (brief description) if not already collected, then immediately ask for any additional high-level details around the issue to help our support team (e.g. "Any more details like when it started, symptoms, or error messages?"). Combine all responses into the final issueSummary.
-// - When ALL details collected (preferredName, customer_id from lookup, email, issueSummary) → Call create_ticket with customer_id, subject based on issueSummary (e.g., "Support: [brief summary]"), message: full issueSummary and details, reporter_type: 'api', priority from collected or 'medium', type_id for support.
-// ACCOUNTS FLOW (billing/financing, for existing customers only):
-// - First, ask for name, email, or phone, then call customer_lookup to get customer_id and services.
-// - If not found, say "Sorry, I couldn't find your account. Are you sure you're an existing customer?" and switch to sales if needed.
-// - Answer any billing or payment questions using the Knowledge base (portal, overdue invoices, update payment method, etc.).
-// - For any specific issue → Please provide issueSummary if not already collected.
-// - When ALL details collected → Call create_ticket with customer_id, subject: "Accounts Query: [brief summary]", message: issueSummary, reporter_type: 'api', priority: 'medium', type_id for accounts.
-// GENERAL: Answer using the Knowledge base. If needed, ask clarifying questions concisely.
-// TOOL USAGE (CRITICAL):
-// - When the customer asks about plans, pricing, speeds, upgrades or "what plans do you have?": call the get_internet_plans tool.
-// - When the customer asks about availability at their address or you reach step 4 in the sales flow: call check_address_availability with the full address.
-// - To lookup customer by name, email, or phone: call customer_lookup with at least one of name, email, phone. Returns customer details and services if found.
-// - The tool results will be injected into the conversation. ALWAYS use the live tool data for plans and availability (never rely on old hardcoded KB plans).
-// - After a tool result, continue the flow concisely using the live data.
-// - Call extract_call_fields whenever the user provides any personal info or intent.
-// Knowledge base for InfiNET Broadband (use this to answer customer calls and chats concisely):
-// ${KB}
-// Locations (states) with IDs:
-// ${LOCATIONS.map((l) => `${l.id}: ${l.name}`).join("\n")}
-// `;
 const SYSTEM_PROMPT = `
 You are a concise, professional voice/chat assistant for ${BRAND}.
 Handle four call types / chat intents: support, sales, general, account.
@@ -5304,7 +5246,7 @@ const response = await splynx.request(
 });
 
 // ────────────────────────────────────────────────
-// SPLYNX PROXY ROUTES (unchanged)
+// SPLYNX PROXY ROUTES (unchanged + integrated GET APIs from Group Services)
 // ────────────────────────────────────────────────
 app.get("/health", (req, res) => {
   res.json({
@@ -5317,7 +5259,6 @@ app.get("/health", (req, res) => {
     },
   });
 });
-
 app.get("/api/customers", async (req, res) => {
   try {
     res.json(
@@ -5330,7 +5271,6 @@ app.get("/api/customers", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch customers", details: err });
   }
 });
-
 app.post("/api/customers", async (req, res) => {
   try {
     res
@@ -5340,7 +5280,6 @@ app.post("/api/customers", async (req, res) => {
     res.status(500).json({ error: "Failed to create customer" });
   }
 });
-
 app.get("/api/customer/:id", async (req, res) => {
   try {
     res.json(
@@ -5350,7 +5289,6 @@ app.get("/api/customer/:id", async (req, res) => {
     res.status(500).json({ error: "Customer not found" });
   }
 });
-
 app.put("/api/customer/:id", async (req, res) => {
   try {
     res
@@ -5366,7 +5304,6 @@ app.put("/api/customer/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to update customer" });
   }
 });
-
 app.delete("/api/customer/:id", async (req, res) => {
   try {
     await splynx.request("DELETE", `admin/customers/customer/${req.params.id}`);
@@ -5375,7 +5312,6 @@ app.delete("/api/customer/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to delete customer" });
   }
 });
-
 app.get("/api/customer/:customer_id/logs-changes", async (req, res) => {
   try {
     res.json(
@@ -5388,7 +5324,6 @@ app.get("/api/customer/:customer_id/logs-changes", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch customer logs changes" });
   }
 });
-
 app.get(
   "/api/customer/:customer_id/logs-changes--first-activation",
   async (req, res) => {
@@ -5406,7 +5341,6 @@ app.get(
     }
   },
 );
-
 app.get(
   "/api/customer/:customer_id/logs-changes--last-activation",
   async (req, res) => {
@@ -5424,7 +5358,6 @@ app.get(
     }
   },
 );
-
 app.get("/api/customer-cap/:id", async (req, res) => {
   try {
     res.json(
@@ -5437,7 +5370,6 @@ app.get("/api/customer-cap/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch customer cap" });
   }
 });
-
 app.put("/api/customer-cap/:id", async (req, res) => {
   try {
     res
@@ -5453,7 +5385,6 @@ app.put("/api/customer-cap/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to update customer cap" });
   }
 });
-
 app.get("/api/customer-bonus-traffic-counter", async (req, res) => {
   try {
     res.json(
@@ -5468,7 +5399,6 @@ app.get("/api/customer-bonus-traffic-counter", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch bonus traffic counters" });
   }
 });
-
 app.post("/api/customer-bonus-traffic-counter", async (req, res) => {
   try {
     res
@@ -5484,7 +5414,6 @@ app.post("/api/customer-bonus-traffic-counter", async (req, res) => {
     res.status(500).json({ error: "Failed to create bonus traffic counter" });
   }
 });
-
 app.get(
   "/api/customer-bonus-traffic-counter/:service_id--:date",
   async (req, res) => {
@@ -5500,7 +5429,6 @@ app.get(
     }
   },
 );
-
 app.put(
   "/api/customer-bonus-traffic-counter/:service_id--:date",
   async (req, res) => {
@@ -5519,7 +5447,6 @@ app.put(
     }
   },
 );
-
 app.delete(
   "/api/customer-bonus-traffic-counter/:service_id--:date",
   async (req, res) => {
@@ -5534,7 +5461,6 @@ app.delete(
     }
   },
 );
-
 app.get("/api/customer-billing-info/:customer_id", async (req, res) => {
   try {
     res.json(
@@ -5549,7 +5475,6 @@ app.get("/api/customer-billing-info/:customer_id", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch customer billing info" });
   }
 });
-
 app.get("/api/customer-payment-accounts", async (req, res) => {
   try {
     res.json(
@@ -5566,7 +5491,6 @@ app.get("/api/customer-payment-accounts", async (req, res) => {
       .json({ error: "Failed to fetch customer payment accounts" });
   }
 });
-
 app.get("/api/customer-payment-account-data", async (req, res) => {
   try {
     res.json(
@@ -5583,7 +5507,6 @@ app.get("/api/customer-payment-account-data", async (req, res) => {
       .json({ error: "Failed to fetch customer payment account data" });
   }
 });
-
 app.get("/api/customer-payment-accounts-by-id", async (req, res) => {
   try {
     res.json(
@@ -5600,7 +5523,6 @@ app.get("/api/customer-payment-accounts-by-id", async (req, res) => {
       .json({ error: "Failed to fetch customer payment accounts by id" });
   }
 });
-
 app.put("/api/customer-payment-accounts-by-id", async (req, res) => {
   try {
     res
@@ -5619,7 +5541,6 @@ app.put("/api/customer-payment-accounts-by-id", async (req, res) => {
       .json({ error: "Failed to update customer payment account" });
   }
 });
-
 app.delete("/api/customer-payment-accounts-by-id", async (req, res) => {
   try {
     await splynx.request(
@@ -5635,7 +5556,6 @@ app.delete("/api/customer-payment-accounts-by-id", async (req, res) => {
       .json({ error: "Failed to delete customer payment account" });
   }
 });
-
 app.get("/api/customer-statistics", async (req, res) => {
   try {
     res.json(
@@ -5650,7 +5570,6 @@ app.get("/api/customer-statistics", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch customer statistics" });
   }
 });
-
 app.get("/api/customer-statistics/:id", async (req, res) => {
   try {
     res.json(
@@ -5663,7 +5582,6 @@ app.get("/api/customer-statistics/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch customer statistic" });
   }
 });
-
 app.get("/api/customer-traffic-counter", async (req, res) => {
   try {
     res.json(
@@ -5680,7 +5598,6 @@ app.get("/api/customer-traffic-counter", async (req, res) => {
       .json({ error: "Failed to fetch customer traffic counters" });
   }
 });
-
 app.post("/api/customer-traffic-counter", async (req, res) => {
   try {
     res
@@ -5698,7 +5615,6 @@ app.post("/api/customer-traffic-counter", async (req, res) => {
       .json({ error: "Failed to create customer traffic counter" });
   }
 });
-
 app.get(
   "/api/customer-traffic-counter/:service_id--:date",
   async (req, res) => {
@@ -5716,7 +5632,6 @@ app.get(
     }
   },
 );
-
 app.put(
   "/api/customer-traffic-counter/:service_id--:date",
   async (req, res) => {
@@ -5737,7 +5652,6 @@ app.put(
     }
   },
 );
-
 app.delete(
   "/api/customer-traffic-counter/:service_id--:date",
   async (req, res) => {
@@ -5754,7 +5668,6 @@ app.delete(
     }
   },
 );
-
 app.get("/api/customer-billing/:id", async (req, res) => {
   try {
     res.json(
@@ -5767,7 +5680,6 @@ app.get("/api/customer-billing/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch customer billing" });
   }
 });
-
 app.put("/api/customer-billing/:id", async (req, res) => {
   try {
     res
@@ -5783,7 +5695,6 @@ app.put("/api/customer-billing/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to update customer billing" });
   }
 });
-
 app.get("/api/customers-search", async (req, res) => {
   try {
     res.json(
@@ -5793,7 +5704,6 @@ app.get("/api/customers-search", async (req, res) => {
     res.status(500).json({ error: "Failed to search customers" });
   }
 });
-
 app.get("/api/online", async (req, res) => {
   try {
     res.json(await splynx.request("GET", "admin/customers/customers-online"));
@@ -5801,7 +5711,6 @@ app.get("/api/online", async (req, res) => {
     res.status(500).json({ error: "Failed to get online customers" });
   }
 });
-
 app.post("/api/online", async (req, res) => {
   try {
     res
@@ -5817,7 +5726,6 @@ app.post("/api/online", async (req, res) => {
     res.status(500).json({ error: "Failed to set customer online" });
   }
 });
-
 app.get("/api/online/:id", async (req, res) => {
   try {
     res.json(
@@ -5830,7 +5738,6 @@ app.get("/api/online/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch online customer" });
   }
 });
-
 app.put("/api/online/:id", async (req, res) => {
   try {
     res
@@ -5846,7 +5753,6 @@ app.put("/api/online/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to update online customer" });
   }
 });
-
 app.delete("/api/online/:id", async (req, res) => {
   try {
     await splynx.request(
@@ -5858,7 +5764,6 @@ app.delete("/api/online/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to remove online customer" });
   }
 });
-
 app.put("/api/online/:id/kill", async (req, res) => {
   try {
     res
@@ -5874,7 +5779,6 @@ app.put("/api/online/:id/kill", async (req, res) => {
     res.status(500).json({ error: "Failed to disconnect online customer" });
   }
 });
-
 app.get("/api/customer-documents/:customer_id", async (req, res) => {
   try {
     res.json(
@@ -5887,7 +5791,6 @@ app.get("/api/customer-documents/:customer_id", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch customer documents" });
   }
 });
-
 app.post("/api/customer-documents", async (req, res) => {
   try {
     res
@@ -5903,7 +5806,6 @@ app.post("/api/customer-documents", async (req, res) => {
     res.status(500).json({ error: "Failed to create customer document" });
   }
 });
-
 app.post(
   "/api/customer-documents/:id/upload",
   upload.single("file"),
@@ -5924,7 +5826,6 @@ app.post(
     }
   },
 );
-
 app.put("/api/customer-documents/:id", async (req, res) => {
   try {
     res
@@ -5940,7 +5841,6 @@ app.put("/api/customer-documents/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to update customer document" });
   }
 });
-
 app.delete("/api/customer-documents/:id", async (req, res) => {
   try {
     await splynx.request(
@@ -5952,7 +5852,6 @@ app.delete("/api/customer-documents/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to delete customer document" });
   }
 });
-
 app.get("/api/download/customer_documents/:id", async (req, res) => {
   try {
     res.json(
@@ -5965,7 +5864,6 @@ app.get("/api/download/customer_documents/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to download customer document" });
   }
 });
-
 app.post("/api/send-documents", async (req, res) => {
   try {
     res
@@ -5981,7 +5879,6 @@ app.post("/api/send-documents", async (req, res) => {
     res.status(500).json({ error: "Failed to send documents" });
   }
 });
-
 app.get("/api/cap-history/:id", async (req, res) => {
   try {
     res.json(
@@ -5994,7 +5891,6 @@ app.get("/api/cap-history/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch cap history" });
   }
 });
-
 app.post("/api/customer-notes", async (req, res) => {
   try {
     res
@@ -6010,7 +5906,6 @@ app.post("/api/customer-notes", async (req, res) => {
     res.status(500).json({ error: "Failed to create customer comment" });
   }
 });
-
 app.get("/api/customer-notes", async (req, res) => {
   try {
     res.json(
@@ -6025,7 +5920,6 @@ app.get("/api/customer-notes", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch customer comments" });
   }
 });
-
 app.get("/api/customer-notes/:customer_id--:id", async (req, res) => {
   try {
     res.json(
@@ -6039,191 +5933,230 @@ app.get("/api/customer-notes/:customer_id--:id", async (req, res) => {
   }
 });
 
-app.get("/api/prepaid-cards-series", async (req, res) => {
+
+// ────────────────────────────────────────────────
+// GROUP SERVICES - GET APIs ONLY (integrated from documentation)
+// All list/search use same endpoint (customer_id=0 + query for search)
+// All single services use -- separator to match existing proxy style
+// ────────────────────────────────────────────────
+
+// Internet services
+app.get("/api/customer/:customer_id/internet-services", async (req, res) => {
   try {
     res.json(
       await splynx.request(
         "GET",
-        "admin/customers/prepaid-cards-series",
+        `admin/customers/customer/${req.params.customer_id}/internet-services`,
         null,
         req.query,
       ),
     );
   } catch (err) {
-    res.status(500).json({ error: "Failed to fetch prepaid cards series" });
+    res.status(500).json({ error: "Failed to fetch customer internet services" });
   }
 });
-
-app.post("/api/prepaid-cards-series", async (req, res) => {
-  try {
-    res
-      .status(201)
-      .json(
+app.get(
+  "/api/customer/:customer_id/internet-services--:service_id",
+  async (req, res) => {
+    try {
+      res.json(
         await splynx.request(
-          "POST",
-          "admin/customers/prepaid-cards-series",
-          req.body,
+          "GET",
+          `admin/customers/customer/${req.params.customer_id}/internet-services--${req.params.service_id}`,
         ),
       );
-  } catch (err) {
-    res.status(500).json({ error: "Failed to create prepaid cards series" });
-  }
-});
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch internet service" });
+    }
+  },
+);
+app.get(
+  "/api/customer/:customer_id/geo-internet-service--:service_id",
+  async (req, res) => {
+    try {
+      res.json(
+        await splynx.request(
+          "GET",
+          `admin/customers/customer/${req.params.customer_id}/geo-internet-service--${req.params.service_id}`,
+        ),
+      );
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch internet service geo data" });
+    }
+  },
+);
 
-app.get("/api/prepaid-cards-series/:serie_id", async (req, res) => {
+// Voice service geo data (as per documentation order)
+app.get(
+  "/api/customer/:customer_id/geo-voice-service--:service_id",
+  async (req, res) => {
+    try {
+      res.json(
+        await splynx.request(
+          "GET",
+          `admin/customers/customer/${req.params.customer_id}/geo-voice-service--${req.params.service_id}`,
+        ),
+      );
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch voice service geo data" });
+    }
+  },
+);
+
+// Recurring service geo data
+app.get(
+  "/api/customer/:customer_id/geo-recurring-service--:service_id",
+  async (req, res) => {
+    try {
+      res.json(
+        await splynx.request(
+          "GET",
+          `admin/customers/customer/${req.params.customer_id}/geo-recurring-service--${req.params.service_id}`,
+        ),
+      );
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch recurring service geo data" });
+    }
+  },
+);
+
+// Voice services
+app.get("/api/customer/:customer_id/voice-services", async (req, res) => {
   try {
     res.json(
       await splynx.request(
         "GET",
-        `admin/customers/prepaid-cards-series/${req.params.serie_id}`,
-      ),
-    );
-  } catch (err) {
-    res.status(500).json({ error: "Failed to fetch prepaid cards series" });
-  }
-});
-
-app.put("/api/prepaid-cards-series/:serie_id", async (req, res) => {
-  try {
-    res
-      .status(202)
-      .json(
-        await splynx.request(
-          "PUT",
-          `admin/customers/prepaid-cards-series/${req.params.serie_id}`,
-          req.body,
-        ),
-      );
-  } catch (err) {
-    res.status(500).json({ error: "Failed to update prepaid cards series" });
-  }
-});
-
-app.delete("/api/prepaid-cards-series/:serie_id", async (req, res) => {
-  try {
-    await splynx.request(
-      "DELETE",
-      `admin/customers/prepaid-cards-series/${req.params.serie_id}`,
-    );
-    res.status(204).send();
-  } catch (err) {
-    res.status(500).json({ error: "Failed to delete prepaid cards series" });
-  }
-});
-
-app.get("/api/prepaid-cards", async (req, res) => {
-  try {
-    res.json(
-      await splynx.request(
-        "GET",
-        "admin/customers/prepaid-cards",
+        `admin/customers/customer/${req.params.customer_id}/voice-services`,
         null,
         req.query,
       ),
     );
   } catch (err) {
-    res.status(500).json({ error: "Failed to fetch prepaid cards" });
+    res.status(500).json({ error: "Failed to fetch customer voice services" });
   }
 });
-
-app.get("/api/prepaid-cards/:id", async (req, res) => {
-  try {
-    res.json(
-      await splynx.request(
-        "GET",
-        `admin/customers/prepaid-cards/${req.params.id}`,
-      ),
-    );
-  } catch (err) {
-    res.status(500).json({ error: "Failed to fetch prepaid card" });
-  }
-});
-
-app.put("/api/prepaid-cards/:id", async (req, res) => {
-  try {
-    res
-      .status(202)
-      .json(
+app.get(
+  "/api/customer/:customer_id/voice-services--:service_id",
+  async (req, res) => {
+    try {
+      res.json(
         await splynx.request(
-          "PUT",
-          `admin/customers/prepaid-cards/${req.params.id}`,
-          req.body,
+          "GET",
+          `admin/customers/customer/${req.params.customer_id}/voice-services--${req.params.service_id}`,
         ),
       );
-  } catch (err) {
-    res.status(500).json({ error: "Failed to update prepaid card" });
-  }
-});
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch voice service" });
+    }
+  },
+);
 
-app.delete("/api/prepaid-cards/:id", async (req, res) => {
-  try {
-    await splynx.request(
-      "DELETE",
-      `admin/customers/prepaid-cards/${req.params.id}`,
-    );
-    res.status(204).send();
-  } catch (err) {
-    res.status(500).json({ error: "Failed to delete prepaid card" });
-  }
-});
-
-app.get("/api/prepaid-cards-statistics", async (req, res) => {
+// Recurring services
+app.get("/api/customer/:customer_id/recurring-services", async (req, res) => {
   try {
     res.json(
       await splynx.request(
         "GET",
-        "admin/customers/prepaid-cards-statistics",
+        `admin/customers/customer/${req.params.customer_id}/recurring-services`,
         null,
         req.query,
       ),
     );
   } catch (err) {
-    res.status(500).json({ error: "Failed to fetch prepaid cards statistics" });
+    res.status(500).json({ error: "Failed to fetch customer recurring services" });
   }
 });
+app.get(
+  "/api/customer/:customer_id/recurring-services--:service_id",
+  async (req, res) => {
+    try {
+      res.json(
+        await splynx.request(
+          "GET",
+          `admin/customers/customer/${req.params.customer_id}/recurring-services--${req.params.service_id}`,
+        ),
+      );
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch recurring service" });
+    }
+  },
+);
 
-app.get("/api/prepaid-cards-statistics/:id", async (req, res) => {
+// Bundle services
+app.get("/api/customer/:customer_id/bundle-services", async (req, res) => {
   try {
     res.json(
       await splynx.request(
         "GET",
-        `admin/customers/prepaid-cards-statistics/${req.params.id}`,
+        `admin/customers/customer/${req.params.customer_id}/bundle-services`,
+        null,
+        req.query,
       ),
     );
   } catch (err) {
-    res.status(500).json({ error: "Failed to fetch prepaid card statistic" });
+    res.status(500).json({ error: "Failed to fetch customer bundle services" });
+  }
+});
+app.get(
+  "/api/customer/:customer_id/bundle-services--:service_id",
+  async (req, res) => {
+    try {
+      res.json(
+        await splynx.request(
+          "GET",
+          `admin/customers/customer/${req.params.customer_id}/bundle-services--${req.params.service_id}`,
+        ),
+      );
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch bundle service" });
+    }
+  },
+);
+
+
+// Customer tariffs
+app.get("/api/customer-tariffs/:id", async (req, res) => {
+  try {
+    res.json(
+      await splynx.request(
+        "GET",
+        `admin/customers/customer-tariffs/${req.params.id}`,
+        null,
+        req.query,
+      ),
+    );
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch customer tariffs" });
   }
 });
 
-app.post("/api/reset-password-request", async (req, res) => {
+// Portal start/stop service (GET only, as documented)
+app.get("/api/portal/services/start/:service_id", async (req, res) => {
   try {
-    res
-      .status(201)
-      .json(
-        await splynx.request(
-          "POST",
-          "portal/profile/reset-password-request",
-          req.body,
-        ),
-      );
+    res.json(
+      await splynx.request(
+        "GET",
+        `portal/services/start/${req.params.service_id}`,
+        null,
+        req.query,
+      ),
+    );
   } catch (err) {
-    res.status(500).json({ error: "Failed to request password reset" });
+    res.status(500).json({ error: "Failed to start service" });
   }
 });
-
-app.post("/api/reset-password-confirm", async (req, res) => {
+app.get("/api/portal/services/stop/:service_id", async (req, res) => {
   try {
-    res
-      .status(201)
-      .json(
-        await splynx.request(
-          "POST",
-          "portal/profile/reset-password-confirm",
-          req.body,
-        ),
-      );
+    res.json(
+      await splynx.request(
+        "GET",
+        `portal/services/stop/${req.params.service_id}`,
+        null,
+        req.query,
+      ),
+    );
   } catch (err) {
-    res.status(500).json({ error: "Failed to confirm password reset" });
+    res.status(500).json({ error: "Failed to stop service" });
   }
 });
 
@@ -6239,7 +6172,6 @@ app.get("/api/traffic/:serviceId", async (req, res) => {
     res.status(500).json({ error: "Failed to get traffic usage" });
   }
 });
-
 app.get("/api/tariffs/internet", async (req, res) => {
   try {
     res.json(await splynx.listInternetTariffs(req.query));
@@ -6247,7 +6179,6 @@ app.get("/api/tariffs/internet", async (req, res) => {
     res.status(500).json({ error: "Failed to list internet tariffs" });
   }
 });
-
 app.get("/api/tariffs/internet/:id", async (req, res) => {
   try {
     res.json(
@@ -6255,39 +6186,6 @@ app.get("/api/tariffs/internet/:id", async (req, res) => {
     );
   } catch (err) {
     res.status(500).json({ error: "Failed to get tariff" });
-  }
-});
-
-app.post("/api/tariffs/internet", async (req, res) => {
-  try {
-    res
-      .status(201)
-      .json(await splynx.request("POST", "admin/tariffs/internet", req.body));
-  } catch (err) {
-    res.status(500).json({ error: "Failed to create tariff" });
-  }
-});
-
-app.put("/api/tariffs/internet/:id", async (req, res) => {
-  try {
-    res.json(
-      await splynx.request(
-        "PUT",
-        `admin/tariffs/internet/${req.params.id}`,
-        req.body,
-      ),
-    );
-  } catch (err) {
-    res.status(500).json({ error: "Failed to update tariff" });
-  }
-});
-
-app.delete("/api/tariffs/internet/:id", async (req, res) => {
-  try {
-    await splynx.request("DELETE", `admin/tariffs/internet/${req.params.id}`);
-    res.status(204).send();
-  } catch (err) {
-    res.status(500).json({ error: "Failed to delete tariff" });
   }
 });
 
@@ -6305,7 +6203,6 @@ app.get("/api/locations", async (req, res) => {
     res.status(500).json({ error: "Failed to list locations" });
   }
 });
-
 app.get("/api/locations/:id", async (req, res) => {
   try {
     res.json(
@@ -6316,48 +6213,6 @@ app.get("/api/locations/:id", async (req, res) => {
     );
   } catch (err) {
     res.status(500).json({ error: "Location not found" });
-  }
-});
-
-app.post("/api/locations", async (req, res) => {
-  try {
-    res
-      .status(201)
-      .json(
-        await splynx.request(
-          "POST",
-          "admin/administration/locations",
-          req.body,
-        ),
-      );
-  } catch (err) {
-    res.status(500).json({ error: "Failed to create location" });
-  }
-});
-
-app.put("/api/locations/:id", async (req, res) => {
-  try {
-    res.json(
-      await splynx.request(
-        "PUT",
-        `admin/administration/locations/${req.params.id}`,
-        req.body,
-      ),
-    );
-  } catch (err) {
-    res.status(500).json({ error: "Failed to update location" });
-  }
-});
-
-app.delete("/api/locations/:id", async (req, res) => {
-  try {
-    await splynx.request(
-      "DELETE",
-      `admin/administration/locations/${req.params.id}`,
-    );
-    res.status(204).send();
-  } catch (err) {
-    res.status(500).json({ error: "Failed to delete location" });
   }
 });
 
@@ -6375,7 +6230,6 @@ app.get("/api/administrators", async (req, res) => {
     res.status(500).json({ error: "Failed to list administrators" });
   }
 });
-
 app.get("/api/administrators/:id", async (req, res) => {
   try {
     res.json(
@@ -6388,7 +6242,6 @@ app.get("/api/administrators/:id", async (req, res) => {
     res.status(500).json({ error: "Admin not found" });
   }
 });
-
 app.get("/api/partners", async (req, res) => {
   try {
     res.json(
@@ -6403,7 +6256,6 @@ app.get("/api/partners", async (req, res) => {
     res.status(500).json({ error: "Failed to list partners" });
   }
 });
-
 app.get("/api/partners/:id", async (req, res) => {
   try {
     res.json(
@@ -6416,7 +6268,6 @@ app.get("/api/partners/:id", async (req, res) => {
     res.status(500).json({ error: "Partner not found" });
   }
 });
-
 // Tickets APIs
 app.post("/api/admin/support/tickets", async (req, res) => {
   try {
@@ -6427,7 +6278,6 @@ app.post("/api/admin/support/tickets", async (req, res) => {
     res.status(500).json({ error: "Failed to create ticket" });
   }
 });
-
 app.get("/api/admin/support/tickets", async (req, res) => {
   try {
     res.json(
@@ -6437,7 +6287,6 @@ app.get("/api/admin/support/tickets", async (req, res) => {
     res.status(500).json({ error: "Failed to list tickets" });
   }
 });
-
 app.get("/api/admin/support/tickets/:id", async (req, res) => {
   try {
     res.json(
@@ -6447,7 +6296,6 @@ app.get("/api/admin/support/tickets/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to get ticket" });
   }
 });
-
 app.put("/api/admin/support/tickets/:id", async (req, res) => {
   try {
     res
@@ -6463,7 +6311,6 @@ app.put("/api/admin/support/tickets/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to update ticket" });
   }
 });
-
 app.delete("/api/admin/support/tickets/:id", async (req, res) => {
   try {
     await splynx.request("DELETE", `admin/support/tickets/${req.params.id}`);
@@ -6472,7 +6319,6 @@ app.delete("/api/admin/support/tickets/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to delete ticket" });
   }
 });
-
 app.post("/api/admin/support/ticket-messages", async (req, res) => {
   try {
     res
@@ -6484,7 +6330,6 @@ app.post("/api/admin/support/ticket-messages", async (req, res) => {
     res.status(500).json({ error: "Failed to create ticket message" });
   }
 });
-
 app.get("/api/admin/support/ticket-messages", async (req, res) => {
   try {
     res.json(
@@ -6499,7 +6344,6 @@ app.get("/api/admin/support/ticket-messages", async (req, res) => {
     res.status(500).json({ error: "Failed to list ticket messages" });
   }
 });
-
 app.get("/api/admin/support/ticket-messages/:id", async (req, res) => {
   try {
     res.json(
@@ -6514,7 +6358,6 @@ app.get("/api/admin/support/ticket-messages/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to get ticket message" });
   }
 });
-
 app.put("/api/admin/support/ticket-messages/:id", async (req, res) => {
   try {
     res
@@ -6530,7 +6373,6 @@ app.put("/api/admin/support/ticket-messages/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to update ticket message" });
   }
 });
-
 app.delete("/api/admin/support/ticket-messages/:id", async (req, res) => {
   try {
     await splynx.request(
@@ -6542,7 +6384,6 @@ app.delete("/api/admin/support/ticket-messages/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to delete ticket message" });
   }
 });
-
 app.get("/api/admin/support/tickets-statuses", async (req, res) => {
   try {
     res.json(
@@ -6557,7 +6398,6 @@ app.get("/api/admin/support/tickets-statuses", async (req, res) => {
     res.status(500).json({ error: "Failed to list ticket statuses" });
   }
 });
-
 app.get("/api/admin/support/tickets-statuses/:id", async (req, res) => {
   try {
     res.json(
@@ -6570,7 +6410,6 @@ app.get("/api/admin/support/tickets-statuses/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to get ticket status" });
   }
 });
-
 app.get("/api/admin/support/tickets-groups", async (req, res) => {
   try {
     res.json(
@@ -6585,7 +6424,6 @@ app.get("/api/admin/support/tickets-groups", async (req, res) => {
     res.status(500).json({ error: "Failed to list ticket groups" });
   }
 });
-
 app.get("/api/admin/support/tickets-groups/:id", async (req, res) => {
   try {
     res.json(
@@ -6598,7 +6436,6 @@ app.get("/api/admin/support/tickets-groups/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to get ticket group" });
   }
 });
-
 app.get("/api/admin/support/tickets-types", async (req, res) => {
   try {
     res.json(
@@ -6613,7 +6450,6 @@ app.get("/api/admin/support/tickets-types", async (req, res) => {
     res.status(500).json({ error: "Failed to list ticket types" });
   }
 });
-
 app.get("/api/admin/support/tickets-types/:id", async (req, res) => {
   try {
     res.json(
@@ -6626,7 +6462,6 @@ app.get("/api/admin/support/tickets-types/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to get ticket type" });
   }
 });
-
 app.get("/api/admin/support/ticket-attachments", async (req, res) => {
   try {
     res.json(
@@ -6641,7 +6476,6 @@ app.get("/api/admin/support/ticket-attachments", async (req, res) => {
     res.status(500).json({ error: "Failed to list ticket attachments" });
   }
 });
-
 app.get("/api/admin/support/ticket-attachments/:id", async (req, res) => {
   try {
     res.json(
@@ -6656,7 +6490,6 @@ app.get("/api/admin/support/ticket-attachments/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to get ticket attachment" });
   }
 });
-
 app.post("/api/admin/support/ticket-attachments", async (req, res) => {
   try {
     res
@@ -6672,7 +6505,6 @@ app.post("/api/admin/support/ticket-attachments", async (req, res) => {
     res.status(500).json({ error: "Failed to create ticket attachment" });
   }
 });
-
 app.delete("/api/admin/support/ticket-attachments/:id", async (req, res) => {
   try {
     await splynx.request(
@@ -6684,7 +6516,6 @@ app.delete("/api/admin/support/ticket-attachments/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to delete ticket attachment" });
   }
 });
-
 app.get("/api/admin/support/ticket-feedbacks", async (req, res) => {
   try {
     res.json(
@@ -6699,7 +6530,6 @@ app.get("/api/admin/support/ticket-feedbacks", async (req, res) => {
     res.status(500).json({ error: "Failed to list ticket feedbacks" });
   }
 });
-
 app.post("/api/admin/support/ticket-feedbacks", async (req, res) => {
   try {
     res
@@ -6715,7 +6545,6 @@ app.post("/api/admin/support/ticket-feedbacks", async (req, res) => {
     res.status(500).json({ error: "Failed to create ticket feedbacks" });
   }
 });
-
 app.get("/api/admin/support/ticket-feedbacks/:id", async (req, res) => {
   try {
     res.json(
@@ -6728,7 +6557,6 @@ app.get("/api/admin/support/ticket-feedbacks/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to get ticket feedback" });
   }
 });
-
 app.put("/api/admin/support/ticket-feedbacks/:id", async (req, res) => {
   try {
     res
@@ -6744,7 +6572,6 @@ app.put("/api/admin/support/ticket-feedbacks/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to update ticket feedback" });
   }
 });
-
 app.delete("/api/admin/support/ticket-feedbacks/:id", async (req, res) => {
   try {
     await splynx.request(
