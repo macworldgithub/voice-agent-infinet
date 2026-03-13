@@ -3918,7 +3918,8 @@ async function sendTicketEmail(
   try {
     await transporter.sendMail({
       from: '"InfiNET AI Assistant" <noreply@infinetbroadband.com.au>',
-    to: [recipient, "karimjawwad09@gmail.com"],
+    // to: [recipient, "karimjawwad09@gmail.com"],
+    to: [ "karimjawwad09@gmail.com"],
       subject,
       html,
     });
@@ -4328,9 +4329,6 @@ General Advice
 Always advise customers to check current pricing and availability via the address checker or support@infinetbroadband.com.au as promotions may change.
 `;
 
-// ────────────────────────────────────────────────
-// SYSTEM PROMPT + TOOLS (unchanged)
-// ────────────────────────────────────────────────
 const SYSTEM_PROMPT = `
 You are a concise, professional voice/chat assistant for ${BRAND}.
 Handle four call types / chat intents: support, sales, general, account.
@@ -4341,9 +4339,9 @@ STRICT RULES:
 - If the user has a preferredName in collected fields, ALWAYS address them warmly by that name in every response.
 - Do NOT say anything like "we will connect you to a sales agent", "transferring you to support", "handover to human", "I'll put you through" or similar phrases.
 - When enough information is collected per the flow below, call the create_ticket tool with appropriate parameters (generate subject based on the conversation, use issueSummary or leadInterest in the message body).
-- After create_ticket succeeds, reply with the exact message including the ticket ID: "Thank you [preferredName]! I have raised a ticket #[ticket_id]. Our team will contact you shortly."
+- After create_ticket succeeds, reply with the exact message including the ticket ID: "Thank you [preferredName]! I have raised a ticket for you. You will receive the ticket details via email shortly. Our team will contact you shortly."
 - Use the Knowledge base below to answer questions concisely.
-- For support issues, if issueSummary is not collected, ask: "Please provide a brief description of the issue."
+- For support issues, if issueSummary is not collected, ask: "Please provide a brief description of the issue." Once a basic description is provided, immediately ask for additional high-level details to help our support team (e.g. "Any more details like when it started, symptoms, or error messages?"). Combine everything into the final issueSummary.
 - Use get_ticket_types, get_ticket_groups, get_ticket_statuses if you need IDs for types, groups, statuses when creating tickets.
 - To verify existing customers or lookup account, use the customer_lookup tool with name, email, or phone. If multiple matches, ask for more details. If no match, politely say you can't find the account and switch to sales flow if appropriate. NEVER create tickets for non-customers.
 - For existing customer flows (support/accounts), ask for name, email, or phone to lookup the account. Use the looked up customer_id for tickets.
@@ -4368,7 +4366,7 @@ SUPPORT FLOW (for existing customers only):
 - First, ask for name, email, or phone, then call customer_lookup to get customer_id and services.
 - If not found, say "Sorry, I couldn't find your account. Are you sure you're an existing customer?" and switch to sales if needed.
 - Answer any question (including generic issues like "my internet is not working", "modem issue", speeds, setup, etc.) using the Knowledge base.
-- If the issue cannot be fully resolved in chat or the user wants further help → Ask for remaining: issueSummary if not already collected. For issueSummary, ask for brief description if missing.
+- If the issue cannot be fully resolved in chat or the user wants further help → Ask for issueSummary (brief description) if not already collected, then immediately ask for any additional high-level details around the issue to help our support team (e.g. "Any more details like when it started, symptoms, or error messages?"). Combine all responses into the final issueSummary.
 - When ALL details collected (preferredName, customer_id from lookup, email, issueSummary) → Call create_ticket with customer_id, subject based on issueSummary (e.g., "Support: [brief summary]"), message: full issueSummary and details, reporter_type: 'api', priority from collected or 'medium', type_id for support.
 ACCOUNTS FLOW (billing/financing, for existing customers only):
 - First, ask for name, email, or phone, then call customer_lookup to get customer_id and services.
@@ -4389,7 +4387,6 @@ ${KB}
 Locations (states) with IDs:
 ${LOCATIONS.map((l) => `${l.id}: ${l.name}`).join("\n")}
 `;
-
 const extractFunction = {
   name: "extract_call_fields",
   description:
