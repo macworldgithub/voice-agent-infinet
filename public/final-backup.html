@@ -15,21 +15,32 @@
       --radius: 16px;
       --fs-base: clamp(13.5px, 3.1vw, 15px);
       --spacing: clamp(10px, 3vw, 16px);
+      /* --vh will be updated by JS to the real viewport height unit */
+      --vh: 1vh;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       font-size: var(--fs-base);
       color: #f1f5f9;
+      -webkit-text-size-adjust: 100%; /* avoid iOS text-size auto adjustments */
     }
+
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
+    html, body {
+      height: 100%;
       background: linear-gradient(165deg, #031022 0%, #0b223f 100%);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
       min-height: 100dvh;
       display: grid;
       place-items: center;
       padding: 8px;
     }
+
     .widget {
       width: min(100%, 420px);
-      height: min(96dvh, 760px);
+      height: min(calc(var(--vh, 1vh) * 96), 760px);
       border-radius: 20px;
       background: var(--glass);
       border: 1px solid rgba(255,255,255,0.07);
@@ -39,6 +50,7 @@
       flex-direction: column;
       backdrop-filter: blur(8px);
     }
+
     .header {
       padding: 12px 16px;
       background: linear-gradient(90deg, rgba(59,130,246,0.09), rgba(0,194,179,0.06));
@@ -66,6 +78,7 @@
       flex: 1; overflow-y: auto; padding: var(--spacing);
       display: flex; flex-direction: column; gap: clamp(10px, 3vw, 14px);
       scroll-behavior: smooth;
+      -webkit-overflow-scrolling: touch;
     }
     .bubble-row {
       display: flex;
@@ -102,63 +115,99 @@
       color: var(--muted);
       opacity: 0.8;
     }
-    .bubble-row.user .meta {
-      text-align: right;
-    }
+    .bubble-row.user .meta { text-align: right; }
 
     @keyframes appear { to { opacity:1; transform:none; } }
 
+    /* Composer: keep original horizontal layout, allow children to stretch so Send matches input height */
     .composer {
       padding: clamp(10px, 3vw, 14px) var(--spacing);
       background: rgba(0,0,0,0.28);
-      display: flex; gap: 10px; flex-shrink: 0;
+      display: flex;
+      gap: 10px;
+      flex-shrink: 0;
       border-top: 1px solid rgba(255,255,255,0.07);
+      align-items: stretch; /* restored so the send button stretches to match textarea height like your reference */
     }
     .input-wrap { flex: 1; display: flex; flex-direction: column; gap: 5px; }
+
     textarea {
-      width: 100%; min-height: 46px; max-height: 140px; resize: vertical;
-      padding: 11px 13px; border-radius: 13px;
-      background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.09);
+      width: 100%;
+      min-height: 46px;
+      max-height: 140px;
+      resize: vertical;
+      padding: 11px 13px;
+      border-radius: 13px;
+      background: rgba(255,255,255,0.035);
+      border: 1px solid rgba(255,255,255,0.09);
       color: inherit; font: inherit; outline: none; line-height: 1.42;
+      /* default font-size is inherited */
     }
     textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2.5px rgba(0,194,179,0.22); }
+
     .hint { font-size: clamp(10px, 2.7vw, 11.5px); color: var(--muted); display: flex; justify-content: space-between; padding: 0 5px; }
+
+    /* Keep the exact Send button style from your reference: padding: 0 18px */
     .btn {
       background: linear-gradient(90deg, var(--accent-2), var(--accent));
-      border: none; padding: 0 18px; border-radius: 12px;
+      border: none;
+      padding: 0 18px;          /* <-- same as your reference code */
+      border-radius: 12px;
       color: white; font-weight: 600; font-size: clamp(13px, 3.4vw, 14.5px);
       min-width: 62px; cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      align-self: stretch;     /* stretch vertically to match textarea height (keeps the same visual size) */
     }
     .btn:hover:not(:disabled) { opacity: 0.94; transform: translateY(-1px); }
     .btn:disabled { opacity: 0.48; cursor: not-allowed; }
 
     .typing-indicator {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 16px;
-      background: rgba(255,255,255,0.03);
-      border-radius: 18px 18px 18px 4px;
-      font-size: 14px;
-      color: var(--muted);
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 16px; background: rgba(255,255,255,0.03);
+      border-radius: 18px 18px 18px 4px; font-size: 14px; color: var(--muted);
       max-width: 84%;
     }
-    .typing-dots {
-      display: flex;
-      gap: 4px;
-    }
-    .typing-dot {
-      width: 6px;
-      height: 6px;
-      background: var(--muted);
-      border-radius: 50%;
-      animation: typing 1.4s infinite ease-in-out;
-    }
+    .typing-dots { display: flex; gap: 4px; }
+    .typing-dot { width: 6px; height: 6px; background: var(--muted); border-radius: 50%; animation: typing 1.4s infinite ease-in-out; }
     .typing-dot:nth-child(2) { animation-delay: 0.2s; }
     .typing-dot:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes typing {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-6px); }
+    @keyframes typing { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+
+    /* MOBILE-SPECIFIC */
+    @media (max-width: 720px) {
+      body { padding: 0; }
+
+      .widget {
+        position: fixed;
+        left: 8px;
+        right: 8px;
+        top: calc(8px + env(safe-area-inset-top));
+        bottom: calc(env(safe-area-inset-bottom) + 8px);
+        width: auto;
+        height: auto;
+        max-height: calc(var(--vh, 1vh) * 96);
+        border-radius: 14px;
+      }
+
+      .composer {
+        padding-bottom: calc(env(safe-area-inset-bottom) + 10px);
+        z-index: 5;
+      }
+
+      /* ensure >=16px on mobile to prevent browser auto-zoom */
+      textarea { font-size: 16px; min-height: 54px; }
+
+      /* keep send button same padding but let it stretch vertically with composer */
+      .btn { padding: 0 18px; }
+
+      .messages { padding-bottom: calc(var(--spacing) + 10px); }
+    }
+
+    @media (orientation: landscape) and (max-height: 420px) {
+      textarea { font-size: 16px; }
+      .btn { padding: 0 18px; }
     }
   </style>
 </head>
@@ -194,10 +243,11 @@
   </div>
 
   <script>
-    (async () => {
+    (function () {
       const messagesEl = document.getElementById('messages');
       const txt = document.getElementById('txt');
       const sendBtn = document.getElementById('send');
+
       let sessionId = null;
       let busy = false;
 
@@ -232,7 +282,7 @@
 
         row.append(msg, metaEl);
         messagesEl.appendChild(row);
-        messagesEl.scrollTop = messagesEl.scrollHeight;
+        scrollToBottom();
       }
 
       function showTyping() {
@@ -249,7 +299,7 @@
           </div>
         `;
         messagesEl.appendChild(row);
-        messagesEl.scrollTop = messagesEl.scrollHeight;
+        scrollToBottom();
         return row;
       }
 
@@ -279,13 +329,14 @@
           const data = await res.json();
           typing.remove();
           if (data?.text) addMessage({ from: 'agent', text: data.text });
-        } catch {
+          else addMessage({ from: 'agent', text: 'Sorry — no reply received.' });
+        } catch (err) {
           typing.remove();
           addMessage({ from: 'agent', text: 'Sorry — something went wrong. Try again?' });
         } finally {
           setBusy(false);
           txt.focus();
-          messagesEl.scrollTop = messagesEl.scrollHeight;
+          scrollToBottom();
         }
       }
 
@@ -304,21 +355,64 @@
         }
       }
 
-      sendBtn.onclick = sendMessage;
+      sendBtn.addEventListener('click', sendMessage);
 
-      txt.onkeydown = e => {
+      txt.addEventListener('keydown', e => {
         if (e.key === 'Enter' && e.shiftKey) {
           e.preventDefault();
           sendMessage();
         }
-      };
+      });
 
-      txt.oninput = () => {
+      txt.addEventListener('input', () => {
         document.getElementById('charCount').textContent = txt.value.length;
-      };
+      });
 
-      await init();
-      txt.focus();
+      function scrollToBottom() {
+        window.requestAnimationFrame(() => {
+          messagesEl.scrollTop = messagesEl.scrollHeight;
+        });
+      }
+
+      // MOBILE: dynamic --vh to handle address bar/keyboard changes
+      function updateVh() {
+        const vHeight = (window.visualViewport && window.visualViewport.height) ? window.visualViewport.height : window.innerHeight;
+        document.documentElement.style.setProperty('--vh', (vHeight * 0.01) + 'px');
+      }
+
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', () => { updateVh(); scrollToBottom(); });
+        window.visualViewport.addEventListener('scroll', () => { updateVh(); });
+      } else {
+        window.addEventListener('resize', () => { updateVh(); scrollToBottom(); });
+      }
+
+      txt.addEventListener('focus', () => {
+        updateVh();
+        setTimeout(scrollToBottom, 50);
+        setTimeout(scrollToBottom, 300);
+      });
+
+      txt.addEventListener('blur', () => {
+        setTimeout(updateVh, 80);
+      });
+
+      updateVh();
+
+      // auto-scroll when messages change
+      const observer = new MutationObserver(() => { scrollToBottom(); });
+      observer.observe(messagesEl, { childList: true });
+
+      init();
+
+      window.addEventListener('load', () => {
+        setTimeout(() => {
+          if (!txt.disabled) txt.focus();
+          scrollToBottom();
+        }, 100);
+      });
+
+      window._infinetChatHelpers = { updateVh, scrollToBottom };
     })();
   </script>
 </body>
