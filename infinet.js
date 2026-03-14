@@ -3901,7 +3901,7 @@ import OpenAI from "openai";
 import axios from "axios";
 import crypto from "crypto";
 import FormData from "form-data";
-import nodemailer from "nodemailer"; // ← ADDED for SparkPost email
+import nodemailer from "nodemailer";
 
 dotenv.config();
 
@@ -3927,28 +3927,14 @@ const transporter = nodemailer.createTransport({
 });
 
 if (!process.env.SMTP_PASS) {
-  console.warn(
-    "⚠️ SMTP_PASS not set in .env — email notifications will be DISABLED",
-  );
+  console.warn("⚠️ SMTP_PASS not set in .env — email notifications will be DISABLED");
 }
 
-// Helper: send email to sales@ or support@ after ticket is created
-async function sendTicketEmail(
-  ticketId,
-  ticketArgs,
-  collectedFields,
-  isSupportTicket = false,
-) {
+async function sendTicketEmail(ticketId, ticketArgs, collectedFields, isSupportTicket = false) {
   if (!process.env.SMTP_PASS) return;
-
-  const recipient = isSupportTicket
-    ? "support@infinetbroadband.com.au"
-    : "sales@infinetbroadband.com.au";
-
+  const recipient = isSupportTicket ? "support@infinetbroadband.com.au" : "sales@infinetbroadband.com.au";
   const type = isSupportTicket ? "Support" : "Sales";
-
   const subject = `New ${type} Enquiry — Ticket #${ticketId} — ${ticketArgs.subject || "Inquiry"}`;
-
   const html = `
 <!DOCTYPE html>
 <html>
@@ -3958,20 +3944,9 @@ async function sendTicketEmail(
   <p><strong>Ticket ID:</strong> ${ticketId}</p>
   <p><strong>Subject:</strong> ${ticketArgs.subject || "N/A"}</p>
   <p><strong>Priority:</strong> ${ticketArgs.priority || "medium"}</p>
-  ${
-    ticketArgs.customer_id
-      ? `<p><strong>Customer ID:</strong> ${ticketArgs.customer_id}</p>`
-      : `<p><strong>New Lead (no customer ID)</strong></p>`
-  }
-  
-  <!--
-  <h3>Collected Fields</h3>
-  <pre style="background:#f4f4f4;padding:12px;border-radius:6px;">${JSON.stringify(collectedFields || {}, null, 2)}</pre>
-  -->
-
+  ${ticketArgs.customer_id ? `<p><strong>Customer ID:</strong> ${ticketArgs.customer_id}</p>` : `<p><strong>New Lead (no customer ID)</strong></p>`}
   <h3>Message Body</h3>
   <p>${(ticketArgs.message && (ticketArgs.message.message || ticketArgs.message)) || "No additional message provided"}</p>
-
   <hr>
   <p><small>This is an automated email from the InfiNET Broadband AI Assistant.<br>
   View ticket: https://infinetbroadband-portal.com.au/admin/support/tickets/${ticketId}</small></p>
@@ -3981,14 +3956,11 @@ async function sendTicketEmail(
   try {
     await transporter.sendMail({
       from: '"InfiNET AI Assistant" <noreply@infinetbroadband.com.au>',
-    // to: [recipient, "karimjawwad09@gmail.com"],
-    to: [ "karimjawwad09@gmail.com"],
+      to: ["karimjawwad09@gmail.com"],
       subject,
       html,
     });
-    console.log(
-      `📧 Email notification sent to ${recipient} for ticket #${ticketId}`,
-    );
+    console.log(`📧 Email notification sent for ticket #${ticketId}`);
   } catch (err) {
     console.error("Failed to send ticket email:", err.message);
   }
@@ -4004,9 +3976,6 @@ const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 const sessions = new Map();
 const BRAND = "InfiNET Broadband";
 
-// ────────────────────────────────────────────────
-// SPLYNX CONFIG & CLIENT
-// ────────────────────────────────────────────────
 const CONFIG = {
   SPLYNX_BASE_URL: "https://infinetbroadband-portal.com.au/api/2.0/",
   API_KEY: "107c483d15e930b41b8d70affdd08632",
@@ -4043,16 +4012,12 @@ class SplynxApiClient {
   async generateAccessToken() {
     try {
       const nonce = Math.floor(Date.now() / 1000);
-      const response = await axios.post(
-        `${this.baseUrl}admin/auth/tokens`,
-        {
-          auth_type: "api_key",
-          key: this.apiKey,
-          nonce,
-          signature: this.generateSignature(nonce),
-        },
-        { headers: { "Content-Type": "application/json" } },
-      );
+      const response = await axios.post(`${this.baseUrl}admin/auth/tokens`, {
+        auth_type: "api_key",
+        key: this.apiKey,
+        nonce,
+        signature: this.generateSignature(nonce),
+      }, { headers: { "Content-Type": "application/json" } });
       const data = response.data;
       this.accessToken = data.access_token;
       this.accessTokenExpiration = data.access_token_expiration;
@@ -4069,14 +4034,9 @@ class SplynxApiClient {
   async renewAccessToken() {
     if (!this.refreshToken) throw new Error("No refresh token available");
     try {
-      const response = await axios.get(
-        `${this.baseUrl}admin/auth/tokens/${this.refreshToken}`,
-        {
-          headers: {
-            Authorization: `Splynx-EA (access_token=${this.accessToken})`,
-          },
-        },
-      );
+      const response = await axios.get(`${this.baseUrl}admin/auth/tokens/${this.refreshToken}`, {
+        headers: { Authorization: `Splynx-EA (access_token=${this.accessToken})` },
+      });
       const data = response.data;
       this.accessToken = data.access_token;
       this.accessTokenExpiration = data.access_token_expiration;
@@ -4094,76 +4054,42 @@ class SplynxApiClient {
     return Date.now() / 1000 + bufferSeconds > this.accessTokenExpiration;
   }
 
-  // ==================== BULLETPROOF REQUEST METHOD ====================
   async request(method, endpoint, data = null, params = {}) {
-  let headers = {};
-
-  if (data) {
-    if (typeof data.getHeaders === "function") {
-      console.log("✅ FormData detected — setting correct multipart headers");
-      Object.assign(headers, data.getHeaders());
-    } else if (data instanceof URLSearchParams) {
-      console.log("✅ URLSearchParams detected — using application/x-www-form-urlencoded");
-      headers["Content-Type"] = "application/x-www-form-urlencoded";
+    let headers = {};
+    if (data) {
+      if (typeof data.getHeaders === "function") {
+        Object.assign(headers, data.getHeaders());
+      } else if (data instanceof URLSearchParams) {
+        headers["Content-Type"] = "application/x-www-form-urlencoded";
+      } else {
+        headers["Content-Type"] = "application/json";
+      }
+    }
+    if (this.useAccessToken && this.accessToken) {
+      if (this.isTokenExpired()) await this.renewAccessToken();
+      headers.Authorization = `Splynx-EA (access_token=${this.accessToken})`;
     } else {
-      headers["Content-Type"] = "application/json";
+      headers.Authorization = this.getSignatureAuthHeader();
     }
-  }
-
-  // Authorization (unchanged)
-  if (this.useAccessToken && this.accessToken) {
-    if (this.isTokenExpired()) {
-      console.log("Token expired → renewing...");
-      await this.renewAccessToken();
-    }
-    headers.Authorization = `Splynx-EA (access_token=${this.accessToken})`;
-  } else {
-    headers.Authorization = this.getSignatureAuthHeader();
-  }
-
-  const url = `${this.baseUrl}${endpoint}`;
-  console.log(
-    `Making [${method}] to ${endpoint} with data:`,
-    data
-      ? data instanceof URLSearchParams
-        ? "URLSearchParams"
-        : typeof data.getHeaders === "function"
-        ? "FormData object"
-        : data
-      : "no data"
-  );
-
-  try {
-    const config = {
-      method,
-      url,
-      headers,
-      params,
-      ...(data && {
-        data: data instanceof URLSearchParams ? data.toString() : data,
-      }),
-      maxBodyLength: Infinity,
-      maxContentLength: Infinity,
-    };
-
-    const response = await axios(config);
-    return response.data;
+    const url = `${this.baseUrl}${endpoint}`;
+    try {
+      const config = {
+        method,
+        url,
+        headers,
+        params,
+        ...(data && { data: data instanceof URLSearchParams ? data.toString() : data }),
+      };
+      const response = await axios(config);
+      return response.data;
     } catch (err) {
       if (err.response?.status === 401) {
-        console.warn("401 → retrying after renew...");
         await this.renewAccessToken();
         return this.request(method, endpoint, data, params);
       }
-
-      console.error(
-        `[${method}] ${endpoint} failed`,
-        "error:",
-        err.response?.data || err.message
-      );
       throw err.response?.data || err;
     }
   }
-  // =================================================================
 
   async listInternetTariffs(params = {}) {
     return this.request("GET", "admin/tariffs/internet", null, params);
@@ -4173,34 +4099,32 @@ class SplynxApiClient {
     return this.request("GET", "admin/customers/customer", null, searchParams);
   }
 
-  async getCustomerTariffs(customerId, params = {}) {
-    return this.request(
-      "GET",
-      `admin/customers/customer-tariffs/${customerId}`,
-      null,
-      params
-    );
+  async getCustomerInternetServices(customerId, params = {}) {
+    return this.request("GET", `admin/customers/customer/${customerId}/internet-services`, null, params);
+  }
+
+  async getCustomerVoiceServices(customerId, params = {}) {
+    return this.request("GET", `admin/customers/customer/${customerId}/voice-services`, null, params);
+  }
+
+  async getCustomerRecurringServices(customerId, params = {}) {
+    return this.request("GET", `admin/customers/customer/${customerId}/recurring-services`, null, params);
   }
 }
+
 const splynx = new SplynxApiClient(CONFIG);
 
 (async () => {
   try {
-    if (CONFIG.USE_ACCESS_TOKEN) {
-      await splynx.generateAccessToken();
-    }
+    if (CONFIG.USE_ACCESS_TOKEN) await splynx.generateAccessToken();
   } catch (err) {
-    console.error(
-      "Initial Splynx token generation failed. Some calls may fail.",
-    );
+    console.error("Initial Splynx token generation failed.");
   }
 })();
 
 app.use(async (req, res, next) => {
   try {
-    if (CONFIG.USE_ACCESS_TOKEN && !splynx.accessToken) {
-      await splynx.generateAccessToken();
-    }
+    if (CONFIG.USE_ACCESS_TOKEN && !splynx.accessToken) await splynx.generateAccessToken();
     next();
   } catch (err) {
     console.error("Splynx middleware error:", err.message);
@@ -4208,9 +4132,6 @@ app.use(async (req, res, next) => {
   }
 });
 
-// ────────────────────────────────────────────────
-// LOCATIONS
-// ────────────────────────────────────────────────
 const LOCATIONS = [
   { id: 1, name: "Queensland" },
   { id: 2, name: "Victoria" },
@@ -4222,9 +4143,6 @@ const LOCATIONS = [
   { id: 8, name: "ACT" },
 ];
 
-// ────────────────────────────────────────────────
-// FULL KNOWLEDGE BASE (unchanged)
-// ────────────────────────────────────────────────
 const KB = `
 Knowledge base for InfiNET Broadband (use this to answer customer calls and chats concisely):
 - Greeting / Routing:
@@ -4442,6 +4360,18 @@ STRICT RULES:
 - Use get_ticket_types, get_ticket_groups, get_ticket_statuses if you need IDs for types, groups, statuses when creating tickets.
 - To verify existing customers or lookup account, use the customer_lookup tool with name, email, or phone. If multiple matches, ask for more details. If no match, politely say you can't find the account and switch to sales flow if appropriate. NEVER create tickets for non-customers.
 - For existing customer flows (support/accounts), ask for name, email, or phone to lookup the account. Use the looked up customer_id for tickets.
+
+NEW SERVICE HANDLING (CRITICAL):
+- customer_lookup returns services: { internet: [], voice: [], recurring: [] }
+- Each service has title, price, speed_download, speed_upload, status etc.
+- When user asks "which plan am I on?", "what plan do I have?", "my current service", "plan details":
+  → Reply using the services data from the tool result (e.g. "You are currently on the [title] plan – $[price]/month (XX Mbps down / YY Mbps up).")
+- If user wants to CHANGE / UPGRADE plan:
+  1. Summarise current plan(s) using services data.
+  2. Ask: "Would you like to see upgrade options based on your current service?"
+  3. If yes → call check_address_availability and show higher speed plans.
+  4. Then follow sales flow and create_ticket with subject "Plan Upgrade Request".
+
 INITIAL FLOW - follow these steps exactly:
 1. After the initial greeting and collecting preferredName, ask: "Are you a new InfiNET customer or an existing one?"
 2. If they say new (or similar), ask: "Would you like to learn more about InfiNET Broadband, or how may I assist you with our services today?"
@@ -4454,6 +4384,7 @@ INITIAL FLOW - follow these steps exactly:
    - accounts → ACCOUNTS FLOW
    - other → GENERAL flow: ask concisely "Could you please give me a bit more detail on how we can assist?" then answer using KB or create ticket if needed
    If they are not an existing customer and choose support or accounts, politely explain: "Support and accounts are for existing customers. If you're interested in our services (or moving), let's proceed with sales." and switch to sales flow.
+
 SALES FLOW - follow these steps exactly (for new or interested users):
 NOTE: If the user is existing and mentions moving, relocation, or shifting, when asking for the address in step 3, say "provide the new property address" instead of "full address".
 1. Ask: "Great! Are you interested in residential or business plans?"
@@ -4465,12 +4396,14 @@ NOTE: If the user is existing and mentions moving, relocation, or shifting, when
 7. After they select a plan → Confirm and collect remaining: email, and confirm address if not already collected.
 8. Use extract_call_fields to capture leadInterest as the selected plan title/speed.
 9. When ALL details collected (preferredName, email, leadInterest, address) → Call create_ticket with subject like "Sales Inquiry for [leadInterest]", message body including all collected details, lead_id: 0 if new, reporter_type: 'api', priority: 'medium', type_id: appropriate from get_ticket_types (e.g., for sales).
+
 SUPPORT FLOW (for existing customers only):
 - First, ask for name, email, or phone, then call customer_lookup to get customer_id and services.
 - If not found, say "Sorry, I couldn't find your account. Are you sure you're an existing customer?" and switch to sales if needed.
 - Answer any question (including generic issues like "my internet is not working", "modem issue", speeds, setup, etc.) using the Knowledge base.
 - If the issue cannot be fully resolved in chat or the user wants further help → Ask for issueSummary (brief description) if not already collected, then immediately ask for any additional high-level details around the issue to help our support team (e.g. "Any more details like when it started, symptoms, or error messages?"). Combine all responses into the final issueSummary.
 - When ALL details collected (preferredName, customer_id from lookup, email, issueSummary) → Call create_ticket with customer_id, subject based on issueSummary (e.g., "Support: [brief summary]"), message: full issueSummary and details, reporter_type: 'api', priority from collected or 'medium', type_id for support.
+
 ACCOUNTS FLOW (billing/financing, for existing customers only):
 - First, ask for name, email, or phone, then call customer_lookup to get customer_id and services.
 - If not found, say "Sorry, I couldn't find your account. Are you sure you're an existing customer?" and switch to sales if needed.
@@ -4478,7 +4411,9 @@ ACCOUNTS FLOW (billing/financing, for existing customers only):
 - Specifically for "pay a bill" or any question about paying over the phone: Reply concisely: "We can take payments or update payment details over the phone. Please call 1300 101 414 to proceed. Would you like help with anything else regarding your bill?"
 - For any specific issue → Please provide issueSummary if not already collected.
 - When ALL details collected → Call create_ticket with customer_id, subject: "Accounts Query: [brief summary]", message: issueSummary, reporter_type: 'api', priority: 'medium', type_id for accounts.
+
 GENERAL: Answer using the Knowledge base. If needed, ask clarifying questions concisely.
+
 TOOL USAGE (CRITICAL):
 - When the customer asks about plans, pricing, speeds, upgrades or "what plans do you have?": call the get_internet_plans tool.
 - When the customer asks about availability at their address or you reach step 4 in the sales flow: call check_address_availability with the full address.
@@ -4486,22 +4421,20 @@ TOOL USAGE (CRITICAL):
 - The tool results will be injected into the conversation. ALWAYS use the live tool data for plans and availability (never rely on old hardcoded KB plans).
 - After a tool result, continue the flow concisely using the live data.
 - Call extract_call_fields whenever the user provides any personal info or intent.
+
 Knowledge base for InfiNET Broadband (use this to answer customer calls and chats concisely):
 ${KB}
 Locations (states) with IDs:
 ${LOCATIONS.map((l) => `${l.id}: ${l.name}`).join("\n")}
 `;
+
 const extractFunction = {
   name: "extract_call_fields",
-  description:
-    "Extract fields from user message: intent (support/sales/general/account), issueSummary, preferredName (what they want to be called), email, priority, callbackRequest (boolean), timeline, leadInterest, accountNumber, name, phone. Omit fields not present.",
+  description: "Extract fields from user message: intent (support/sales/general/account), issueSummary, preferredName (what they want to be called), email, priority, callbackRequest (boolean), timeline, leadInterest, accountNumber, name, phone. Omit fields not present.",
   parameters: {
     type: "object",
     properties: {
-      intent: {
-        type: "string",
-        enum: ["support", "sales", "general", "account"],
-      },
+      intent: { type: "string", enum: ["support", "sales", "general", "account"] },
       issueSummary: { type: "string" },
       preferredName: { type: "string" },
       email: { type: "string" },
@@ -4519,23 +4452,17 @@ const extractFunction = {
 
 const getPlansTool = {
   name: "get_internet_plans",
-  description:
-    "Fetch the latest live internet tariff plans (prices, speeds, availability). ALWAYS call this for any plan/pricing/speed question.",
+  description: "Fetch the latest live internet tariff plans (prices, speeds, availability). ALWAYS call this for any plan/pricing/speed question.",
   parameters: { type: "object", properties: {}, required: [] },
 };
 
 const checkAvailabilityTool = {
   name: "check_address_availability",
-  description:
-    "Check which plans are available at a customer's address. Requires full address.",
+  description: "Check which plans are available at a customer's address. Requires full address.",
   parameters: {
     type: "object",
     properties: {
-      address: {
-        type: "string",
-        description:
-          "Full address including street, suburb, state and postcode if possible",
-      },
+      address: { type: "string", description: "Full address including street, suburb, state and postcode if possible" },
     },
     required: ["address"],
   },
@@ -4543,8 +4470,7 @@ const checkAvailabilityTool = {
 
 const customerLookupTool = {
   name: "customer_lookup",
-  description:
-    "Lookup customer by name, email, or phone to verify existing customer and get account details and services. Provide at least one.",
+  description: "Lookup customer by name, email, or phone to verify existing customer and get account details and services. Provide at least one.",
   parameters: {
     type: "object",
     properties: {
@@ -4558,8 +4484,7 @@ const customerLookupTool = {
 
 const createTicketTool = {
   name: "create_ticket",
-  description:
-    "Create a new ticket in Splynx. Use this when ready to raise a ticket based on the flow.",
+  description: "Create a new ticket in Splynx. Use this when ready to raise a ticket based on the flow.",
   parameters: {
     type: "object",
     properties: {
@@ -4567,10 +4492,7 @@ const createTicketTool = {
       incoming_customer_id: { type: "number" },
       lead_id: { type: "number" },
       reporter_id: { type: "number" },
-      reporter_type: {
-        type: "string",
-        enum: ["admin", "customer", "api", "incoming", "none"],
-      },
+      reporter_type: { type: "string", enum: ["admin", "customer", "api", "incoming", "none"] },
       hidden: { type: "boolean" },
       assign_to: { type: "number" },
       status_id: { type: "number" },
@@ -4583,10 +4505,7 @@ const createTicketTool = {
       unread_by_customer: { type: "boolean" },
       unread_by_admin: { type: "boolean" },
       closed: { type: "boolean" },
-      source: {
-        type: "string",
-        enum: ["administration", "api", "portal", "widget", "incoming"],
-      },
+      source: { type: "string", enum: ["administration", "api", "portal", "widget", "incoming"] },
       trash: { type: "number" },
       shareable: { type: "number" },
       note: { type: "string" },
@@ -4642,12 +4561,9 @@ const tools = [
   getTicketStatusesTool,
 ];
 
-// ────────────────────────────────────────────────
 // HELPER FUNCTIONS
-// ────────────────────────────────────────────────
 function mkSession(sessionId) {
-  const id =
-    sessionId || `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const id = sessionId || `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const session = {
     id,
     collected: {},
@@ -4660,11 +4576,7 @@ function mkSession(sessionId) {
 
 function normalizeText(t) {
   if (!t) return "";
-  return t
-    .toString()
-    .replace(/\u200B/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  return t.toString().replace(/\u200B/g, "").replace(/\s+/g, " ").trim();
 }
 
 function safeParseJSON(s) {
@@ -4785,9 +4697,7 @@ Address: ${address}`;
       ACT: "ACT",
     };
     if (nameMap[stateName]) stateName = nameMap[stateName];
-    const loc = LOCATIONS.find(
-      (l) => l.name.toLowerCase() === stateName.toLowerCase(),
-    );
+    const loc = LOCATIONS.find((l) => l.name.toLowerCase() === stateName.toLowerCase());
     return loc ? loc.id : null;
   } catch (err) {
     console.error("Location determination failed:", err.message);
@@ -4798,70 +4708,46 @@ Address: ${address}`;
 async function customerLookup({ name, email, phone }) {
   const main_attributes = {};
   if (name) main_attributes.name = name;
-  // if (email) main_attributes.email = email;
   if (email) main_attributes.login = email;
   if (phone) main_attributes.phone = phone;
 
   const searchParams = { main_attributes };
   console.log("Customer lookup with params:", searchParams);
   const customers = await splynx.searchCustomers(searchParams);
+
   if (!customers || customers.length === 0) {
     return { success: false, message: "No customer found" };
   }
   if (customers.length > 1) {
     return { success: true, multiple: true, customers };
   }
+
   const customer = customers[0];
-  let services = [];
+
+  let services = { internet: [], voice: [], recurring: [] };
   try {
-    services = await splynx.getCustomerTariffs(customer.id);
+    services.internet = await splynx.getCustomerInternetServices(customer.id);
+    services.voice = await splynx.getCustomerVoiceServices(customer.id);
+    services.recurring = await splynx.getCustomerRecurringServices(customer.id);
+    console.log("Customer services fetched:", services);
   } catch (err) {
-    console.error("Failed to get tariffs for customer", customer.id, err);
+    console.error("Failed to get services for customer", customer.id, err);
   }
+
   return { success: true, customer, services };
 }
 
-function objectToFormData(obj, form = new FormData(), namespace = "") {
-  for (const property in obj) {
-    if (obj.hasOwnProperty(property)) {
-      const formKey = namespace ? `${namespace}[${property}]` : property;
-      if (
-        typeof obj[property] === "object" &&
-        !(obj[property] instanceof File) &&
-        !Array.isArray(obj[property])
-      ) {
-        objectToFormData(obj[property], form, formKey);
-      } else if (Array.isArray(obj[property])) {
-        obj[property].forEach((item) => {
-          const arrayKey = `${formKey}[]`;
-          if (typeof item === "object" && !(item instanceof File)) {
-            objectToFormData(item, form, arrayKey);
-          } else {
-            form.append(arrayKey, item);
-          }
-        });
-      } else {
-        form.append(formKey, obj[property]);
-      }
-    }
-  }
-  return form;
-}
-// Replace the old objectToFormData function with this
 function objectToUrlEncoded(obj, params = new URLSearchParams(), namespace = "") {
   for (const property in obj) {
     if (!obj.hasOwnProperty(property)) continue;
     const formKey = namespace ? `${namespace}[${property}]` : property;
     const value = obj[property];
-
     if (value === undefined || value === null) continue;
-
     if (typeof value === "object" && !Array.isArray(value)) {
       objectToUrlEncoded(value, params, formKey);
     } else if (Array.isArray(value)) {
       value.forEach((item) => params.append(`${formKey}[]`, item));
     } else {
-      // Boolean → 0/1 (better for Splynx), everything else string
       const valStr = typeof value === "boolean" ? (value ? "1" : "0") : String(value);
       params.append(formKey, valStr);
     }
@@ -4869,9 +4755,7 @@ function objectToUrlEncoded(obj, params = new URLSearchParams(), namespace = "")
   return params;
 }
 
-// ────────────────────────────────────────────────
-// AGENT ENDPOINTS (with email notification added)
-// ────────────────────────────────────────────────
+// AGENT ENDPOINTS
 app.post("/api/chat/init", async (req, res) => {
   try {
     const session = mkSession();
@@ -4886,53 +4770,41 @@ app.post("/api/chat/init", async (req, res) => {
 });
 
 app.post("/api/voice", upload.single("audio"), async (req, res) => {
-  const incomingSessionId =
-    (req.body && req.body.sessionId) ||
-    req.query.sessionId ||
-    req.headers["x-session-id"] ||
-    null;
-  if (!req.file)
-    return res
-      .status(400)
-      .json({ error: "Missing audio file (multipart field 'audio')" });
+  const incomingSessionId = (req.body && req.body.sessionId) || req.query.sessionId || req.headers["x-session-id"] || null;
+  if (!req.file) return res.status(400).json({ error: "Missing audio file (multipart field 'audio')" });
+
   const uploadedPath = path.resolve(req.file.path);
   let convertedPath = null;
+
   try {
-    const session =
-      incomingSessionId && sessions.has(incomingSessionId)
-        ? sessions.get(incomingSessionId)
-        : mkSession(incomingSessionId);
+    const session = incomingSessionId && sessions.has(incomingSessionId) ? sessions.get(incomingSessionId) : mkSession(incomingSessionId);
     const origName = (req.file.originalname || "").toLowerCase();
     const mimetype = (req.file.mimetype || "").toLowerCase();
-    const looksLikeWav =
-      origName.endsWith(".wav") ||
-      mimetype === "audio/wav" ||
-      mimetype === "audio/wave" ||
-      mimetype === "audio/x-wav";
+    const looksLikeWav = origName.endsWith(".wav") || mimetype === "audio/wav" || mimetype === "audio/wave" || mimetype === "audio/x-wav";
+
     if (looksLikeWav) {
       convertedPath = uploadedPath;
     } else {
       convertedPath = await convertToWav(uploadedPath);
     }
+
     const transcriptionResp = await openai.audio.transcriptions.create({
       file: fs.createReadStream(convertedPath),
       model: "gpt-4o-mini-transcribe",
     });
+
     const userTextRaw = normalizeText(transcriptionResp?.text || "");
     if (!userTextRaw) {
-      const prompt =
-        "Sorry, I didn't catch that — could you please repeat briefly?";
+      const prompt = "Sorry, I didn't catch that — could you please repeat briefly?";
       const ttsBuf = await makeTTS(prompt);
       session.lastSeen = new Date().toISOString();
       sessions.set(session.id, session);
-      return res.json({
-        sessionId: session.id,
-        text: prompt,
-        audioBase64: ttsBuf ? ttsBuf.toString("base64") : null,
-      });
+      return res.json({ sessionId: session.id, text: prompt, audioBase64: ttsBuf ? ttsBuf.toString("base64") : null });
     }
+
     session.messages.push({ role: "user", content: userTextRaw });
     let assistantText = null;
+
     const firstCompletion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: session.messages,
@@ -4941,12 +4813,14 @@ app.post("/api/voice", upload.single("audio"), async (req, res) => {
       temperature: 0.0,
       max_tokens: 300,
     });
+
     const firstMsg = firstCompletion.choices?.[0]?.message;
     if (firstMsg?.function_call) {
       const funcName = firstMsg.function_call.name;
       const args = safeParseJSON(firstMsg.function_call.arguments) || {};
       session.messages.push(firstMsg);
       let toolContent;
+
       if (funcName === "extract_call_fields") {
         applyExtractionToSession(session, args);
         toolContent = JSON.stringify({ success: true });
@@ -4971,18 +4845,13 @@ app.post("/api/voice", upload.single("audio"), async (req, res) => {
           const locId = await determineLocationId(address);
           const tariffs = await fetchTariffs();
           const availablePlans = locId
-            ? tariffs.filter(
-                (t) =>
-                  t.available_for_locations &&
-                  t.available_for_locations.includes(locId),
-              )
+            ? tariffs.filter((t) => t.available_for_locations && t.available_for_locations.includes(locId))
             : [];
           toolContent = JSON.stringify({
             success: true,
             address,
             locationId: locId,
-            locationName:
-              LOCATIONS.find((l) => l.id === locId)?.name || "Unknown",
+            locationName: LOCATIONS.find((l) => l.id === locId)?.name || "Unknown",
             availablePlans: availablePlans.map((p) => ({
               title: p.title,
               price: parseFloat(p.price),
@@ -5004,79 +4873,42 @@ app.post("/api/voice", upload.single("audio"), async (req, res) => {
           if (typeof fixedArgs.message === "string") {
             fixedArgs.message = { message: fixedArgs.message };
           }
-          // NEW — FIXED
-const urlEncoded = objectToUrlEncoded(fixedArgs);
-console.log("Creating ticket with args:", JSON.stringify(fixedArgs));
+          const urlEncoded = objectToUrlEncoded(fixedArgs);
+          console.log("Creating ticket with args:", JSON.stringify(fixedArgs));
+          const response = await splynx.request("POST", "admin/support/tickets", urlEncoded);
+          toolContent = JSON.stringify({ success: true, ticket_id: response.id });
 
-const response = await splynx.request(
-  "POST",
-  "admin/support/tickets",
-  urlEncoded   // ← now URLSearchParams
-);
-
-          toolContent = JSON.stringify({
-            success: true,
-            ticket_id: response.id,
-          });
-
-          // ───── EMAIL NOTIFICATION (NEW) ─────
-          const isSupportTicket = !!(
-            fixedArgs.customer_id && parseInt(fixedArgs.customer_id) > 0
-          );
-          await sendTicketEmail(
-            response.id,
-            fixedArgs,
-            session.collected,
-            isSupportTicket,
-          );
+          const isSupportTicket = !!(fixedArgs.customer_id && parseInt(fixedArgs.customer_id) > 0);
+          await sendTicketEmail(response.id, fixedArgs, session.collected, isSupportTicket);
         } catch (err) {
-          console.error(
-            "Create ticket failed with args:",
-            JSON.stringify(args),
-            "error:",
-            err,
-          );
-          toolContent = JSON.stringify({
-            success: false,
-            error: err.message || "Failed to create ticket",
-          });
+          console.error("Create ticket failed with args:", JSON.stringify(args), "error:", err);
+          toolContent = JSON.stringify({ success: false, error: err.message || "Failed to create ticket" });
         }
       } else if (funcName === "get_ticket_types") {
         try {
-          const types = await splynx.request(
-            "GET",
-            "admin/support/tickets-types",
-          );
+          const types = await splynx.request("GET", "admin/support/tickets-types");
           toolContent = JSON.stringify({ success: true, types });
         } catch (err) {
           toolContent = JSON.stringify({ success: false, error: err.message });
         }
       } else if (funcName === "get_ticket_groups") {
         try {
-          const groups = await splynx.request(
-            "GET",
-            "admin/support/tickets-groups",
-          );
+          const groups = await splynx.request("GET", "admin/support/tickets-groups");
           toolContent = JSON.stringify({ success: true, groups });
         } catch (err) {
           toolContent = JSON.stringify({ success: false, error: err.message });
         }
       } else if (funcName === "get_ticket_statuses") {
         try {
-          const statuses = await splynx.request(
-            "GET",
-            "admin/support/tickets-statuses",
-          );
+          const statuses = await splynx.request("GET", "admin/support/tickets-statuses");
           toolContent = JSON.stringify({ success: true, statuses });
         } catch (err) {
           toolContent = JSON.stringify({ success: false, error: err.message });
         }
       }
-      session.messages.push({
-        role: "function",
-        name: funcName,
-        content: toolContent,
-      });
+
+      session.messages.push({ role: "function", name: funcName, content: toolContent });
+
       const collectedSummary = `CollectedFields: ${JSON.stringify(session.collected || {})}.`;
       const followupSystem = `You are a concise assistant for ISP CRM. Use collected fields and ask for remaining missing info concisely. Use the tool results above for accurate plans and availability.`;
       const finalMessages = [
@@ -5084,23 +4916,25 @@ const response = await splynx.request(
         ...session.messages,
         { role: "system", content: collectedSummary },
       ];
+
       const finalResp = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: finalMessages,
         temperature: 0.0,
         max_tokens: 350,
       });
-      assistantText =
-        finalResp.choices?.[0]?.message?.content?.trim() ||
-        "Thanks — I have your details.";
+
+      assistantText = finalResp.choices?.[0]?.message?.content?.trim() || "Thanks — I have your details.";
       session.messages.push({ role: "assistant", content: assistantText });
     } else if (firstMsg?.content) {
       assistantText = firstMsg.content;
       session.messages.push({ role: "assistant", content: assistantText });
     }
+
     const ttsBuf = await makeTTS(assistantText);
     session.lastSeen = new Date().toISOString();
     sessions.set(session.id, session);
+
     return res.json({
       sessionId: session.id,
       text: assistantText,
@@ -5111,16 +4945,10 @@ const response = await splynx.request(
     return res.status(500).json({ error: err?.message || "server error" });
   } finally {
     try {
-      if (uploadedPath && fs.existsSync(uploadedPath))
-        fs.unlinkSync(uploadedPath);
+      if (uploadedPath && fs.existsSync(uploadedPath)) fs.unlinkSync(uploadedPath);
     } catch (_) {}
     try {
-      if (
-        convertedPath &&
-        convertedPath !== uploadedPath &&
-        fs.existsSync(convertedPath)
-      )
-        fs.unlinkSync(convertedPath);
+      if (convertedPath && convertedPath !== uploadedPath && fs.existsSync(convertedPath)) fs.unlinkSync(convertedPath);
     } catch (_) {}
   }
 });
@@ -5129,12 +4957,11 @@ app.post("/api/chat/message", async (req, res) => {
   try {
     const { sessionId, message } = req.body;
     if (!message) return res.status(400).json({ error: "Missing message" });
-    const session =
-      sessionId && sessions.has(sessionId)
-        ? sessions.get(sessionId)
-        : mkSession(sessionId);
+
+    const session = sessionId && sessions.has(sessionId) ? sessions.get(sessionId) : mkSession(sessionId);
     session.messages.push({ role: "user", content: message });
     let assistantText = null;
+
     const firstCompletion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: session.messages,
@@ -5143,12 +4970,14 @@ app.post("/api/chat/message", async (req, res) => {
       temperature: 0.0,
       max_tokens: 300,
     });
+
     const firstMsg = firstCompletion.choices?.[0]?.message;
     if (firstMsg?.function_call) {
       const funcName = firstMsg.function_call.name;
       const args = safeParseJSON(firstMsg.function_call.arguments) || {};
       session.messages.push(firstMsg);
       let toolContent;
+
       if (funcName === "extract_call_fields") {
         applyExtractionToSession(session, args);
         toolContent = JSON.stringify({ success: true });
@@ -5173,18 +5002,13 @@ app.post("/api/chat/message", async (req, res) => {
           const locId = await determineLocationId(address);
           const tariffs = await fetchTariffs();
           const availablePlans = locId
-            ? tariffs.filter(
-                (t) =>
-                  t.available_for_locations &&
-                  t.available_for_locations.includes(locId),
-              )
+            ? tariffs.filter((t) => t.available_for_locations && t.available_for_locations.includes(locId))
             : [];
           toolContent = JSON.stringify({
             success: true,
             address,
             locationId: locId,
-            locationName:
-              LOCATIONS.find((l) => l.id === locId)?.name || "Unknown",
+            locationName: LOCATIONS.find((l) => l.id === locId)?.name || "Unknown",
             availablePlans: availablePlans.map((p) => ({
               title: p.title,
               price: parseFloat(p.price),
@@ -5206,79 +5030,42 @@ app.post("/api/chat/message", async (req, res) => {
           if (typeof fixedArgs.message === "string") {
             fixedArgs.message = { message: fixedArgs.message };
           }
-          // NEW — FIXED
-const urlEncoded = objectToUrlEncoded(fixedArgs);
-console.log("Creating ticket with args:", JSON.stringify(fixedArgs));
+          const urlEncoded = objectToUrlEncoded(fixedArgs);
+          console.log("Creating ticket with args:", JSON.stringify(fixedArgs));
+          const response = await splynx.request("POST", "admin/support/tickets", urlEncoded);
+          toolContent = JSON.stringify({ success: true, ticket_id: response.id });
 
-const response = await splynx.request(
-  "POST",
-  "admin/support/tickets",
-  urlEncoded   // ← now URLSearchParams
-);
-
-          toolContent = JSON.stringify({
-            success: true,
-            ticket_id: response.id,
-          });
-
-          // ───── EMAIL NOTIFICATION (NEW) ─────
-          const isSupportTicket = !!(
-            fixedArgs.customer_id && parseInt(fixedArgs.customer_id) > 0
-          );
-          await sendTicketEmail(
-            response.id,
-            fixedArgs,
-            session.collected,
-            isSupportTicket,
-          );
+          const isSupportTicket = !!(fixedArgs.customer_id && parseInt(fixedArgs.customer_id) > 0);
+          await sendTicketEmail(response.id, fixedArgs, session.collected, isSupportTicket);
         } catch (err) {
-          console.error(
-            "Create ticket failed with args:",
-            JSON.stringify(args),
-            "error:",
-            err,
-          );
-          toolContent = JSON.stringify({
-            success: false,
-            error: err.message || "Failed to create ticket",
-          });
+          console.error("Create ticket failed with args:", JSON.stringify(args), "error:", err);
+          toolContent = JSON.stringify({ success: false, error: err.message || "Failed to create ticket" });
         }
       } else if (funcName === "get_ticket_types") {
         try {
-          const types = await splynx.request(
-            "GET",
-            "admin/support/tickets-types",
-          );
+          const types = await splynx.request("GET", "admin/support/tickets-types");
           toolContent = JSON.stringify({ success: true, types });
         } catch (err) {
           toolContent = JSON.stringify({ success: false, error: err.message });
         }
       } else if (funcName === "get_ticket_groups") {
         try {
-          const groups = await splynx.request(
-            "GET",
-            "admin/support/tickets-groups",
-          );
+          const groups = await splynx.request("GET", "admin/support/tickets-groups");
           toolContent = JSON.stringify({ success: true, groups });
         } catch (err) {
           toolContent = JSON.stringify({ success: false, error: err.message });
         }
       } else if (funcName === "get_ticket_statuses") {
         try {
-          const statuses = await splynx.request(
-            "GET",
-            "admin/support/tickets-statuses",
-          );
+          const statuses = await splynx.request("GET", "admin/support/tickets-statuses");
           toolContent = JSON.stringify({ success: true, statuses });
         } catch (err) {
           toolContent = JSON.stringify({ success: false, error: err.message });
         }
       }
-      session.messages.push({
-        role: "function",
-        name: funcName,
-        content: toolContent,
-      });
+
+      session.messages.push({ role: "function", name: funcName, content: toolContent });
+
       const collectedSummary = `CollectedFields: ${JSON.stringify(session.collected || {})}.`;
       const followupSystem = `You are a concise assistant for ISP CRM. Use collected fields and ask for remaining missing info concisely. Use the tool results above for accurate plans and availability.`;
       const finalMessages = [
@@ -5286,22 +5073,24 @@ const response = await splynx.request(
         ...session.messages,
         { role: "system", content: collectedSummary },
       ];
+
       const finalResp = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: finalMessages,
         temperature: 0.0,
         max_tokens: 350,
       });
-      assistantText =
-        finalResp.choices?.[0]?.message?.content?.trim() ||
-        "Thanks — I have your details.";
+
+      assistantText = finalResp.choices?.[0]?.message?.content?.trim() || "Thanks — I have your details.";
       session.messages.push({ role: "assistant", content: assistantText });
     } else if (firstMsg?.content) {
       assistantText = firstMsg.content;
       session.messages.push({ role: "assistant", content: assistantText });
     }
+
     session.lastSeen = new Date().toISOString();
     sessions.set(session.id, session);
+
     return res.json({
       sessionId: session.id,
       text: assistantText,
@@ -5313,65 +5102,49 @@ const response = await splynx.request(
   }
 });
 
-// ────────────────────────────────────────────────
-// SPLYNX PROXY ROUTES (unchanged + integrated GET APIs from Group Services)
-// ────────────────────────────────────────────────
+// SPLYNX PROXY ROUTES (FULL)
 app.get("/health", (req, res) => {
   res.json({
     status: "ok",
     splynx: {
       hasToken: !!splynx.accessToken,
-      tokenExpires: splynx.accessTokenExpiration
-        ? new Date(splynx.accessTokenExpiration * 1000).toISOString()
-        : null,
+      tokenExpires: splynx.accessTokenExpiration ? new Date(splynx.accessTokenExpiration * 1000).toISOString() : null,
     },
   });
 });
+
 app.get("/api/customers", async (req, res) => {
   try {
-    res.json(
-      await splynx.request("GET", "admin/customers/customer", null, {
-        limit: 10,
-        offset: 0,
-      }),
-    );
+    res.json(await splynx.request("GET", "admin/customers/customer", null, { limit: 10, offset: 0 }));
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch customers", details: err });
   }
 });
+
 app.post("/api/customers", async (req, res) => {
   try {
-    res
-      .status(201)
-      .json(await splynx.request("POST", "admin/customers/customer", req.body));
+    res.status(201).json(await splynx.request("POST", "admin/customers/customer", req.body));
   } catch (err) {
     res.status(500).json({ error: "Failed to create customer" });
   }
 });
+
 app.get("/api/customer/:id", async (req, res) => {
   try {
-    res.json(
-      await splynx.request("GET", `admin/customers/customer/${req.params.id}`),
-    );
+    res.json(await splynx.request("GET", `admin/customers/customer/${req.params.id}`));
   } catch (err) {
     res.status(500).json({ error: "Customer not found" });
   }
 });
+
 app.put("/api/customer/:id", async (req, res) => {
   try {
-    res
-      .status(202)
-      .json(
-        await splynx.request(
-          "PUT",
-          `admin/customers/customer/${req.params.id}`,
-          req.body,
-        ),
-      );
+    res.status(202).json(await splynx.request("PUT", `admin/customers/customer/${req.params.id}`, req.body));
   } catch (err) {
     res.status(500).json({ error: "Failed to update customer" });
   }
 });
+
 app.delete("/api/customer/:id", async (req, res) => {
   try {
     await splynx.request("DELETE", `admin/customers/customer/${req.params.id}`);
@@ -5380,398 +5153,218 @@ app.delete("/api/customer/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to delete customer" });
   }
 });
+
 app.get("/api/customer/:customer_id/logs-changes", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        `admin/customers/customer/${req.params.customer_id}/logs-changes`,
-      ),
-    );
+    res.json(await splynx.request("GET", `admin/customers/customer/${req.params.customer_id}/logs-changes`));
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch customer logs changes" });
   }
 });
-app.get(
-  "/api/customer/:customer_id/logs-changes--first-activation",
-  async (req, res) => {
-    try {
-      res.json(
-        await splynx.request(
-          "GET",
-          `admin/customers/customer/${req.params.customer_id}/logs-changes--first-activation`,
-        ),
-      );
-    } catch (err) {
-      res
-        .status(500)
-        .json({ error: "Failed to fetch customer first activation" });
-    }
-  },
-);
-app.get(
-  "/api/customer/:customer_id/logs-changes--last-activation",
-  async (req, res) => {
-    try {
-      res.json(
-        await splynx.request(
-          "GET",
-          `admin/customers/customer/${req.params.customer_id}/logs-changes--last-activation`,
-        ),
-      );
-    } catch (err) {
-      res
-        .status(500)
-        .json({ error: "Failed to fetch customer last activation" });
-    }
-  },
-);
+
+app.get("/api/customer/:customer_id/logs-changes--first-activation", async (req, res) => {
+  try {
+    res.json(await splynx.request("GET", `admin/customers/customer/${req.params.customer_id}/logs-changes--first-activation`));
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch customer first activation" });
+  }
+});
+
+app.get("/api/customer/:customer_id/logs-changes--last-activation", async (req, res) => {
+  try {
+    res.json(await splynx.request("GET", `admin/customers/customer/${req.params.customer_id}/logs-changes--last-activation`));
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch customer last activation" });
+  }
+});
+
 app.get("/api/customer-cap/:id", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        `admin/customers/customer-cap/${req.params.id}`,
-      ),
-    );
+    res.json(await splynx.request("GET", `admin/customers/customer-cap/${req.params.id}`));
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch customer cap" });
   }
 });
+
 app.put("/api/customer-cap/:id", async (req, res) => {
   try {
-    res
-      .status(202)
-      .json(
-        await splynx.request(
-          "PUT",
-          `admin/customers/customer-cap/${req.params.id}`,
-          req.body,
-        ),
-      );
+    res.status(202).json(await splynx.request("PUT", `admin/customers/customer-cap/${req.params.id}`, req.body));
   } catch (err) {
     res.status(500).json({ error: "Failed to update customer cap" });
   }
 });
+
 app.get("/api/customer-bonus-traffic-counter", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        "admin/customers/customer-bonus-traffic-counter",
-        null,
-        req.query,
-      ),
-    );
+    res.json(await splynx.request("GET", "admin/customers/customer-bonus-traffic-counter", null, req.query));
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch bonus traffic counters" });
   }
 });
+
 app.post("/api/customer-bonus-traffic-counter", async (req, res) => {
   try {
-    res
-      .status(201)
-      .json(
-        await splynx.request(
-          "POST",
-          "admin/customers/customer-bonus-traffic-counter",
-          req.body,
-        ),
-      );
+    res.status(201).json(await splynx.request("POST", "admin/customers/customer-bonus-traffic-counter", req.body));
   } catch (err) {
     res.status(500).json({ error: "Failed to create bonus traffic counter" });
   }
 });
-app.get(
-  "/api/customer-bonus-traffic-counter/:service_id--:date",
-  async (req, res) => {
-    try {
-      res.json(
-        await splynx.request(
-          "GET",
-          `admin/customers/customer-bonus-traffic-counter/${req.params.service_id}--${req.params.date}`,
-        ),
-      );
-    } catch (err) {
-      res.status(500).json({ error: "Failed to fetch bonus traffic counter" });
-    }
-  },
-);
-app.put(
-  "/api/customer-bonus-traffic-counter/:service_id--:date",
-  async (req, res) => {
-    try {
-      res
-        .status(202)
-        .json(
-          await splynx.request(
-            "PUT",
-            `admin/customers/customer-bonus-traffic-counter/${req.params.service_id}--${req.params.date}`,
-            req.body,
-          ),
-        );
-    } catch (err) {
-      res.status(500).json({ error: "Failed to update bonus traffic counter" });
-    }
-  },
-);
-app.delete(
-  "/api/customer-bonus-traffic-counter/:service_id--:date",
-  async (req, res) => {
-    try {
-      await splynx.request(
-        "DELETE",
-        `admin/customers/customer-bonus-traffic-counter/${req.params.service_id}--${req.params.date}`,
-      );
-      res.status(204).send();
-    } catch (err) {
-      res.status(500).json({ error: "Failed to delete bonus traffic counter" });
-    }
-  },
-);
+
+app.get("/api/customer-bonus-traffic-counter/:service_id--:date", async (req, res) => {
+  try {
+    res.json(await splynx.request("GET", `admin/customers/customer-bonus-traffic-counter/${req.params.service_id}--${req.params.date}`));
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch bonus traffic counter" });
+  }
+});
+
+app.put("/api/customer-bonus-traffic-counter/:service_id--:date", async (req, res) => {
+  try {
+    res.status(202).json(await splynx.request("PUT", `admin/customers/customer-bonus-traffic-counter/${req.params.service_id}--${req.params.date}`, req.body));
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update bonus traffic counter" });
+  }
+});
+
+app.delete("/api/customer-bonus-traffic-counter/:service_id--:date", async (req, res) => {
+  try {
+    await splynx.request("DELETE", `admin/customers/customer-bonus-traffic-counter/${req.params.service_id}--${req.params.date}`);
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: "Failed to delete bonus traffic counter" });
+  }
+});
+
 app.get("/api/customer-billing-info/:customer_id", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        `admin/customers/billing-info/${req.params.customer_id}`,
-        null,
-        req.query,
-      ),
-    );
+    res.json(await splynx.request("GET", `admin/customers/billing-info/${req.params.customer_id}`, null, req.query));
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch customer billing info" });
   }
 });
+
 app.get("/api/customer-payment-accounts", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        "admin/customers/customer-payment-accounts",
-        null,
-        req.query,
-      ),
-    );
+    res.json(await splynx.request("GET", "admin/customers/customer-payment-accounts", null, req.query));
   } catch (err) {
-    res
-      .status(500)
-      .json({ error: "Failed to fetch customer payment accounts" });
+    res.status(500).json({ error: "Failed to fetch customer payment accounts" });
   }
 });
+
 app.get("/api/customer-payment-account-data", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        "admin/customers/customer-payment-account-data",
-        null,
-        req.query,
-      ),
-    );
+    res.json(await splynx.request("GET", "admin/customers/customer-payment-account-data", null, req.query));
   } catch (err) {
-    res
-      .status(500)
-      .json({ error: "Failed to fetch customer payment account data" });
+    res.status(500).json({ error: "Failed to fetch customer payment account data" });
   }
 });
+
 app.get("/api/customer-payment-accounts-by-id", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        "admin/customers/customer-payment-accounts",
-        null,
-        req.query,
-      ),
-    );
+    res.json(await splynx.request("GET", "admin/customers/customer-payment-accounts", null, req.query));
   } catch (err) {
-    res
-      .status(500)
-      .json({ error: "Failed to fetch customer payment accounts by id" });
+    res.status(500).json({ error: "Failed to fetch customer payment accounts by id" });
   }
 });
+
 app.put("/api/customer-payment-accounts-by-id", async (req, res) => {
   try {
-    res
-      .status(202)
-      .json(
-        await splynx.request(
-          "PUT",
-          "admin/customers/customer-payment-accounts",
-          req.body,
-          req.query,
-        ),
-      );
+    res.status(202).json(await splynx.request("PUT", "admin/customers/customer-payment-accounts", req.body, req.query));
   } catch (err) {
-    res
-      .status(500)
-      .json({ error: "Failed to update customer payment account" });
+    res.status(500).json({ error: "Failed to update customer payment account" });
   }
 });
+
 app.delete("/api/customer-payment-accounts-by-id", async (req, res) => {
   try {
-    await splynx.request(
-      "DELETE",
-      "admin/customers/customer-payment-accounts",
-      null,
-      req.query,
-    );
+    await splynx.request("DELETE", "admin/customers/customer-payment-accounts", null, req.query);
     res.status(204).send();
   } catch (err) {
-    res
-      .status(500)
-      .json({ error: "Failed to delete customer payment account" });
+    res.status(500).json({ error: "Failed to delete customer payment account" });
   }
 });
+
 app.get("/api/customer-statistics", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        "admin/customers/customer-statistics",
-        null,
-        req.query,
-      ),
-    );
+    res.json(await splynx.request("GET", "admin/customers/customer-statistics", null, req.query));
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch customer statistics" });
   }
 });
+
 app.get("/api/customer-statistics/:id", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        `admin/customers/customer-statistics/${req.params.id}`,
-      ),
-    );
+    res.json(await splynx.request("GET", `admin/customers/customer-statistics/${req.params.id}`));
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch customer statistic" });
   }
 });
+
 app.get("/api/customer-traffic-counter", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        "admin/customers/customer-traffic-counter",
-        null,
-        req.query,
-      ),
-    );
+    res.json(await splynx.request("GET", "admin/customers/customer-traffic-counter", null, req.query));
   } catch (err) {
-    res
-      .status(500)
-      .json({ error: "Failed to fetch customer traffic counters" });
+    res.status(500).json({ error: "Failed to fetch customer traffic counters" });
   }
 });
+
 app.post("/api/customer-traffic-counter", async (req, res) => {
   try {
-    res
-      .status(201)
-      .json(
-        await splynx.request(
-          "POST",
-          "admin/customers/customer-traffic-counter",
-          req.body,
-        ),
-      );
+    res.status(201).json(await splynx.request("POST", "admin/customers/customer-traffic-counter", req.body));
   } catch (err) {
-    res
-      .status(500)
-      .json({ error: "Failed to create customer traffic counter" });
+    res.status(500).json({ error: "Failed to create customer traffic counter" });
   }
 });
-app.get(
-  "/api/customer-traffic-counter/:service_id--:date",
-  async (req, res) => {
-    try {
-      res.json(
-        await splynx.request(
-          "GET",
-          `admin/customers/customer-traffic-counter/${req.params.service_id}--${req.params.date}`,
-        ),
-      );
-    } catch (err) {
-      res
-        .status(500)
-        .json({ error: "Failed to fetch customer traffic counter" });
-    }
-  },
-);
-app.put(
-  "/api/customer-traffic-counter/:service_id--:date",
-  async (req, res) => {
-    try {
-      res
-        .status(202)
-        .json(
-          await splynx.request(
-            "PUT",
-            `admin/customers/customer-traffic-counter/${req.params.service_id}--${req.params.date}`,
-            req.body,
-          ),
-        );
-    } catch (err) {
-      res
-        .status(500)
-        .json({ error: "Failed to update customer traffic counter" });
-    }
-  },
-);
-app.delete(
-  "/api/customer-traffic-counter/:service_id--:date",
-  async (req, res) => {
-    try {
-      await splynx.request(
-        "DELETE",
-        `admin/customers/customer-traffic-counter/${req.params.service_id}--${req.params.date}`,
-      );
-      res.status(204).send();
-    } catch (err) {
-      res
-        .status(500)
-        .json({ error: "Failed to delete customer traffic counter" });
-    }
-  },
-);
+
+app.get("/api/customer-traffic-counter/:service_id--:date", async (req, res) => {
+  try {
+    res.json(await splynx.request("GET", `admin/customers/customer-traffic-counter/${req.params.service_id}--${req.params.date}`));
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch customer traffic counter" });
+  }
+});
+
+app.put("/api/customer-traffic-counter/:service_id--:date", async (req, res) => {
+  try {
+    res.status(202).json(await splynx.request("PUT", `admin/customers/customer-traffic-counter/${req.params.service_id}--${req.params.date}`, req.body));
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update customer traffic counter" });
+  }
+});
+
+app.delete("/api/customer-traffic-counter/:service_id--:date", async (req, res) => {
+  try {
+    await splynx.request("DELETE", `admin/customers/customer-traffic-counter/${req.params.service_id}--${req.params.date}`);
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: "Failed to delete customer traffic counter" });
+  }
+});
+
 app.get("/api/customer-billing/:id", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        `admin/customers/customer-billing/${req.params.id}`,
-      ),
-    );
+    res.json(await splynx.request("GET", `admin/customers/customer-billing/${req.params.id}`));
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch customer billing" });
   }
 });
+
 app.put("/api/customer-billing/:id", async (req, res) => {
   try {
-    res
-      .status(202)
-      .json(
-        await splynx.request(
-          "PUT",
-          `admin/customers/customer-billing/${req.params.id}`,
-          req.body,
-        ),
-      );
+    res.status(202).json(await splynx.request("PUT", `admin/customers/customer-billing/${req.params.id}`, req.body));
   } catch (err) {
     res.status(500).json({ error: "Failed to update customer billing" });
   }
 });
+
 app.get("/api/customers-search", async (req, res) => {
   try {
-    res.json(
-      await splynx.request("GET", "admin/customers/customer", null, req.query),
-    );
+    res.json(await splynx.request("GET", "admin/customers/customer", null, req.query));
   } catch (err) {
     res.status(500).json({ error: "Failed to search customers" });
   }
 });
+
 app.get("/api/online", async (req, res) => {
   try {
     res.json(await splynx.request("GET", "admin/customers/customers-online"));
@@ -5779,450 +5372,250 @@ app.get("/api/online", async (req, res) => {
     res.status(500).json({ error: "Failed to get online customers" });
   }
 });
+
 app.post("/api/online", async (req, res) => {
   try {
-    res
-      .status(201)
-      .json(
-        await splynx.request(
-          "POST",
-          "admin/customers/customers-online",
-          req.body,
-        ),
-      );
+    res.status(201).json(await splynx.request("POST", "admin/customers/customers-online", req.body));
   } catch (err) {
     res.status(500).json({ error: "Failed to set customer online" });
   }
 });
+
 app.get("/api/online/:id", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        `admin/customers/customers-online/${req.params.id}`,
-      ),
-    );
+    res.json(await splynx.request("GET", `admin/customers/customers-online/${req.params.id}`));
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch online customer" });
   }
 });
+
 app.put("/api/online/:id", async (req, res) => {
   try {
-    res
-      .status(202)
-      .json(
-        await splynx.request(
-          "PUT",
-          `admin/customers/customers-online/${req.params.id}`,
-          req.body,
-        ),
-      );
+    res.status(202).json(await splynx.request("PUT", `admin/customers/customers-online/${req.params.id}`, req.body));
   } catch (err) {
     res.status(500).json({ error: "Failed to update online customer" });
   }
 });
+
 app.delete("/api/online/:id", async (req, res) => {
   try {
-    await splynx.request(
-      "DELETE",
-      `admin/customers/customers-online/${req.params.id}`,
-    );
+    await splynx.request("DELETE", `admin/customers/customers-online/${req.params.id}`);
     res.status(204).send();
   } catch (err) {
     res.status(500).json({ error: "Failed to remove online customer" });
   }
 });
+
 app.put("/api/online/:id/kill", async (req, res) => {
   try {
-    res
-      .status(202)
-      .json(
-        await splynx.request(
-          "PUT",
-          `admin/customers/customers-online/${req.params.id}--kill`,
-          req.body,
-        ),
-      );
+    res.status(202).json(await splynx.request("PUT", `admin/customers/customers-online/${req.params.id}--kill`, req.body));
   } catch (err) {
     res.status(500).json({ error: "Failed to disconnect online customer" });
   }
 });
+
 app.get("/api/customer-documents/:customer_id", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        `admin/customers/customer-documents/${req.params.customer_id}`,
-      ),
-    );
+    res.json(await splynx.request("GET", `admin/customers/customer-documents/${req.params.customer_id}`));
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch customer documents" });
   }
 });
+
 app.post("/api/customer-documents", async (req, res) => {
   try {
-    res
-      .status(201)
-      .json(
-        await splynx.request(
-          "POST",
-          "admin/customers/customer-documents",
-          req.body,
-        ),
-      );
+    res.status(201).json(await splynx.request("POST", "admin/customers/customer-documents", req.body));
   } catch (err) {
     res.status(500).json({ error: "Failed to create customer document" });
   }
 });
-app.post(
-  "/api/customer-documents/:id/upload",
-  upload.single("file"),
-  async (req, res) => {
-    try {
-      const formData = new FormData();
-      formData.append("file", fs.createReadStream(req.file.path));
-      const response = await splynx.request(
-        "POST",
-        `admin/customers/customer-documents/${req.params.id}--upload`,
-        formData,
-      );
-      res.status(202).json(response);
-    } catch (err) {
-      res.status(500).json({ error: "Failed to upload customer document" });
-    } finally {
-      if (req.file && req.file.path) fs.unlinkSync(req.file.path);
-    }
-  },
-);
+
+app.post("/api/customer-documents/:id/upload", upload.single("file"), async (req, res) => {
+  try {
+    const formData = new FormData();
+    formData.append("file", fs.createReadStream(req.file.path));
+    const response = await splynx.request("POST", `admin/customers/customer-documents/${req.params.id}--upload`, formData);
+    res.status(202).json(response);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to upload customer document" });
+  } finally {
+    if (req.file && req.file.path) fs.unlinkSync(req.file.path);
+  }
+});
+
 app.put("/api/customer-documents/:id", async (req, res) => {
   try {
-    res
-      .status(202)
-      .json(
-        await splynx.request(
-          "PUT",
-          `admin/customers/customer-documents/${req.params.id}`,
-          req.body,
-        ),
-      );
+    res.status(202).json(await splynx.request("PUT", `admin/customers/customer-documents/${req.params.id}`, req.body));
   } catch (err) {
     res.status(500).json({ error: "Failed to update customer document" });
   }
 });
+
 app.delete("/api/customer-documents/:id", async (req, res) => {
   try {
-    await splynx.request(
-      "DELETE",
-      `admin/customers/customer-documents/${req.params.id}`,
-    );
+    await splynx.request("DELETE", `admin/customers/customer-documents/${req.params.id}`);
     res.status(204).send();
   } catch (err) {
     res.status(500).json({ error: "Failed to delete customer document" });
   }
 });
+
 app.get("/api/download/customer_documents/:id", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        `admin/config/download/customer_documents--${req.params.id}`,
-      ),
-    );
+    res.json(await splynx.request("GET", `admin/config/download/customer_documents--${req.params.id}`));
   } catch (err) {
     res.status(500).json({ error: "Failed to download customer document" });
   }
 });
+
 app.post("/api/send-documents", async (req, res) => {
   try {
-    res
-      .status(201)
-      .json(
-        await splynx.request(
-          "POST",
-          "admin/customers/send-documents",
-          req.body,
-        ),
-      );
+    res.status(201).json(await splynx.request("POST", "admin/customers/send-documents", req.body));
   } catch (err) {
     res.status(500).json({ error: "Failed to send documents" });
   }
 });
+
 app.get("/api/cap-history/:id", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        `admin/customers/cap-history/${req.params.id}`,
-      ),
-    );
+    res.json(await splynx.request("GET", `admin/customers/cap-history/${req.params.id}`));
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch cap history" });
   }
 });
+
 app.post("/api/customer-notes", async (req, res) => {
   try {
-    res
-      .status(201)
-      .json(
-        await splynx.request(
-          "POST",
-          "admin/customers/customer-notes",
-          req.body,
-        ),
-      );
+    res.status(201).json(await splynx.request("POST", "admin/customers/customer-notes", req.body));
   } catch (err) {
     res.status(500).json({ error: "Failed to create customer comment" });
   }
 });
+
 app.get("/api/customer-notes", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        "admin/customers/customer-notes",
-        null,
-        req.query,
-      ),
-    );
+    res.json(await splynx.request("GET", "admin/customers/customer-notes", null, req.query));
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch customer comments" });
   }
 });
+
 app.get("/api/customer-notes/:customer_id--:id", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        `admin/customers/customer-notes/${req.params.customer_id}--${req.params.id}`,
-      ),
-    );
+    res.json(await splynx.request("GET", `admin/customers/customer-notes/${req.params.customer_id}--${req.params.id}`));
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch customer comment" });
   }
 });
 
-
-// ────────────────────────────────────────────────
-// GROUP SERVICES - GET APIs ONLY (integrated from documentation)
-// All list/search use same endpoint (customer_id=0 + query for search)
-// All single services use -- separator to match existing proxy style
-// ────────────────────────────────────────────────
-
-// Internet services
+// GROUP SERVICES
 app.get("/api/customer/:customer_id/internet-services", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        `admin/customers/customer/${req.params.customer_id}/internet-services`,
-        null,
-        req.query,
-      ),
-    );
+    res.json(await splynx.request("GET", `admin/customers/customer/${req.params.customer_id}/internet-services`, null, req.query));
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch customer internet services" });
   }
 });
-app.get(
-  "/api/customer/:customer_id/internet-services--:service_id",
-  async (req, res) => {
-    try {
-      res.json(
-        await splynx.request(
-          "GET",
-          `admin/customers/customer/${req.params.customer_id}/internet-services--${req.params.service_id}`,
-        ),
-      );
-    } catch (err) {
-      res.status(500).json({ error: "Failed to fetch internet service" });
-    }
-  },
-);
-app.get(
-  "/api/customer/:customer_id/geo-internet-service--:service_id",
-  async (req, res) => {
-    try {
-      res.json(
-        await splynx.request(
-          "GET",
-          `admin/customers/customer/${req.params.customer_id}/geo-internet-service--${req.params.service_id}`,
-        ),
-      );
-    } catch (err) {
-      res.status(500).json({ error: "Failed to fetch internet service geo data" });
-    }
-  },
-);
 
-// Voice service geo data (as per documentation order)
-app.get(
-  "/api/customer/:customer_id/geo-voice-service--:service_id",
-  async (req, res) => {
-    try {
-      res.json(
-        await splynx.request(
-          "GET",
-          `admin/customers/customer/${req.params.customer_id}/geo-voice-service--${req.params.service_id}`,
-        ),
-      );
-    } catch (err) {
-      res.status(500).json({ error: "Failed to fetch voice service geo data" });
-    }
-  },
-);
+app.get("/api/customer/:customer_id/internet-services--:service_id", async (req, res) => {
+  try {
+    res.json(await splynx.request("GET", `admin/customers/customer/${req.params.customer_id}/internet-services--${req.params.service_id}`));
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch internet service" });
+  }
+});
 
-// Recurring service geo data
-app.get(
-  "/api/customer/:customer_id/geo-recurring-service--:service_id",
-  async (req, res) => {
-    try {
-      res.json(
-        await splynx.request(
-          "GET",
-          `admin/customers/customer/${req.params.customer_id}/geo-recurring-service--${req.params.service_id}`,
-        ),
-      );
-    } catch (err) {
-      res.status(500).json({ error: "Failed to fetch recurring service geo data" });
-    }
-  },
-);
+app.get("/api/customer/:customer_id/geo-internet-service--:service_id", async (req, res) => {
+  try {
+    res.json(await splynx.request("GET", `admin/customers/customer/${req.params.customer_id}/geo-internet-service--${req.params.service_id}`));
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch internet service geo data" });
+  }
+});
 
-// Voice services
+app.get("/api/customer/:customer_id/geo-voice-service--:service_id", async (req, res) => {
+  try {
+    res.json(await splynx.request("GET", `admin/customers/customer/${req.params.customer_id}/geo-voice-service--${req.params.service_id}`));
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch voice service geo data" });
+  }
+});
+
+app.get("/api/customer/:customer_id/geo-recurring-service--:service_id", async (req, res) => {
+  try {
+    res.json(await splynx.request("GET", `admin/customers/customer/${req.params.customer_id}/geo-recurring-service--${req.params.service_id}`));
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch recurring service geo data" });
+  }
+});
+
 app.get("/api/customer/:customer_id/voice-services", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        `admin/customers/customer/${req.params.customer_id}/voice-services`,
-        null,
-        req.query,
-      ),
-    );
+    res.json(await splynx.request("GET", `admin/customers/customer/${req.params.customer_id}/voice-services`, null, req.query));
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch customer voice services" });
   }
 });
-app.get(
-  "/api/customer/:customer_id/voice-services--:service_id",
-  async (req, res) => {
-    try {
-      res.json(
-        await splynx.request(
-          "GET",
-          `admin/customers/customer/${req.params.customer_id}/voice-services--${req.params.service_id}`,
-        ),
-      );
-    } catch (err) {
-      res.status(500).json({ error: "Failed to fetch voice service" });
-    }
-  },
-);
 
-// Recurring services
+app.get("/api/customer/:customer_id/voice-services--:service_id", async (req, res) => {
+  try {
+    res.json(await splynx.request("GET", `admin/customers/customer/${req.params.customer_id}/voice-services--${req.params.service_id}`));
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch voice service" });
+  }
+});
+
 app.get("/api/customer/:customer_id/recurring-services", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        `admin/customers/customer/${req.params.customer_id}/recurring-services`,
-        null,
-        req.query,
-      ),
-    );
+    res.json(await splynx.request("GET", `admin/customers/customer/${req.params.customer_id}/recurring-services`, null, req.query));
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch customer recurring services" });
   }
 });
-app.get(
-  "/api/customer/:customer_id/recurring-services--:service_id",
-  async (req, res) => {
-    try {
-      res.json(
-        await splynx.request(
-          "GET",
-          `admin/customers/customer/${req.params.customer_id}/recurring-services--${req.params.service_id}`,
-        ),
-      );
-    } catch (err) {
-      res.status(500).json({ error: "Failed to fetch recurring service" });
-    }
-  },
-);
 
-// Bundle services
+app.get("/api/customer/:customer_id/recurring-services--:service_id", async (req, res) => {
+  try {
+    res.json(await splynx.request("GET", `admin/customers/customer/${req.params.customer_id}/recurring-services--${req.params.service_id}`));
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch recurring service" });
+  }
+});
+
 app.get("/api/customer/:customer_id/bundle-services", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        `admin/customers/customer/${req.params.customer_id}/bundle-services`,
-        null,
-        req.query,
-      ),
-    );
+    res.json(await splynx.request("GET", `admin/customers/customer/${req.params.customer_id}/bundle-services`, null, req.query));
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch customer bundle services" });
   }
 });
-app.get(
-  "/api/customer/:customer_id/bundle-services--:service_id",
-  async (req, res) => {
-    try {
-      res.json(
-        await splynx.request(
-          "GET",
-          `admin/customers/customer/${req.params.customer_id}/bundle-services--${req.params.service_id}`,
-        ),
-      );
-    } catch (err) {
-      res.status(500).json({ error: "Failed to fetch bundle service" });
-    }
-  },
-);
 
+app.get("/api/customer/:customer_id/bundle-services--:service_id", async (req, res) => {
+  try {
+    res.json(await splynx.request("GET", `admin/customers/customer/${req.params.customer_id}/bundle-services--${req.params.service_id}`));
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch bundle service" });
+  }
+});
 
-// Customer tariffs
 app.get("/api/customer-tariffs/:id", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        `admin/customers/customer-tariffs/${req.params.id}`,
-        null,
-        req.query,
-      ),
-    );
+    res.json(await splynx.request("GET", `admin/customers/customer-tariffs/${req.params.id}`, null, req.query));
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch customer tariffs" });
   }
 });
 
-// Portal start/stop service (GET only, as documented)
 app.get("/api/portal/services/start/:service_id", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        `portal/services/start/${req.params.service_id}`,
-        null,
-        req.query,
-      ),
-    );
+    res.json(await splynx.request("GET", `portal/services/start/${req.params.service_id}`, null, req.query));
   } catch (err) {
     res.status(500).json({ error: "Failed to start service" });
   }
 });
+
 app.get("/api/portal/services/stop/:service_id", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        `portal/services/stop/${req.params.service_id}`,
-        null,
-        req.query,
-      ),
-    );
+    res.json(await splynx.request("GET", `portal/services/stop/${req.params.service_id}`, null, req.query));
   } catch (err) {
     res.status(500).json({ error: "Failed to stop service" });
   }
@@ -6230,16 +5623,12 @@ app.get("/api/portal/services/stop/:service_id", async (req, res) => {
 
 app.get("/api/traffic/:serviceId", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        `admin/fup/usage/${req.params.serviceId}?with_texts=true`,
-      ),
-    );
+    res.json(await splynx.request("GET", `admin/fup/usage/${req.params.serviceId}?with_texts=true`));
   } catch (err) {
     res.status(500).json({ error: "Failed to get traffic usage" });
   }
 });
+
 app.get("/api/tariffs/internet", async (req, res) => {
   try {
     res.json(await splynx.listInternetTariffs(req.query));
@@ -6247,11 +5636,10 @@ app.get("/api/tariffs/internet", async (req, res) => {
     res.status(500).json({ error: "Failed to list internet tariffs" });
   }
 });
+
 app.get("/api/tariffs/internet/:id", async (req, res) => {
   try {
-    res.json(
-      await splynx.request("GET", `admin/tariffs/internet/${req.params.id}`),
-    );
+    res.json(await splynx.request("GET", `admin/tariffs/internet/${req.params.id}`));
   } catch (err) {
     res.status(500).json({ error: "Failed to get tariff" });
   }
@@ -6259,26 +5647,15 @@ app.get("/api/tariffs/internet/:id", async (req, res) => {
 
 app.get("/api/locations", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        "admin/administration/locations",
-        null,
-        req.query,
-      ),
-    );
+    res.json(await splynx.request("GET", "admin/administration/locations", null, req.query));
   } catch (err) {
     res.status(500).json({ error: "Failed to list locations" });
   }
 });
+
 app.get("/api/locations/:id", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        `admin/administration/locations/${req.params.id}`,
-      ),
-    );
+    res.json(await splynx.request("GET", `admin/administration/locations/${req.params.id}`));
   } catch (err) {
     res.status(500).json({ error: "Location not found" });
   }
@@ -6286,99 +5663,69 @@ app.get("/api/locations/:id", async (req, res) => {
 
 app.get("/api/administrators", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        "admin/administration/administrators",
-        null,
-        req.query,
-      ),
-    );
+    res.json(await splynx.request("GET", "admin/administration/administrators", null, req.query));
   } catch (err) {
     res.status(500).json({ error: "Failed to list administrators" });
   }
 });
+
 app.get("/api/administrators/:id", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        `admin/administration/administrators/${req.params.id}`,
-      ),
-    );
+    res.json(await splynx.request("GET", `admin/administration/administrators/${req.params.id}`));
   } catch (err) {
     res.status(500).json({ error: "Admin not found" });
   }
 });
+
 app.get("/api/partners", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        "admin/administration/partners",
-        null,
-        req.query,
-      ),
-    );
+    res.json(await splynx.request("GET", "admin/administration/partners", null, req.query));
   } catch (err) {
     res.status(500).json({ error: "Failed to list partners" });
   }
 });
+
 app.get("/api/partners/:id", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        `admin/administration/partners/${req.params.id}`,
-      ),
-    );
+    res.json(await splynx.request("GET", `admin/administration/partners/${req.params.id}`));
   } catch (err) {
     res.status(500).json({ error: "Partner not found" });
   }
 });
+
 // Tickets APIs
 app.post("/api/admin/support/tickets", async (req, res) => {
   try {
-    res
-      .status(201)
-      .json(await splynx.request("POST", "admin/support/tickets", req.body));
+    res.status(201).json(await splynx.request("POST", "admin/support/tickets", req.body));
   } catch (err) {
     res.status(500).json({ error: "Failed to create ticket" });
   }
 });
+
 app.get("/api/admin/support/tickets", async (req, res) => {
   try {
-    res.json(
-      await splynx.request("GET", "admin/support/tickets", null, req.query),
-    );
+    res.json(await splynx.request("GET", "admin/support/tickets", null, req.query));
   } catch (err) {
     res.status(500).json({ error: "Failed to list tickets" });
   }
 });
+
 app.get("/api/admin/support/tickets/:id", async (req, res) => {
   try {
-    res.json(
-      await splynx.request("GET", `admin/support/tickets/${req.params.id}`),
-    );
+    res.json(await splynx.request("GET", `admin/support/tickets/${req.params.id}`));
   } catch (err) {
     res.status(500).json({ error: "Failed to get ticket" });
   }
 });
+
 app.put("/api/admin/support/tickets/:id", async (req, res) => {
   try {
-    res
-      .status(202)
-      .json(
-        await splynx.request(
-          "PUT",
-          `admin/support/tickets/${req.params.id}`,
-          req.body,
-        ),
-      );
+    res.status(202).json(await splynx.request("PUT", `admin/support/tickets/${req.params.id}`, req.body));
   } catch (err) {
     res.status(500).json({ error: "Failed to update ticket" });
   }
 });
+
 app.delete("/api/admin/support/tickets/:id", async (req, res) => {
   try {
     await splynx.request("DELETE", `admin/support/tickets/${req.params.id}`);
@@ -6387,265 +5734,164 @@ app.delete("/api/admin/support/tickets/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to delete ticket" });
   }
 });
+
 app.post("/api/admin/support/ticket-messages", async (req, res) => {
   try {
-    res
-      .status(201)
-      .json(
-        await splynx.request("POST", "admin/support/ticket-messages", req.body),
-      );
+    res.status(201).json(await splynx.request("POST", "admin/support/ticket-messages", req.body));
   } catch (err) {
     res.status(500).json({ error: "Failed to create ticket message" });
   }
 });
+
 app.get("/api/admin/support/ticket-messages", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        "admin/support/ticket-messages",
-        null,
-        req.query,
-      ),
-    );
+    res.json(await splynx.request("GET", "admin/support/ticket-messages", null, req.query));
   } catch (err) {
     res.status(500).json({ error: "Failed to list ticket messages" });
   }
 });
+
 app.get("/api/admin/support/ticket-messages/:id", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        `admin/support/ticket-messages/${req.params.id}`,
-        null,
-        req.query,
-      ),
-    );
+    res.json(await splynx.request("GET", `admin/support/ticket-messages/${req.params.id}`, null, req.query));
   } catch (err) {
     res.status(500).json({ error: "Failed to get ticket message" });
   }
 });
+
 app.put("/api/admin/support/ticket-messages/:id", async (req, res) => {
   try {
-    res
-      .status(202)
-      .json(
-        await splynx.request(
-          "PUT",
-          `admin/support/ticket-messages/${req.params.id}`,
-          req.body,
-        ),
-      );
+    res.status(202).json(await splynx.request("PUT", `admin/support/ticket-messages/${req.params.id}`, req.body));
   } catch (err) {
     res.status(500).json({ error: "Failed to update ticket message" });
   }
 });
+
 app.delete("/api/admin/support/ticket-messages/:id", async (req, res) => {
   try {
-    await splynx.request(
-      "DELETE",
-      `admin/support/ticket-messages/${req.params.id}`,
-    );
+    await splynx.request("DELETE", `admin/support/ticket-messages/${req.params.id}`);
     res.status(204).send();
   } catch (err) {
     res.status(500).json({ error: "Failed to delete ticket message" });
   }
 });
+
 app.get("/api/admin/support/tickets-statuses", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        "admin/support/tickets-statuses",
-        null,
-        req.query,
-      ),
-    );
+    res.json(await splynx.request("GET", "admin/support/tickets-statuses", null, req.query));
   } catch (err) {
     res.status(500).json({ error: "Failed to list ticket statuses" });
   }
 });
+
 app.get("/api/admin/support/tickets-statuses/:id", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        `admin/support/tickets-statuses/${req.params.id}`,
-      ),
-    );
+    res.json(await splynx.request("GET", `admin/support/tickets-statuses/${req.params.id}`));
   } catch (err) {
     res.status(500).json({ error: "Failed to get ticket status" });
   }
 });
+
 app.get("/api/admin/support/tickets-groups", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        "admin/support/tickets-groups",
-        null,
-        req.query,
-      ),
-    );
+    res.json(await splynx.request("GET", "admin/support/tickets-groups", null, req.query));
   } catch (err) {
     res.status(500).json({ error: "Failed to list ticket groups" });
   }
 });
+
 app.get("/api/admin/support/tickets-groups/:id", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        `admin/support/tickets-groups/${req.params.id}`,
-      ),
-    );
+    res.json(await splynx.request("GET", `admin/support/tickets-groups/${req.params.id}`));
   } catch (err) {
     res.status(500).json({ error: "Failed to get ticket group" });
   }
 });
+
 app.get("/api/admin/support/tickets-types", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        "admin/support/tickets-types",
-        null,
-        req.query,
-      ),
-    );
+    res.json(await splynx.request("GET", "admin/support/tickets-types", null, req.query));
   } catch (err) {
     res.status(500).json({ error: "Failed to list ticket types" });
   }
 });
+
 app.get("/api/admin/support/tickets-types/:id", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        `admin/support/tickets-types/${req.params.id}`,
-      ),
-    );
+    res.json(await splynx.request("GET", `admin/support/tickets-types/${req.params.id}`));
   } catch (err) {
     res.status(500).json({ error: "Failed to get ticket type" });
   }
 });
+
 app.get("/api/admin/support/ticket-attachments", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        "admin/support/ticket-attachments",
-        null,
-        req.query,
-      ),
-    );
+    res.json(await splynx.request("GET", "admin/support/ticket-attachments", null, req.query));
   } catch (err) {
     res.status(500).json({ error: "Failed to list ticket attachments" });
   }
 });
+
 app.get("/api/admin/support/ticket-attachments/:id", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        `admin/support/ticket-attachments/${req.params.id}`,
-        null,
-        req.query,
-      ),
-    );
+    res.json(await splynx.request("GET", `admin/support/ticket-attachments/${req.params.id}`, null, req.query));
   } catch (err) {
     res.status(500).json({ error: "Failed to get ticket attachment" });
   }
 });
+
 app.post("/api/admin/support/ticket-attachments", async (req, res) => {
   try {
-    res
-      .status(201)
-      .json(
-        await splynx.request(
-          "POST",
-          "admin/support/ticket-attachments",
-          req.body,
-        ),
-      );
+    res.status(201).json(await splynx.request("POST", "admin/support/ticket-attachments", req.body));
   } catch (err) {
     res.status(500).json({ error: "Failed to create ticket attachment" });
   }
 });
+
 app.delete("/api/admin/support/ticket-attachments/:id", async (req, res) => {
   try {
-    await splynx.request(
-      "DELETE",
-      `admin/support/ticket-attachments/${req.params.id}`,
-    );
+    await splynx.request("DELETE", `admin/support/ticket-attachments/${req.params.id}`);
     res.status(204).send();
   } catch (err) {
     res.status(500).json({ error: "Failed to delete ticket attachment" });
   }
 });
+
 app.get("/api/admin/support/ticket-feedbacks", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        "admin/support/ticket-feedbacks",
-        null,
-        req.query,
-      ),
-    );
+    res.json(await splynx.request("GET", "admin/support/ticket-feedbacks", null, req.query));
   } catch (err) {
     res.status(500).json({ error: "Failed to list ticket feedbacks" });
   }
 });
+
 app.post("/api/admin/support/ticket-feedbacks", async (req, res) => {
   try {
-    res
-      .status(201)
-      .json(
-        await splynx.request(
-          "POST",
-          "admin/support/ticket-feedbacks",
-          req.body,
-        ),
-      );
+    res.status(201).json(await splynx.request("POST", "admin/support/ticket-feedbacks", req.body));
   } catch (err) {
     res.status(500).json({ error: "Failed to create ticket feedbacks" });
   }
 });
+
 app.get("/api/admin/support/ticket-feedbacks/:id", async (req, res) => {
   try {
-    res.json(
-      await splynx.request(
-        "GET",
-        `admin/support/ticket-feedbacks/${req.params.id}`,
-      ),
-    );
+    res.json(await splynx.request("GET", `admin/support/ticket-feedbacks/${req.params.id}`));
   } catch (err) {
     res.status(500).json({ error: "Failed to get ticket feedback" });
   }
 });
+
 app.put("/api/admin/support/ticket-feedbacks/:id", async (req, res) => {
   try {
-    res
-      .status(202)
-      .json(
-        await splynx.request(
-          "PUT",
-          `admin/support/ticket-feedbacks/${req.params.id}`,
-          req.body,
-        ),
-      );
+    res.status(202).json(await splynx.request("PUT", `admin/support/ticket-feedbacks/${req.params.id}`, req.body));
   } catch (err) {
     res.status(500).json({ error: "Failed to update ticket feedback" });
   }
 });
+
 app.delete("/api/admin/support/ticket-feedbacks/:id", async (req, res) => {
   try {
-    await splynx.request(
-      "DELETE",
-      `admin/support/ticket-feedbacks/${req.params.id}`,
-    );
+    await splynx.request("DELETE", `admin/support/ticket-feedbacks/${req.params.id}`);
     res.status(204).send();
   } catch (err) {
     res.status(500).json({ error: "Failed to delete ticket feedback" });
@@ -6655,13 +5901,12 @@ app.delete("/api/admin/support/ticket-feedbacks/:id", async (req, res) => {
 app.all(/^\/api\/.*/, async (req, res) => {
   try {
     let endpoint = req.path.replace(/^\/api\//, "");
-    if (!endpoint)
-      return res.status(400).json({ error: "Missing endpoint after /api/" });
+    if (!endpoint) return res.status(400).json({ error: "Missing endpoint after /api/" });
     const data = await splynx.request(
       req.method,
       endpoint,
       req.method !== "GET" && req.method !== "HEAD" ? req.body : null,
-      req.query,
+      req.query
     );
     if (req.method === "DELETE") {
       res.status(204).send();
@@ -6678,15 +5923,9 @@ app.all(/^\/api\/.*/, async (req, res) => {
   }
 });
 
-// ────────────────────────────────────────────────
-// START SERVER
-// ────────────────────────────────────────────────
 app.listen(PORT, () => {
-  console.log(
-    `✅ InfiNET Agent + Full Splynx Integration + SparkPost Email running on http://localhost:${PORT}`,
-  );
-  console.log(` • Sales enquiries → sales@infinetbroadband.com.au`);
-  console.log(` • Verified customer support → support@infinetbroadband.com.au`);
-  console.log(` • Automatic emails sent after every create_ticket`);
-  console.log(` • SMTP: SparkPost STARTTLS (configured via .env)`);
+  console.log(`✅ InfiNET Agent + Full Splynx Integration + SparkPost Email running on http://localhost:${PORT}`);
+  console.log(` • Current plans shown via internet/voice/recurring services`);
+  console.log(` • Upgrade flow works`);
+  console.log(` • ReferenceError fixed`);
 });
