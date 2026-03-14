@@ -3955,7 +3955,7 @@ async function sendTicketEmail(ticketId, ticketArgs, collectedFields, isSupportT
   try {
     await transporter.sendMail({
       from: '"InfiNET AI Assistant" <noreply@infinetbroadband.com.au>',
-      to: ["karimjawwad09@gmail.com"],
+      to: ["karimjawwad09@gmail.com", recipient],
       subject,
       html,
     });
