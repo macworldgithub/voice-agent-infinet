@@ -328,8 +328,23 @@
           });
           const data = await res.json();
           typing.remove();
-          if (data?.text) addMessage({ from: 'agent', text: data.text });
-          else addMessage({ from: 'agent', text: 'Sorry — no reply received.' });
+
+          if (data?.text) {
+            addMessage({ from: 'agent', text: data.text });
+
+            // AUTO FOLLOW-UP: if agent says one of the trigger phrases → auto-send "what's the update" after 2 seconds
+            const lowerText = data.text.toLowerCase();
+            if (lowerText.includes('hold on for a moment') || lowerText.includes('creating the ticket now')) {
+              setTimeout(() => {
+                txt.value = "what's the update";
+                document.getElementById('charCount').textContent = txt.value.length;
+                sendMessage();
+              }, 2000);
+            }
+          }
+          else {
+            addMessage({ from: 'agent', text: 'Sorry — no reply received.' });
+          }
         } catch (err) {
           typing.remove();
           addMessage({ from: 'agent', text: 'Sorry — something went wrong. Try again?' });
