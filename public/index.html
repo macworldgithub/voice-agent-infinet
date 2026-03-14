@@ -15,12 +15,14 @@
       --radius: 16px;
       --fs-base: clamp(13.5px, 3.1vw, 15px);
       --spacing: clamp(10px, 3vw, 16px);
+      /* --vh will be updated by JS to the real viewport height unit */
       --vh: 1vh;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       font-size: var(--fs-base);
       color: #f1f5f9;
-      -webkit-text-size-adjust: 100%;
+      -webkit-text-size-adjust: 100%; /* avoid iOS text-size auto adjustments */
     }
+
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body {
       height: 100%;
@@ -28,12 +30,14 @@
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
     }
+
     body {
       min-height: 100dvh;
       display: grid;
       place-items: center;
       padding: 8px;
     }
+
     .widget {
       width: min(100%, 420px);
       height: min(calc(var(--vh, 1vh) * 96), 760px);
@@ -46,6 +50,7 @@
       flex-direction: column;
       backdrop-filter: blur(8px);
     }
+
     .header {
       padding: 12px 16px;
       background: linear-gradient(90deg, rgba(59,130,246,0.09), rgba(0,194,179,0.06));
@@ -67,6 +72,7 @@
     .status { display: flex; align-items: center; gap: 7px; font-size: clamp(11px, 2.9vw, 12.5px); color: var(--muted); white-space: nowrap; }
     .dot { width: 9px; height: 9px; border-radius: 50%; }
     .dot.online { background: #22c55e; box-shadow: 0 0 6px #22c55e80; }
+
     .messages-wrap { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
     .messages {
       flex: 1; overflow-y: auto; padding: var(--spacing);
@@ -110,7 +116,10 @@
       opacity: 0.8;
     }
     .bubble-row.user .meta { text-align: right; }
+
     @keyframes appear { to { opacity:1; transform:none; } }
+
+    /* Composer: keep original horizontal layout, allow children to stretch so Send matches input height */
     .composer {
       padding: clamp(10px, 3vw, 14px) var(--spacing);
       background: rgba(0,0,0,0.28);
@@ -118,9 +127,10 @@
       gap: 10px;
       flex-shrink: 0;
       border-top: 1px solid rgba(255,255,255,0.07);
-      align-items: stretch;
+      align-items: stretch; /* restored so the send button stretches to match textarea height like your reference */
     }
     .input-wrap { flex: 1; display: flex; flex-direction: column; gap: 5px; }
+
     textarea {
       width: 100%;
       min-height: 46px;
@@ -131,23 +141,28 @@
       background: rgba(255,255,255,0.035);
       border: 1px solid rgba(255,255,255,0.09);
       color: inherit; font: inherit; outline: none; line-height: 1.42;
+      /* default font-size is inherited */
     }
     textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2.5px rgba(0,194,179,0.22); }
+
     .hint { font-size: clamp(10px, 2.7vw, 11.5px); color: var(--muted); display: flex; justify-content: space-between; padding: 0 5px; }
+
+    /* Keep the exact Send button style from your reference: padding: 0 18px */
     .btn {
       background: linear-gradient(90deg, var(--accent-2), var(--accent));
       border: none;
-      padding: 0 18px;
+      padding: 0 18px;          /* <-- same as your reference code */
       border-radius: 12px;
       color: white; font-weight: 600; font-size: clamp(13px, 3.4vw, 14.5px);
       min-width: 62px; cursor: pointer;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      align-self: stretch;
+      align-self: stretch;     /* stretch vertically to match textarea height (keeps the same visual size) */
     }
     .btn:hover:not(:disabled) { opacity: 0.94; transform: translateY(-1px); }
     .btn:disabled { opacity: 0.48; cursor: not-allowed; }
+
     .typing-indicator {
       display: flex; align-items: center; gap: 8px;
       padding: 10px 16px; background: rgba(255,255,255,0.03);
@@ -159,8 +174,11 @@
     .typing-dot:nth-child(2) { animation-delay: 0.2s; }
     .typing-dot:nth-child(3) { animation-delay: 0.4s; }
     @keyframes typing { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+
+    /* MOBILE-SPECIFIC */
     @media (max-width: 720px) {
       body { padding: 0; }
+
       .widget {
         position: fixed;
         left: 8px;
@@ -172,14 +190,21 @@
         max-height: calc(var(--vh, 1vh) * 96);
         border-radius: 14px;
       }
+
       .composer {
         padding-bottom: calc(env(safe-area-inset-bottom) + 10px);
         z-index: 5;
       }
+
+      /* ensure >=16px on mobile to prevent browser auto-zoom */
       textarea { font-size: 16px; min-height: 54px; }
+
+      /* keep send button same padding but let it stretch vertically with composer */
       .btn { padding: 0 18px; }
+
       .messages { padding-bottom: calc(var(--spacing) + 10px); }
     }
+
     @media (orientation: landscape) and (max-height: 420px) {
       textarea { font-size: 16px; }
       .btn { padding: 0 18px; }
@@ -201,9 +226,11 @@
         <span id="statusText">Online</span>
       </div>
     </div>
+
     <div class="messages-wrap">
       <div id="messages" class="messages" aria-live="polite"></div>
     </div>
+
     <div class="composer">
       <div class="input-wrap">
         <textarea id="txt" placeholder="Type your message…" aria-label="Chat message input"></textarea>
@@ -220,6 +247,7 @@
       const messagesEl = document.getElementById('messages');
       const txt = document.getElementById('txt');
       const sendBtn = document.getElementById('send');
+
       let sessionId = null;
       let busy = false;
 
@@ -243,12 +271,15 @@
       function addMessage({ from = 'agent', text = '', meta = '' }) {
         const row = document.createElement('div');
         row.className = `bubble-row ${from === 'user' ? 'user' : ''}`;
+
         const msg = document.createElement('div');
         msg.className = `msg ${from}`;
         msg.innerHTML = from === 'agent' ? renderMarkdown(text) : escapeHtml(text);
+
         const metaEl = document.createElement('div');
         metaEl.className = 'meta';
         metaEl.textContent = meta || timeNow();
+
         row.append(msg, metaEl);
         messagesEl.appendChild(row);
         scrollToBottom();
@@ -281,11 +312,14 @@
       async function sendMessage() {
         const message = txt.value.trim();
         if (!message || busy) return;
+
         setBusy(true);
         addMessage({ from: 'user', text: message });
         txt.value = '';
         document.getElementById('charCount').textContent = '0';
+
         const typing = showTyping();
+
         try {
           const res = await fetch('/api/chat/message', {
             method: 'POST',
@@ -321,53 +355,10 @@
         }
       }
 
-      // ────────────────────────────────────────────────
-      // AUTO-FOLLOW-UP: "is the ticket created?"
-      // ────────────────────────────────────────────────
-      function checkForTicketFollowUp() {
-        if (busy || txt.value.trim() !== '') return;
-
-        const rows = messagesEl.querySelectorAll('.bubble-row');
-        if (rows.length === 0) return;
-
-        const lastRow = rows[rows.length - 1];
-        if (lastRow.classList.contains('user')) return; // only after agent message
-
-        const msgEl = lastRow.querySelector('.msg.agent');
-        if (!msgEl) return;
-
-        const text = (msgEl.textContent || '').toLowerCase();
-
-        if (
-          text.includes('hold on for a moment') ||
-          text.includes('creating the ticket now')
-        ) {
-          // slight delay to feel natural (adjustable)
-          setTimeout(() => {
-            // double-check conditions before sending
-            if (!busy && txt.value.trim() === '') {
-              txt.value = 'is the ticket created?';
-              sendMessage();
-            }
-          }, 1800);
-        }
-      }
-
-      // Watch for new messages to trigger check
-      const messageObserver = new MutationObserver(() => {
-        checkForTicketFollowUp();
-        scrollToBottom();
-      });
-
-      messageObserver.observe(messagesEl, { childList: true, subtree: true });
-
-      // ────────────────────────────────────────────────
-      // Event listeners
-      // ────────────────────────────────────────────────
       sendBtn.addEventListener('click', sendMessage);
 
       txt.addEventListener('keydown', e => {
-        if (e.key === 'Enter' && !e.shiftKey) {
+        if (e.key === 'Enter' && e.shiftKey) {
           e.preventDefault();
           sendMessage();
         }
@@ -383,7 +374,7 @@
         });
       }
 
-      // Mobile viewport handling
+      // MOBILE: dynamic --vh to handle address bar/keyboard changes
       function updateVh() {
         const vHeight = (window.visualViewport && window.visualViewport.height) ? window.visualViewport.height : window.innerHeight;
         document.documentElement.style.setProperty('--vh', (vHeight * 0.01) + 'px');
@@ -407,6 +398,10 @@
       });
 
       updateVh();
+
+      // auto-scroll when messages change
+      const observer = new MutationObserver(() => { scrollToBottom(); });
+      observer.observe(messagesEl, { childList: true });
 
       init();
 
