@@ -3952,7 +3952,6 @@ async function sendTicketEmail(ticketId, ticketArgs, collectedFields, isSupportT
   View ticket: https://infinetbroadband-portal.com.au/admin/support/tickets/${ticketId}</small></p>
 </body>
 </html>`;
-
   try {
     await transporter.sendMail({
       from: '"InfiNET AI Assistant" <noreply@infinetbroadband.com.au>',
@@ -3974,6 +3973,7 @@ app.use(express.static("public"));
 const upload = multer({ dest: "uploads/" });
 const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 const sessions = new Map();
+
 const BRAND = "InfiNET Broadband";
 
 const CONFIG = {
@@ -4347,6 +4347,7 @@ Always advise customers to check current pricing and availability via the addres
 const SYSTEM_PROMPT = `
 You are a concise, professional voice/chat assistant for ${BRAND}.
 Handle four call types / chat intents: support, sales, general, account.
+
 STRICT RULES:
 - ALWAYS reply in English.
 - Keep replies short and focused; ask for remaining missing info concisely.
@@ -4361,16 +4362,19 @@ STRICT RULES:
 - To verify existing customers or lookup account, use the customer_lookup tool with name, email, or phone. If multiple matches, ask for more details. If no match, politely say you can't find the account and switch to sales flow if appropriate. NEVER create tickets for non-customers.
 - For existing customer flows (support/accounts), ask for name, email, or phone to lookup the account. Use the looked up customer_id for tickets.
 
-NEW SERVICE HANDLING (CRITICAL):
-- customer_lookup returns services: { internet: [], voice: [], recurring: [] }
-- Each service has title, price, speed_download, speed_upload, status etc.
+NEW SERVICE HANDLING (CRITICAL – ONLY ACTIVE SERVICES):
+- customer_lookup returns services: { internet: [], voice: [], recurring: [] } filtered to status === 'active' ONLY.
+- When account lookup succeeds: DO NOT show or mention any services/plans automatically.
+- Services are shown ONLY when user specifically asks about "current plan", "my plan", "what plan am I on?", "services", "packages", "plan details", OR wants to CHANGE/UPGRADE ("change plan", "upgrade", "switch plan", "other plans", "plan change").
 - When user asks "which plan am I on?", "what plan do I have?", "my current service", "plan details":
-  → Reply using the services data from the tool result (e.g. "You are currently on the [title] plan – $[price]/month (XX Mbps down / YY Mbps up).")
-- If user wants to CHANGE / UPGRADE plan:
-  1. Summarise current plan(s) using services data.
-  2. Ask: "Would you like to see upgrade options based on your current service?"
-  3. If yes → call check_address_availability and show higher speed plans.
-  4. Then follow sales flow and create_ticket with subject "Plan Upgrade Request".
+  → Reply: "You are currently on the [title] plan – $[price]/month (XX Mbps down / YY Mbps up)."
+- When user asks to CHANGE / UPGRADE plan:
+  1. Identify current active internet service title.
+  2. Respond EXACTLY: "I can see that you are on [title], on the [network] network."
+     (Network logic: title contains "HIR" or "Hope Island" → HIR; contains "OptiComm" → OptiComm; else NBN)
+  3. Then provide other plans available for that exact network (use get_internet_plans or check_address_availability).
+  4. Show numbered list and ask: "Which one would you like to switch to? Reply with the plan number, title or speed."
+  5. Once selected → follow sales flow and create_ticket with subject "Plan Change Request".
 
 INITIAL FLOW - follow these steps exactly:
 1. After the initial greeting and collecting preferredName, ask: "Are you a new InfiNET customer or an existing one?"
@@ -4400,16 +4404,16 @@ NOTE: If the user is existing and mentions moving, relocation, or shifting, when
 SUPPORT FLOW (for existing customers only):
 - First, ask for name, email, or phone, then call customer_lookup to get customer_id and services.
 - If not found, say "Sorry, I couldn't find your account. Are you sure you're an existing customer?" and switch to sales if needed.
-- Answer any question (including generic issues like "my internet is not working", "modem issue", speeds, setup, etc.) using the Knowledge base.
-- If the issue cannot be fully resolved in chat or the user wants further help → Ask for issueSummary (brief description) if not already collected, then immediately ask for any additional high-level details around the issue to help our support team (e.g. "Any more details like when it started, symptoms, or error messages?"). Combine all responses into the final issueSummary.
-- When ALL details collected (preferredName, customer_id from lookup, email, issueSummary) → Call create_ticket with customer_id, subject based on issueSummary (e.g., "Support: [brief summary]"), message: full issueSummary and details, reporter_type: 'api', priority from collected or 'medium', type_id for support.
+- Answer any question using the Knowledge base.
+- If the issue cannot be fully resolved → Ask for issueSummary then additional details. Combine into final issueSummary.
+- When ALL details collected (preferredName, customer_id, email, issueSummary) → Call create_ticket with customer_id, subject based on issueSummary, message: full issueSummary, reporter_type: 'api', priority: 'medium', type_id for support.
 
 ACCOUNTS FLOW (billing/financing, for existing customers only):
 - First, ask for name, email, or phone, then call customer_lookup to get customer_id and services.
 - If not found, say "Sorry, I couldn't find your account. Are you sure you're an existing customer?" and switch to sales if needed.
-- Answer any billing or payment questions using the Knowledge base (portal, overdue invoices, update payment method, etc.).
+- Answer any billing or payment questions using the Knowledge base.
 - Specifically for "pay a bill" or any question about paying over the phone: Reply concisely: "We can take payments or update payment details over the phone. Please call 1300 101 414 to proceed. Would you like help with anything else regarding your bill?"
-- For any specific issue → Please provide issueSummary if not already collected.
+- For any specific issue → Provide issueSummary if not collected.
 - When ALL details collected → Call create_ticket with customer_id, subject: "Accounts Query: [brief summary]", message: issueSummary, reporter_type: 'api', priority: 'medium', type_id for accounts.
 
 GENERAL: Answer using the Knowledge base. If needed, ask clarifying questions concisely.
@@ -4417,7 +4421,7 @@ GENERAL: Answer using the Knowledge base. If needed, ask clarifying questions co
 TOOL USAGE (CRITICAL):
 - When the customer asks about plans, pricing, speeds, upgrades or "what plans do you have?": call the get_internet_plans tool.
 - When the customer asks about availability at their address or you reach step 4 in the sales flow: call check_address_availability with the full address.
-- To lookup customer by name, email, or phone: call customer_lookup with at least one of name, email, phone. Returns customer details and services if found.
+- To lookup customer by name, email, or phone: call customer_lookup with at least one of name, email, phone. Returns customer details and ACTIVE services only.
 - The tool results will be injected into the conversation. ALWAYS use the live tool data for plans and availability (never rely on old hardcoded KB plans).
 - After a tool result, continue the flow concisely using the live data.
 - Call extract_call_fields whenever the user provides any personal info or intent.
@@ -4470,7 +4474,7 @@ const checkAvailabilityTool = {
 
 const customerLookupTool = {
   name: "customer_lookup",
-  description: "Lookup customer by name, email, or phone to verify existing customer and get account details and services. Provide at least one.",
+  description: "Lookup customer by name, email, or phone to verify existing customer and get account details and ACTIVE services only. Provide at least one.",
   parameters: {
     type: "object",
     properties: {
@@ -4561,7 +4565,7 @@ const tools = [
   getTicketStatusesTool,
 ];
 
-// HELPER FUNCTIONS
+// ==================== HELPER FUNCTIONS ====================
 function mkSession(sessionId) {
   const id = sessionId || `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const session = {
@@ -4705,35 +4709,37 @@ Address: ${address}`;
   }
 }
 
+// UPDATED CUSTOMER LOOKUP – ONLY ACTIVE SERVICES
 async function customerLookup({ name, email, phone }) {
   const main_attributes = {};
   if (name) main_attributes.name = name;
   if (email) main_attributes.login = email;
   if (phone) main_attributes.phone = phone;
-
   const searchParams = { main_attributes };
   console.log("Customer lookup with params:", searchParams);
   const customers = await splynx.searchCustomers(searchParams);
-
   if (!customers || customers.length === 0) {
     return { success: false, message: "No customer found" };
   }
   if (customers.length > 1) {
     return { success: true, multiple: true, customers };
   }
-
   const customer = customers[0];
-
   let services = { internet: [], voice: [], recurring: [] };
   try {
-    services.internet = await splynx.getCustomerInternetServices(customer.id);
-    services.voice = await splynx.getCustomerVoiceServices(customer.id);
-    services.recurring = await splynx.getCustomerRecurringServices(customer.id);
-    console.log("Customer services fetched:", services);
+    let allInternet = await splynx.getCustomerInternetServices(customer.id);
+    services.internet = allInternet.filter(s => s.status === 'active');
+
+    let allVoice = await splynx.getCustomerVoiceServices(customer.id);
+    services.voice = allVoice.filter(s => s.status === 'active');
+
+    let allRecurring = await splynx.getCustomerRecurringServices(customer.id);
+    services.recurring = allRecurring.filter(s => s.status === 'active');
+
+    console.log("Customer services fetched (ACTIVE ONLY):", services);
   } catch (err) {
     console.error("Failed to get services for customer", customer.id, err);
   }
-
   return { success: true, customer, services };
 }
 
@@ -4755,7 +4761,7 @@ function objectToUrlEncoded(obj, params = new URLSearchParams(), namespace = "")
   return params;
 }
 
-// AGENT ENDPOINTS
+// ==================== AGENT ENDPOINTS ====================
 app.post("/api/chat/init", async (req, res) => {
   try {
     const session = mkSession();
@@ -4772,27 +4778,22 @@ app.post("/api/chat/init", async (req, res) => {
 app.post("/api/voice", upload.single("audio"), async (req, res) => {
   const incomingSessionId = (req.body && req.body.sessionId) || req.query.sessionId || req.headers["x-session-id"] || null;
   if (!req.file) return res.status(400).json({ error: "Missing audio file (multipart field 'audio')" });
-
   const uploadedPath = path.resolve(req.file.path);
   let convertedPath = null;
-
   try {
     const session = incomingSessionId && sessions.has(incomingSessionId) ? sessions.get(incomingSessionId) : mkSession(incomingSessionId);
     const origName = (req.file.originalname || "").toLowerCase();
     const mimetype = (req.file.mimetype || "").toLowerCase();
     const looksLikeWav = origName.endsWith(".wav") || mimetype === "audio/wav" || mimetype === "audio/wave" || mimetype === "audio/x-wav";
-
     if (looksLikeWav) {
       convertedPath = uploadedPath;
     } else {
       convertedPath = await convertToWav(uploadedPath);
     }
-
     const transcriptionResp = await openai.audio.transcriptions.create({
       file: fs.createReadStream(convertedPath),
       model: "gpt-4o-mini-transcribe",
     });
-
     const userTextRaw = normalizeText(transcriptionResp?.text || "");
     if (!userTextRaw) {
       const prompt = "Sorry, I didn't catch that — could you please repeat briefly?";
@@ -4801,10 +4802,8 @@ app.post("/api/voice", upload.single("audio"), async (req, res) => {
       sessions.set(session.id, session);
       return res.json({ sessionId: session.id, text: prompt, audioBase64: ttsBuf ? ttsBuf.toString("base64") : null });
     }
-
     session.messages.push({ role: "user", content: userTextRaw });
     let assistantText = null;
-
     const firstCompletion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: session.messages,
@@ -4813,14 +4812,12 @@ app.post("/api/voice", upload.single("audio"), async (req, res) => {
       temperature: 0.0,
       max_tokens: 300,
     });
-
     const firstMsg = firstCompletion.choices?.[0]?.message;
     if (firstMsg?.function_call) {
       const funcName = firstMsg.function_call.name;
       const args = safeParseJSON(firstMsg.function_call.arguments) || {};
       session.messages.push(firstMsg);
       let toolContent;
-
       if (funcName === "extract_call_fields") {
         applyExtractionToSession(session, args);
         toolContent = JSON.stringify({ success: true });
@@ -4877,7 +4874,6 @@ app.post("/api/voice", upload.single("audio"), async (req, res) => {
           console.log("Creating ticket with args:", JSON.stringify(fixedArgs));
           const response = await splynx.request("POST", "admin/support/tickets", urlEncoded);
           toolContent = JSON.stringify({ success: true, ticket_id: response.id });
-
           const isSupportTicket = !!(fixedArgs.customer_id && parseInt(fixedArgs.customer_id) > 0);
           await sendTicketEmail(response.id, fixedArgs, session.collected, isSupportTicket);
         } catch (err) {
@@ -4906,9 +4902,7 @@ app.post("/api/voice", upload.single("audio"), async (req, res) => {
           toolContent = JSON.stringify({ success: false, error: err.message });
         }
       }
-
       session.messages.push({ role: "function", name: funcName, content: toolContent });
-
       const collectedSummary = `CollectedFields: ${JSON.stringify(session.collected || {})}.`;
       const followupSystem = `You are a concise assistant for ISP CRM. Use collected fields and ask for remaining missing info concisely. Use the tool results above for accurate plans and availability.`;
       const finalMessages = [
@@ -4916,25 +4910,21 @@ app.post("/api/voice", upload.single("audio"), async (req, res) => {
         ...session.messages,
         { role: "system", content: collectedSummary },
       ];
-
       const finalResp = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: finalMessages,
         temperature: 0.0,
         max_tokens: 350,
       });
-
       assistantText = finalResp.choices?.[0]?.message?.content?.trim() || "Thanks — I have your details.";
       session.messages.push({ role: "assistant", content: assistantText });
     } else if (firstMsg?.content) {
       assistantText = firstMsg.content;
       session.messages.push({ role: "assistant", content: assistantText });
     }
-
     const ttsBuf = await makeTTS(assistantText);
     session.lastSeen = new Date().toISOString();
     sessions.set(session.id, session);
-
     return res.json({
       sessionId: session.id,
       text: assistantText,
@@ -4957,11 +4947,9 @@ app.post("/api/chat/message", async (req, res) => {
   try {
     const { sessionId, message } = req.body;
     if (!message) return res.status(400).json({ error: "Missing message" });
-
     const session = sessionId && sessions.has(sessionId) ? sessions.get(sessionId) : mkSession(sessionId);
     session.messages.push({ role: "user", content: message });
     let assistantText = null;
-
     const firstCompletion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: session.messages,
@@ -4970,14 +4958,12 @@ app.post("/api/chat/message", async (req, res) => {
       temperature: 0.0,
       max_tokens: 300,
     });
-
     const firstMsg = firstCompletion.choices?.[0]?.message;
     if (firstMsg?.function_call) {
       const funcName = firstMsg.function_call.name;
       const args = safeParseJSON(firstMsg.function_call.arguments) || {};
       session.messages.push(firstMsg);
       let toolContent;
-
       if (funcName === "extract_call_fields") {
         applyExtractionToSession(session, args);
         toolContent = JSON.stringify({ success: true });
@@ -5034,7 +5020,6 @@ app.post("/api/chat/message", async (req, res) => {
           console.log("Creating ticket with args:", JSON.stringify(fixedArgs));
           const response = await splynx.request("POST", "admin/support/tickets", urlEncoded);
           toolContent = JSON.stringify({ success: true, ticket_id: response.id });
-
           const isSupportTicket = !!(fixedArgs.customer_id && parseInt(fixedArgs.customer_id) > 0);
           await sendTicketEmail(response.id, fixedArgs, session.collected, isSupportTicket);
         } catch (err) {
@@ -5063,9 +5048,7 @@ app.post("/api/chat/message", async (req, res) => {
           toolContent = JSON.stringify({ success: false, error: err.message });
         }
       }
-
       session.messages.push({ role: "function", name: funcName, content: toolContent });
-
       const collectedSummary = `CollectedFields: ${JSON.stringify(session.collected || {})}.`;
       const followupSystem = `You are a concise assistant for ISP CRM. Use collected fields and ask for remaining missing info concisely. Use the tool results above for accurate plans and availability.`;
       const finalMessages = [
@@ -5073,24 +5056,20 @@ app.post("/api/chat/message", async (req, res) => {
         ...session.messages,
         { role: "system", content: collectedSummary },
       ];
-
       const finalResp = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: finalMessages,
         temperature: 0.0,
         max_tokens: 350,
       });
-
       assistantText = finalResp.choices?.[0]?.message?.content?.trim() || "Thanks — I have your details.";
       session.messages.push({ role: "assistant", content: assistantText });
     } else if (firstMsg?.content) {
       assistantText = firstMsg.content;
       session.messages.push({ role: "assistant", content: assistantText });
     }
-
     session.lastSeen = new Date().toISOString();
     sessions.set(session.id, session);
-
     return res.json({
       sessionId: session.id,
       text: assistantText,
@@ -5102,7 +5081,7 @@ app.post("/api/chat/message", async (req, res) => {
   }
 });
 
-// SPLYNX PROXY ROUTES (FULL)
+// ==================== FULL SPLYNX PROXY ROUTES ====================
 app.get("/health", (req, res) => {
   res.json({
     status: "ok",
@@ -5925,7 +5904,7 @@ app.all(/^\/api\/.*/, async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`✅ InfiNET Agent + Full Splynx Integration + SparkPost Email running on http://localhost:${PORT}`);
-  console.log(` • Current plans shown via internet/voice/recurring services`);
-  console.log(` • Upgrade flow works`);
-  console.log(` • ReferenceError fixed`);
+  console.log(` • Services shown = ACTIVE ONLY`);
+  console.log(` • No automatic service display on lookup`);
+  console.log(` • Plan change uses exact “I can see that you are on X, on the HIR/NBN/OptiComm network” response`);
 });
