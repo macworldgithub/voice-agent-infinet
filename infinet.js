@@ -4774,6 +4774,20 @@ app.post("/api/chat/init", async (req, res) => {
     return res.status(500).json({ error: err?.message || "server error" });
   }
 });
+app.post("/api/voice-chat/init", async (req, res) => {
+  try {
+    const session = mkSession();
+    const greeting = `Hi there! Welcome to InfiNET Broadband. Could you please share your name to get started?`;
+    session.messages.push({ role: "assistant", content: greeting });
+    sessions.set(session.id, session);
+    const ttsBuf = await makeTTS(greeting);
+    const audioBase64 = ttsBuf ? ttsBuf.toString("base64") : null;
+    return res.json({ sessionId: session.id, text: greeting, audioBase64 });
+  } catch (err) {
+    console.error("chat init err", err);
+    return res.status(500).json({ error: err?.message || "server error" });
+  }
+});
 
 app.post("/api/voice", upload.single("audio"), async (req, res) => {
   const incomingSessionId = (req.body && req.body.sessionId) || req.query.sessionId || req.headers["x-session-id"] || null;

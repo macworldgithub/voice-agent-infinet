@@ -629,7 +629,7 @@
 
   async function initSession() {
     try {
-      const resp = await fetch("/api/chat/init", { method: "POST" });
+      const resp = await fetch("/api/voice-chat/init", { method: "POST" });
       if (!resp.ok) return;
       const data = await resp.json();
       if (data.sessionId) localStorage.setItem("voiceAgent.sessionId", data.sessionId);
