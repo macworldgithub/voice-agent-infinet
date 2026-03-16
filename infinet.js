@@ -4641,13 +4641,30 @@ function applyExtractionToSession(session, parsed) {
   return extractionResult;
 }
 
+// async function makeTTS(text) {
+//   try {
+//     const tts = await openai.audio.speech.create({
+//       model: "gpt-4o-mini-tts",
+//       voice: "cedar",
+//       input: text,
+//       format: "mp3",
+//     });
+//     const buf = await streamToBuffer(tts);
+//     return buf;
+//   } catch (err) {
+//     console.warn("TTS failed:", err?.message || err);
+//     return null;
+//   }
+// }
 async function makeTTS(text) {
   try {
+  
     const tts = await openai.audio.speech.create({
       model: "gpt-4o-mini-tts",
       voice: "cedar",
       input: text,
       format: "mp3",
+      instructions: "MANDATORY: Speak in a natural Australian accent only. Do not use any other accent or regional variant."
     });
     const buf = await streamToBuffer(tts);
     return buf;
@@ -4656,7 +4673,6 @@ async function makeTTS(text) {
     return null;
   }
 }
-
 async function fetchTariffs() {
   try {
     const data = await splynx.listInternetTariffs();
