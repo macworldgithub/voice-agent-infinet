@@ -31,9 +31,6 @@
       -moz-osx-font-smoothing: grayscale;
     }
 
-    /* small, non-visual helper to keep body sized to the viewport as --vh updates */
-    body { min-height: calc(var(--vh, 1vh) * 100); }
-
     body {
       min-height: 100dvh;
       display: grid;
@@ -190,7 +187,7 @@
         bottom: calc(env(safe-area-inset-bottom) + 8px);
         width: auto;
         height: auto;
-        max-height: calc(var(--vh, 1vh) * 96);
+        max-height: calc(var(--vh, 1vh) * 100);
         border-radius: 14px;
       }
 
@@ -387,61 +384,28 @@
       });
 
       function scrollToBottom() {
-        // Always use requestAnimationFrame to avoid layout thrash
         window.requestAnimationFrame(() => {
-          // Prefer setting scrollTop on the messages element so the composer stays visible
-          try {
-            messagesEl.scrollTop = messagesEl.scrollHeight;
-          } catch (e) {
-            // fallback
-            window.scrollTo(0, document.body.scrollHeight);
-          }
+          messagesEl.scrollTop = messagesEl.scrollHeight;
         });
       }
 
       // MOBILE: dynamic --vh to handle address bar/keyboard changes
       function updateVh() {
-        // Use visualViewport height when available (handles keyboard resize on iOS)
         const vHeight = (window.visualViewport && window.visualViewport.height) ? window.visualViewport.height : window.innerHeight;
-        // set --vh so CSS can use it (value in px for compatibility)
         document.documentElement.style.setProperty('--vh', (vHeight * 0.01) + 'px');
-        // set a strong body min-height to avoid the layout jumping on iOS
-        document.body.style.minHeight = vHeight + 'px';
       }
 
       if (window.visualViewport) {
-        // When the visual viewport changes (keyboard open/close), update vh and keep messages visible
-        window.visualViewport.addEventListener('resize', () => {
-          updateVh();
-          // small delay to allow browser layout to settle, then scroll
-          setTimeout(() => {
-            scrollToBottom();
-            // if the user is currently typing, ensure the composer is visible
-            if (document.activeElement === txt) {
-              // Try to bring the focused textarea into view
-              txt.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-              scrollToBottom();
-            }
-          }, 50);
-        });
-
-        window.visualViewport.addEventListener('scroll', () => {
-          updateVh();
-        });
+        window.visualViewport.addEventListener('resize', () => { updateVh(); scrollToBottom(); });
+        window.visualViewport.addEventListener('scroll', () => { updateVh(); });
       } else {
         window.addEventListener('resize', () => { updateVh(); scrollToBottom(); });
       }
 
       txt.addEventListener('focus', () => {
         updateVh();
-        // a couple of short timeouts help mobile browsers (esp. iOS Safari) to adjust and reveal the focused input
-        setTimeout(() => { scrollToBottom(); }, 50);
-        setTimeout(() => { scrollToBottom(); }, 300);
-        // try to keep the composer visible in odd cases
-        setTimeout(() => {
-          txt.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-          scrollToBottom();
-        }, 350);
+        setTimeout(scrollToBottom, 50);
+        setTimeout(scrollToBottom, 300);
       });
 
       txt.addEventListener('blur', () => {
@@ -463,7 +427,6 @@
         }, 100);
       });
 
-      // expose a couple helpers for debugging if needed
       window._infinetChatHelpers = { updateVh, scrollToBottom };
     })();
   </script>
