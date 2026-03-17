@@ -2,9 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>InfiNET Support Chat</title>
   <style>
     :root {
@@ -17,49 +15,32 @@
       --radius: 16px;
       --fs-base: clamp(13.5px, 3.1vw, 15px);
       --spacing: clamp(10px, 3vw, 16px);
+      /* --vh will be updated by JS to the real viewport height unit */
+      --vh: 1vh;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       font-size: var(--fs-base);
       color: #f1f5f9;
-      -webkit-text-size-adjust: 100%;
+      -webkit-text-size-adjust: 100%; /* avoid iOS text-size auto adjustments */
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      background: linear-gradient(165deg, #031022 0%, #0b223f 100%);
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
     }
 
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    html, body {
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(165deg, #031022 0%, #0b223f 100%);
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      overflow: hidden;
-    }
-
     body {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 0;
-      padding-top: env(safe-area-inset-top);
-      padding-bottom: env(safe-area-inset-bottom);
-      padding-left: env(safe-area-inset-left);
-      padding-right: env(safe-area-inset-right);
+      min-height: 100dvh;
+      display: grid;
+      place-items: center;
+      padding: 8px;
     }
 
     .widget {
       width: min(100%, 420px);
-      height: min(100%, 760px);
-      max-height: 100%;
+      height: min(calc(var(--vh, 1vh) * 96), 760px);
       border-radius: 20px;
       background: var(--glass);
       border: 1px solid rgba(255,255,255,0.07);
@@ -68,8 +49,6 @@
       display: flex;
       flex-direction: column;
       backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      position: relative;
     }
 
     .header {
@@ -79,108 +58,36 @@
       align-items: center;
       gap: 12px;
       flex-shrink: 0;
-      z-index: 10;
     }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      flex: 1;
-    }
-
+    .brand { display: flex; align-items: center; gap: 10px; flex: 1; }
     .logo {
-      width: 42px;
-      height: 42px;
-      border-radius: 11px;
+      width: 42px; height: 42px; border-radius: 11px;
       background: linear-gradient(135deg, var(--accent-2), var(--accent));
-      color: white;
-      font-weight: 700;
-      font-size: 15px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
+      color: white; font-weight: 700; font-size: 15px;
+      display: grid; place-items: center;
       box-shadow: 0 3px 10px rgba(59,130,246,0.3);
     }
+    .title h4 { font-size: clamp(14.5px, 3.8vw, 16px); }
+    .title p { font-size: clamp(11px, 2.9vw, 12px); color: var(--muted); margin-top: 2px; }
+    .status { display: flex; align-items: center; gap: 7px; font-size: clamp(11px, 2.9vw, 12.5px); color: var(--muted); white-space: nowrap; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; }
+    .dot.online { background: #22c55e; box-shadow: 0 0 6px #22c55e80; }
 
-    .title h4 {
-      font-size: clamp(14.5px, 3.8vw, 16px);
-      font-weight: 600;
-    }
-
-    .title p {
-      font-size: clamp(11px, 2.9vw, 12px);
-      color: var(--muted);
-      margin-top: 2px;
-    }
-
-    .status {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      font-size: clamp(11px, 2.9vw, 12.5px);
-      color: var(--muted);
-      white-space: nowrap;
-      flex-shrink: 0;
-    }
-
-    .dot {
-      width: 9px;
-      height: 9px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
-
-    .dot.online {
-      background: #22c55e;
-      box-shadow: 0 0 6px #22c55e80;
-    }
-
-    .messages-wrap {
-      flex: 1;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      position: relative;
-      min-height: 0;
-    }
-
+    .messages-wrap { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
     .messages {
-      flex: 1;
-      overflow-y: auto;
-      -webkit-overflow-scrolling: touch;
-      padding: var(--spacing);
-      display: flex;
-      flex-direction: column;
-      gap: clamp(10px, 3vw, 14px);
+      flex: 1; overflow-y: auto; padding: var(--spacing);
+      display: flex; flex-direction: column; gap: clamp(10px, 3vw, 14px);
       scroll-behavior: smooth;
-      min-height: 0;
+      -webkit-overflow-scrolling: touch;
     }
-
-    .messages::-webkit-scrollbar {
-      width: 6px;
-    }
-
-    .messages::-webkit-scrollbar-track {
-      background: transparent;
-    }
-
-    .messages::-webkit-scrollbar-thumb {
-      background: rgba(255,255,255,0.1);
-      border-radius: 3px;
-    }
-
     .bubble-row {
       display: flex;
       flex-direction: column;
       align-items: flex-start;
     }
-
     .bubble-row.user {
       align-items: flex-end;
     }
-
     .msg {
       max-width: 84%;
       padding: clamp(9px, 2.8vw, 12px) clamp(12px, 3.5vw, 15px);
@@ -191,67 +98,38 @@
       opacity: 0;
       transform: translateY(8px);
       word-break: break-word;
-      -webkit-user-select: text;
-      user-select: text;
     }
-
     .msg.agent {
       background: rgba(255,255,255,0.045);
       border: 1px solid rgba(255,255,255,0.08);
       border-radius: 15px 15px 15px 5px;
     }
-
-    .msg.agent p {
-      margin: 0;
-    }
-
-    .msg.agent p + p {
-      margin-top: 10px;
-    }
-
     .msg.user {
       background: linear-gradient(135deg, var(--accent-2), var(--accent));
       color: white;
       border-radius: 15px 15px 5px 15px;
     }
-
     .meta {
       margin-top: 4px;
       font-size: clamp(10px, 2.7vw, 11px);
       color: var(--muted);
       opacity: 0.8;
     }
+    .bubble-row.user .meta { text-align: right; }
 
-    .bubble-row.user .meta {
-      text-align: right;
-    }
+    @keyframes appear { to { opacity:1; transform:none; } }
 
-    @keyframes appear {
-      to {
-        opacity: 1;
-        transform: none;
-      }
-    }
-
+    /* Composer: keep original horizontal layout, allow children to stretch so Send matches input height */
     .composer {
       padding: clamp(10px, 3vw, 14px) var(--spacing);
-      padding-bottom: max(clamp(10px, 3vw, 14px), env(safe-area-inset-bottom));
       background: rgba(0,0,0,0.28);
       display: flex;
       gap: 10px;
       flex-shrink: 0;
       border-top: 1px solid rgba(255,255,255,0.07);
-      align-items: stretch;
-      z-index: 10;
+      align-items: stretch; /* restored so the send button stretches to match textarea height like your reference */
     }
-
-    .input-wrap {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-      min-width: 0;
-    }
+    .input-wrap { flex: 1; display: flex; flex-direction: column; gap: 5px; }
 
     textarea {
       width: 100%;
@@ -262,152 +140,74 @@
       border-radius: 13px;
       background: rgba(255,255,255,0.035);
       border: 1px solid rgba(255,255,255,0.09);
-      color: inherit;
-      font: inherit;
-      outline: none;
-      line-height: 1.42;
-      -webkit-appearance: none;
-      -webkit-user-select: text;
-      user-select: text;
-      font-size: 16px;
+      color: inherit; font: inherit; outline: none; line-height: 1.42;
+      /* default font-size is inherited */
     }
+    textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2.5px rgba(0,194,179,0.22); }
 
-    textarea:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 2.5px rgba(0,194,179,0.22);
-      -webkit-box-shadow: 0 0 0 2.5px rgba(0,194,179,0.22);
-    }
+    .hint { font-size: clamp(10px, 2.7vw, 11.5px); color: var(--muted); display: flex; justify-content: space-between; padding: 0 5px; }
 
-    .hint {
-      font-size: clamp(10px, 2.7vw, 11.5px);
-      color: var(--muted);
-      display: flex;
-      justify-content: space-between;
-      padding: 0 5px;
-    }
-
+    /* Keep the exact Send button style from your reference: padding: 0 18px */
     .btn {
       background: linear-gradient(90deg, var(--accent-2), var(--accent));
       border: none;
-      padding: 0 18px;
+      padding: 0 18px;          /* <-- same as your reference code */
       border-radius: 12px;
-      color: white;
-      font-weight: 600;
-      font-size: clamp(13px, 3.4vw, 14.5px);
-      min-width: 62px;
-      cursor: pointer;
+      color: white; font-weight: 600; font-size: clamp(13px, 3.4vw, 14.5px);
+      min-width: 62px; cursor: pointer;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      align-self: stretch;
-      -webkit-appearance: none;
-      -webkit-user-select: none;
-      user-select: none;
-      flex-shrink: 0;
+      align-self: stretch;     /* stretch vertically to match textarea height (keeps the same visual size) */
     }
-
-    .btn:active:not(:disabled) {
-      opacity: 0.85;
-    }
-
-    .btn:disabled {
-      opacity: 0.48;
-      cursor: not-allowed;
-    }
+    .btn:hover:not(:disabled) { opacity: 0.94; transform: translateY(-1px); }
+    .btn:disabled { opacity: 0.48; cursor: not-allowed; }
 
     .typing-indicator {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 16px;
-      background: rgba(255,255,255,0.03);
-      border-radius: 18px 18px 18px 4px;
-      font-size: 14px;
-      color: var(--muted);
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 16px; background: rgba(255,255,255,0.03);
+      border-radius: 18px 18px 18px 4px; font-size: 14px; color: var(--muted);
       max-width: 84%;
     }
+    .typing-dots { display: flex; gap: 4px; }
+    .typing-dot { width: 6px; height: 6px; background: var(--muted); border-radius: 50%; animation: typing 1.4s infinite ease-in-out; }
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes typing { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
 
-    .typing-dots {
-      display: flex;
-      gap: 4px;
-    }
-
-    .typing-dot {
-      width: 6px;
-      height: 6px;
-      background: var(--muted);
-      border-radius: 50%;
-      animation: typing 1.4s infinite ease-in-out;
-    }
-
-    .typing-dot:nth-child(2) {
-      animation-delay: 0.2s;
-    }
-
-    .typing-dot:nth-child(3) {
-      animation-delay: 0.4s;
-    }
-
-    @keyframes typing {
-      0%, 100% {
-        transform: translateY(0);
-      }
-      50% {
-        transform: translateY(-6px);
-      }
-    }
-
-    /* TABLET & UP */
-    @media (min-width: 721px) {
-      body {
-        padding: 8px;
-      }
-
-      .widget {
-        border-radius: 20px;
-      }
-    }
-
-    /* MOBILE */
+    /* MOBILE-SPECIFIC */
     @media (max-width: 720px) {
-      body {
-        padding: 0;
-      }
+      body { padding: 0; }
 
       .widget {
-        width: 100%;
-        height: 100%;
-        max-height: 100%;
-        border-radius: 0;
-      }
-
-      .header {
-        border-radius: 0;
-      }
-
-      .messages {
-        padding-bottom: calc(var(--spacing) + 10px);
-      }
-    }
-
-    /* LANDSCAPE ADJUSTMENTS */
-    @media (orientation: landscape) and (max-height: 500px) {
-      textarea {
-        min-height: 40px;
-        max-height: 80px;
-      }
-
-      .header {
-        padding: 8px 16px;
-      }
-
-      .messages {
-        padding: 8px;
+        position: fixed;
+        left: 8px;
+        right: 8px;
+        top: calc(8px + env(safe-area-inset-top));
+        bottom: calc(env(safe-area-inset-bottom) + 8px);
+        width: auto;
+        height: auto;
+        max-height: calc(var(--vh, 1vh) * 96);
+        border-radius: 14px;
       }
 
       .composer {
-        padding: 8px var(--spacing);
+        padding-bottom: calc(env(safe-area-inset-bottom) + 10px);
+        z-index: 5;
       }
+
+      /* ensure >=16px on mobile to prevent browser auto-zoom */
+      textarea { font-size: 16px; min-height: 54px; }
+
+      /* keep send button same padding but let it stretch vertically with composer */
+      .btn { padding: 0 18px; }
+
+      .messages { padding-bottom: calc(var(--spacing) + 10px); }
+    }
+
+    @media (orientation: landscape) and (max-height: 420px) {
+      textarea { font-size: 16px; }
+      .btn { padding: 0 18px; }
     }
   </style>
 </head>
@@ -428,7 +228,7 @@
     </div>
 
     <div class="messages-wrap">
-      <div id="messages" class="messages" role="log" aria-live="polite" aria-label="Chat messages"></div>
+      <div id="messages" class="messages" aria-live="polite"></div>
     </div>
 
     <div class="composer">
@@ -438,7 +238,7 @@
           <span id="charCount">0</span>
         </div>
       </div>
-      <button class="btn" id="send" aria-label="Send message">Send</button>
+      <button class="btn" id="send">Send</button>
     </div>
   </div>
 
@@ -532,6 +332,7 @@
           if (data?.text) {
             addMessage({ from: 'agent', text: data.text });
 
+            // AUTO FOLLOW-UP: if agent says one of the trigger phrases → auto-send "what's the update" after 2 seconds
             const lowerText = data.text.toLowerCase();
             if (lowerText.includes('hold on for a moment') || lowerText.includes('creating the ticket now')) {
               setTimeout(() => {
@@ -540,7 +341,8 @@
                 sendMessage();
               }, 2000);
             }
-          } else {
+          }
+          else {
             addMessage({ from: 'agent', text: 'Sorry — no reply received.' });
           }
         } catch (err) {
@@ -565,7 +367,6 @@
           addMessage({ from: 'agent', text: 'Connection issue. Please try again later.' });
         } finally {
           setBusy(false);
-          scrollToBottom();
         }
       }
 
@@ -583,41 +384,50 @@
       });
 
       function scrollToBottom() {
-        requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
           messagesEl.scrollTop = messagesEl.scrollHeight;
         });
       }
 
-      function handleResize() {
-        scrollToBottom();
+      // MOBILE: dynamic --vh to handle address bar/keyboard changes
+      function updateVh() {
+        const vHeight = (window.visualViewport && window.visualViewport.height) ? window.visualViewport.height : window.innerHeight;
+        document.documentElement.style.setProperty('--vh', (vHeight * 0.01) + 'px');
       }
 
-      window.addEventListener('resize', handleResize);
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', () => { updateVh(); scrollToBottom(); });
+        window.visualViewport.addEventListener('scroll', () => { updateVh(); });
+      } else {
+        window.addEventListener('resize', () => { updateVh(); scrollToBottom(); });
+      }
 
       txt.addEventListener('focus', () => {
-        setTimeout(scrollToBottom, 100);
+        updateVh();
+        setTimeout(scrollToBottom, 50);
         setTimeout(scrollToBottom, 300);
       });
 
-      const observer = new MutationObserver(() => {
-        scrollToBottom();
+      txt.addEventListener('blur', () => {
+        setTimeout(updateVh, 80);
       });
+
+      updateVh();
+
+      // auto-scroll when messages change
+      const observer = new MutationObserver(() => { scrollToBottom(); });
       observer.observe(messagesEl, { childList: true });
+
+      init();
 
       window.addEventListener('load', () => {
         setTimeout(() => {
-          scrollToBottom();
           if (!txt.disabled) txt.focus();
+          scrollToBottom();
         }, 100);
       });
 
-      // Initialize chat
-      init();
-
-      // Ensure initial render is visible
-      setTimeout(() => {
-        scrollToBottom();
-      }, 150);
+      window._infinetChatHelpers = { updateVh, scrollToBottom };
     })();
   </script>
 </body>
