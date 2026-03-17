@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, maximum-scale=1" />
   <title>InfiNET Support Chat</title>
   <style>
     :root {
@@ -15,32 +15,47 @@
       --radius: 16px;
       --fs-base: clamp(13.5px, 3.1vw, 15px);
       --spacing: clamp(10px, 3vw, 16px);
-      /* --vh will be updated by JS to the real viewport height unit */
       --vh: 1vh;
+      --safe-top: 0px;
+      --safe-bottom: 0px;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       font-size: var(--fs-base);
       color: #f1f5f9;
-      -webkit-text-size-adjust: 100%; /* avoid iOS text-size auto adjustments */
+      -webkit-text-size-adjust: 100%;
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body {
+    
+    html {
+      width: 100%;
       height: 100%;
-      background: linear-gradient(165deg, #031022 0%, #0b223f 100%);
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
+      -webkit-user-select: none;
+      user-select: none;
     }
 
     body {
+      width: 100%;
+      height: 100%;
       min-height: 100dvh;
-      display: grid;
-      place-items: center;
-      padding: 8px;
+      background: linear-gradient(165deg, #031022 0%, #0b223f 100%);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      position: fixed;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
     }
 
     .widget {
-      width: min(100%, 420px);
-      height: min(calc(var(--vh, 1vh) * 96), 760px);
+      position: fixed;
+      left: 8px;
+      right: 8px;
+      top: calc(8px + var(--safe-top));
+      bottom: calc(8px + var(--safe-bottom));
+      width: auto;
+      height: auto;
       border-radius: 20px;
       background: var(--glass);
       border: 1px solid rgba(255,255,255,0.07);
@@ -49,6 +64,8 @@
       display: flex;
       flex-direction: column;
       backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      z-index: 10;
     }
 
     .header {
@@ -59,35 +76,111 @@
       gap: 12px;
       flex-shrink: 0;
     }
-    .brand { display: flex; align-items: center; gap: 10px; flex: 1; }
-    .logo {
-      width: 42px; height: 42px; border-radius: 11px;
-      background: linear-gradient(135deg, var(--accent-2), var(--accent));
-      color: white; font-weight: 700; font-size: 15px;
-      display: grid; place-items: center;
-      box-shadow: 0 3px 10px rgba(59,130,246,0.3);
-    }
-    .title h4 { font-size: clamp(14.5px, 3.8vw, 16px); }
-    .title p { font-size: clamp(11px, 2.9vw, 12px); color: var(--muted); margin-top: 2px; }
-    .status { display: flex; align-items: center; gap: 7px; font-size: clamp(11px, 2.9vw, 12.5px); color: var(--muted); white-space: nowrap; }
-    .dot { width: 9px; height: 9px; border-radius: 50%; }
-    .dot.online { background: #22c55e; box-shadow: 0 0 6px #22c55e80; }
 
-    .messages-wrap { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
-    .messages {
-      flex: 1; overflow-y: auto; padding: var(--spacing);
-      display: flex; flex-direction: column; gap: clamp(10px, 3vw, 14px);
-      scroll-behavior: smooth;
-      -webkit-overflow-scrolling: touch;
+    .brand { 
+      display: flex; 
+      align-items: center; 
+      gap: 10px; 
+      flex: 1; 
     }
+
+    .logo {
+      width: 42px;
+      height: 42px;
+      border-radius: 11px;
+      background: linear-gradient(135deg, var(--accent-2), var(--accent));
+      color: white;
+      font-weight: 700;
+      font-size: 15px;
+      display: grid;
+      place-items: center;
+      box-shadow: 0 3px 10px rgba(59,130,246,0.3);
+      flex-shrink: 0;
+    }
+
+    .title h4 { 
+      font-size: clamp(14.5px, 3.8vw, 16px);
+      margin: 0;
+    }
+
+    .title p { 
+      font-size: clamp(11px, 2.9vw, 12px);
+      color: var(--muted);
+      margin-top: 2px;
+      margin: 2px 0 0 0;
+    }
+
+    .status { 
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: clamp(11px, 2.9vw, 12.5px);
+      color: var(--muted);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .dot { 
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .dot.online { 
+      background: #22c55e;
+      box-shadow: 0 0 6px #22c55e80;
+    }
+
+    /* CRITICAL: Messages container must be scrollable */
+    .messages-wrap {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      position: relative;
+    }
+
+    .messages {
+      flex: 1;
+      overflow-y: scroll;
+      -webkit-overflow-scrolling: touch;
+      padding: var(--spacing);
+      display: flex;
+      flex-direction: column;
+      gap: clamp(10px, 3vw, 14px);
+      scroll-behavior: smooth;
+      min-height: 0;
+      /* iOS Safari fix: ensure content is scrollable */
+      will-change: scroll-position;
+    }
+
+    /* Hide scrollbar but keep scrolling functional */
+    .messages::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .messages::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .messages::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+    }
+
     .bubble-row {
       display: flex;
       flex-direction: column;
       align-items: flex-start;
+      flex-shrink: 0;
     }
+
     .bubble-row.user {
       align-items: flex-end;
     }
+
     .msg {
       max-width: 84%;
       padding: clamp(9px, 2.8vw, 12px) clamp(12px, 3.5vw, 15px);
@@ -98,38 +191,60 @@
       opacity: 0;
       transform: translateY(8px);
       word-break: break-word;
+      -webkit-user-select: text;
+      user-select: text;
     }
+
     .msg.agent {
       background: rgba(255,255,255,0.045);
       border: 1px solid rgba(255,255,255,0.08);
       border-radius: 15px 15px 15px 5px;
     }
+
     .msg.user {
       background: linear-gradient(135deg, var(--accent-2), var(--accent));
       color: white;
       border-radius: 15px 15px 5px 15px;
     }
+
     .meta {
       margin-top: 4px;
       font-size: clamp(10px, 2.7vw, 11px);
       color: var(--muted);
       opacity: 0.8;
     }
-    .bubble-row.user .meta { text-align: right; }
 
-    @keyframes appear { to { opacity:1; transform:none; } }
+    .bubble-row.user .meta { 
+      text-align: right;
+    }
 
-    /* Composer: keep original horizontal layout, allow children to stretch so Send matches input height */
+    @keyframes appear { 
+      to { 
+        opacity: 1;
+        transform: none;
+      }
+    }
+
+    /* Composer: fixed at bottom with proper safe area handling */
     .composer {
       padding: clamp(10px, 3vw, 14px) var(--spacing);
+      padding-bottom: calc(clamp(10px, 3vw, 14px) + var(--safe-bottom));
       background: rgba(0,0,0,0.28);
       display: flex;
       gap: 10px;
       flex-shrink: 0;
       border-top: 1px solid rgba(255,255,255,0.07);
-      align-items: stretch; /* restored so the send button stretches to match textarea height like your reference */
+      align-items: flex-end;
+      z-index: 20;
     }
-    .input-wrap { flex: 1; display: flex; flex-direction: column; gap: 5px; }
+
+    .input-wrap { 
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      min-width: 0;
+    }
 
     textarea {
       width: 100%;
@@ -140,74 +255,110 @@
       border-radius: 13px;
       background: rgba(255,255,255,0.035);
       border: 1px solid rgba(255,255,255,0.09);
-      color: inherit; font: inherit; outline: none; line-height: 1.42;
-      /* default font-size is inherited */
+      color: inherit;
+      font: inherit;
+      outline: none;
+      line-height: 1.42;
+      -webkit-appearance: none;
+      -webkit-user-select: text;
+      user-select: text;
     }
-    textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2.5px rgba(0,194,179,0.22); }
 
-    .hint { font-size: clamp(10px, 2.7vw, 11.5px); color: var(--muted); display: flex; justify-content: space-between; padding: 0 5px; }
+    @supports (padding: max(0px)) {
+      textarea {
+        padding: max(11px, calc(11px + env(safe-area-inset-bottom, 0))) max(13px, calc(13px + env(safe-area-inset-right, 0)));
+      }
+    }
 
-    /* Keep the exact Send button style from your reference: padding: 0 18px */
+    textarea::placeholder {
+      color: var(--muted);
+    }
+
+    textarea:focus { 
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2.5px rgba(0,194,179,0.22);
+      -webkit-box-shadow: 0 0 0 2.5px rgba(0,194,179,0.22);
+    }
+
+    .hint { 
+      font-size: clamp(10px, 2.7vw, 11.5px);
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      padding: 0 5px;
+    }
+
     .btn {
       background: linear-gradient(90deg, var(--accent-2), var(--accent));
       border: none;
-      padding: 0 18px;          /* <-- same as your reference code */
+      padding: 0 18px;
       border-radius: 12px;
-      color: white; font-weight: 600; font-size: clamp(13px, 3.4vw, 14.5px);
-      min-width: 62px; cursor: pointer;
+      color: white;
+      font-weight: 600;
+      font-size: clamp(13px, 3.4vw, 14.5px);
+      min-width: 62px;
+      min-height: 46px;
+      cursor: pointer;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      align-self: stretch;     /* stretch vertically to match textarea height (keeps the same visual size) */
+      -webkit-appearance: none;
+      flex-shrink: 0;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      -webkit-user-select: none;
+      user-select: none;
     }
-    .btn:hover:not(:disabled) { opacity: 0.94; transform: translateY(-1px); }
-    .btn:disabled { opacity: 0.48; cursor: not-allowed; }
+
+    .btn:hover:not(:disabled) { 
+      opacity: 0.94;
+      transform: translateY(-1px);
+    }
+
+    .btn:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .btn:disabled { 
+      opacity: 0.48;
+      cursor: not-allowed;
+    }
 
     .typing-indicator {
-      display: flex; align-items: center; gap: 8px;
-      padding: 10px 16px; background: rgba(255,255,255,0.03);
-      border-radius: 18px 18px 18px 4px; font-size: 14px; color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      background: rgba(255,255,255,0.03);
+      border-radius: 18px 18px 18px 4px;
+      font-size: 14px;
+      color: var(--muted);
       max-width: 84%;
     }
-    .typing-dots { display: flex; gap: 4px; }
-    .typing-dot { width: 6px; height: 6px; background: var(--muted); border-radius: 50%; animation: typing 1.4s infinite ease-in-out; }
-    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
-    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes typing { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
 
-    /* MOBILE-SPECIFIC */
-    @media (max-width: 720px) {
-      body { padding: 0; }
-
-      .widget {
-        position: fixed;
-        left: 8px;
-        right: 8px;
-        top: calc(8px + env(safe-area-inset-top));
-        bottom: calc(env(safe-area-inset-bottom) + 8px);
-        width: auto;
-        height: auto;
-        max-height: calc(var(--vh, 1vh) * 96);
-        border-radius: 14px;
-      }
-
-      .composer {
-        padding-bottom: calc(env(safe-area-inset-bottom) + 10px);
-        z-index: 5;
-      }
-
-      /* ensure >=16px on mobile to prevent browser auto-zoom */
-      textarea { font-size: 16px; min-height: 54px; }
-
-      /* keep send button same padding but let it stretch vertically with composer */
-      .btn { padding: 0 18px; }
-
-      .messages { padding-bottom: calc(var(--spacing) + 10px); }
+    .typing-dots { 
+      display: flex;
+      gap: 4px;
     }
 
-    @media (orientation: landscape) and (max-height: 420px) {
-      textarea { font-size: 16px; }
-      .btn { padding: 0 18px; }
+    .typing-dot { 
+      width: 6px;
+      height: 6px;
+      background: var(--muted);
+      border-radius: 50%;
+      animation: typing 1.4s infinite ease-in-out;
+    }
+
+    .typing-dot:nth-child(2) { 
+      animation-delay: 0.2s;
+    }
+
+    .typing-dot:nth-child(3) { 
+      animation-delay: 0.4s;
+    }
+
+    @keyframes typing { 
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-6px); }
     }
   </style>
 </head>
@@ -228,7 +379,7 @@
     </div>
 
     <div class="messages-wrap">
-      <div id="messages" class="messages" aria-live="polite"></div>
+      <div id="messages" class="messages" role="log" aria-live="polite" aria-label="Chat messages"></div>
     </div>
 
     <div class="composer">
@@ -238,7 +389,7 @@
           <span id="charCount">0</span>
         </div>
       </div>
-      <button class="btn" id="send">Send</button>
+      <button class="btn" id="send" aria-label="Send message">Send</button>
     </div>
   </div>
 
@@ -250,6 +401,7 @@
 
       let sessionId = null;
       let busy = false;
+      let keyboardOpen = false;
 
       function timeNow() {
         return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -332,7 +484,6 @@
           if (data?.text) {
             addMessage({ from: 'agent', text: data.text });
 
-            // AUTO FOLLOW-UP: if agent says one of the trigger phrases → auto-send "what's the update" after 2 seconds
             const lowerText = data.text.toLowerCase();
             if (lowerText.includes('hold on for a moment') || lowerText.includes('creating the ticket now')) {
               setTimeout(() => {
@@ -341,8 +492,7 @@
                 sendMessage();
               }, 2000);
             }
-          }
-          else {
+          } else {
             addMessage({ from: 'agent', text: 'Sorry — no reply received.' });
           }
         } catch (err) {
@@ -350,7 +500,6 @@
           addMessage({ from: 'agent', text: 'Sorry — something went wrong. Try again?' });
         } finally {
           setBusy(false);
-          txt.focus();
           scrollToBottom();
         }
       }
@@ -389,45 +538,95 @@
         });
       }
 
-      // MOBILE: dynamic --vh to handle address bar/keyboard changes
+      // iOS: Update viewport height dynamically
       function updateVh() {
-        const vHeight = (window.visualViewport && window.visualViewport.height) ? window.visualViewport.height : window.innerHeight;
-        document.documentElement.style.setProperty('--vh', (vHeight * 0.01) + 'px');
+        let vHeight;
+        
+        if (window.visualViewport) {
+          vHeight = window.visualViewport.height;
+        } else {
+          vHeight = window.innerHeight;
+        }
+        
+        const vhValue = (vHeight * 0.01);
+        document.documentElement.style.setProperty('--vh', vhValue + 'px');
       }
 
+      // iOS: Update safe area insets
+      function updateSafeArea() {
+        const safeTop = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--safe-top')) || 0;
+        const safeBottom = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--safe-bottom')) || 0;
+        
+        const newSafeTop = (env('safe-area-inset-top') || '0px').replace('px', '');
+        const newSafeBottom = (env('safe-area-inset-bottom') || '0px').replace('px', '');
+        
+        // Use CSS env() - fallback to 0
+        document.documentElement.style.setProperty('--safe-top', 'max(8px, env(safe-area-inset-top))');
+        document.documentElement.style.setProperty('--safe-bottom', 'env(safe-area-inset-bottom)');
+      }
+
+      function env(variable) {
+        const value = getComputedStyle(document.documentElement).getPropertyValue(variable);
+        return value ? value.trim() : '0px';
+      }
+
+      // Handle visualViewport for iOS keyboard changes
       if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', () => { updateVh(); scrollToBottom(); });
-        window.visualViewport.addEventListener('scroll', () => { updateVh(); });
-      } else {
-        window.addEventListener('resize', () => { updateVh(); scrollToBottom(); });
+        window.visualViewport.addEventListener('resize', () => {
+          updateVh();
+          scrollToBottom();
+        });
+        
+        window.visualViewport.addEventListener('scroll', () => {
+          updateVh();
+        });
       }
 
-      txt.addEventListener('focus', () => {
+      // Fallback for older devices
+      window.addEventListener('resize', () => {
         updateVh();
-        setTimeout(scrollToBottom, 50);
+        scrollToBottom();
+      });
+
+      // Focus/blur handlers for keyboard
+      txt.addEventListener('focus', () => {
+        keyboardOpen = true;
+        updateVh();
+        setTimeout(scrollToBottom, 100);
         setTimeout(scrollToBottom, 300);
       });
 
       txt.addEventListener('blur', () => {
-        setTimeout(updateVh, 80);
+        keyboardOpen = false;
+        setTimeout(updateVh, 100);
+        setTimeout(scrollToBottom, 100);
       });
 
-      updateVh();
-
-      // auto-scroll when messages change
-      const observer = new MutationObserver(() => { scrollToBottom(); });
+      // Observer for message changes
+      const observer = new MutationObserver(() => {
+        scrollToBottom();
+      });
+      
       observer.observe(messagesEl, { childList: true });
 
+      // Initial setup
+      updateSafeArea();
+      updateVh();
       init();
 
+      // Ensure proper focus and scroll on load
       window.addEventListener('load', () => {
         setTimeout(() => {
-          if (!txt.disabled) txt.focus();
+          updateVh();
+          if (!txt.disabled) {
+            txt.focus();
+          }
           scrollToBottom();
-        }, 100);
+        }, 200);
       });
 
-      window._infinetChatHelpers = { updateVh, scrollToBottom };
+      // Store helpers for external access
+      window._infinetChatHelpers = { updateVh, scrollToBottom, updateSafeArea };
     })();
   </script>
 </body>
