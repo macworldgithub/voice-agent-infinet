@@ -20,7 +20,7 @@
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       font-size: var(--fs-base);
       color: #f1f5f9;
-      -webkit-text-size-adjust: 100%;
+      -webkit-text-size-adjust: 100%; /* avoid iOS text-size auto adjustments */
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -32,7 +32,6 @@
     }
 
     body {
-      /* avoid 100vh quirks on iOS by using dynamic --vh set from JS */
       min-height: 100dvh;
       display: grid;
       place-items: center;
@@ -74,28 +73,12 @@
     .dot { width: 9px; height: 9px; border-radius: 50%; }
     .dot.online { background: #22c55e; box-shadow: 0 0 6px #22c55e80; }
 
-    .messages-wrap { 
-      flex: 1; 
-      overflow: hidden; 
-      display: flex; 
-      flex-direction: column;
-      /* Fix for iOS flexbox overflow: allow children to shrink properly */
-      min-height: 0;
-    }
+    .messages-wrap { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
     .messages {
-      flex: 1; 
-      overflow-y: auto; 
-      padding: var(--spacing);
-      display: flex; 
-      flex-direction: column; 
-      gap: clamp(10px, 3vw, 14px);
+      flex: 1; overflow-y: auto; padding: var(--spacing);
+      display: flex; flex-direction: column; gap: clamp(10px, 3vw, 14px);
       scroll-behavior: smooth;
       -webkit-overflow-scrolling: touch;
-      /* Force compositing and avoid iOS repaint issues */
-      transform: translateZ(0);
-      /* Fix iOS flex overflow */
-      min-height: 0;
-      will-change: scroll-position;
     }
     .bubble-row {
       display: flex;
@@ -115,7 +98,6 @@
       opacity: 0;
       transform: translateY(8px);
       word-break: break-word;
-      background-clip: padding-box;
     }
     .msg.agent {
       background: rgba(255,255,255,0.045);
@@ -145,7 +127,7 @@
       gap: 10px;
       flex-shrink: 0;
       border-top: 1px solid rgba(255,255,255,0.07);
-      align-items: stretch;
+      align-items: stretch; /* restored so the send button stretches to match textarea height like your reference */
     }
     .input-wrap { flex: 1; display: flex; flex-direction: column; gap: 5px; }
 
@@ -159,24 +141,24 @@
       background: rgba(255,255,255,0.035);
       border: 1px solid rgba(255,255,255,0.09);
       color: inherit; font: inherit; outline: none; line-height: 1.42;
-      font-size: inherit;
-      /* prevent iOS automatic zoom when focusing by keeping >=16px on mobile via JS */
+      /* default font-size is inherited */
     }
     textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2.5px rgba(0,194,179,0.22); }
 
     .hint { font-size: clamp(10px, 2.7vw, 11.5px); color: var(--muted); display: flex; justify-content: space-between; padding: 0 5px; }
 
+    /* Keep the exact Send button style from your reference: padding: 0 18px */
     .btn {
       background: linear-gradient(90deg, var(--accent-2), var(--accent));
       border: none;
-      padding: 0 18px;
+      padding: 0 18px;          /* <-- same as your reference code */
       border-radius: 12px;
       color: white; font-weight: 600; font-size: clamp(13px, 3.4vw, 14.5px);
       min-width: 62px; cursor: pointer;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      align-self: stretch;
+      align-self: stretch;     /* stretch vertically to match textarea height (keeps the same visual size) */
     }
     .btn:hover:not(:disabled) { opacity: 0.94; transform: translateY(-1px); }
     .btn:disabled { opacity: 0.48; cursor: not-allowed; }
@@ -251,7 +233,7 @@
 
     <div class="composer">
       <div class="input-wrap">
-        <textarea id="txt" placeholder="Type your message…" aria-label="Chat message input" rows="1"></textarea>
+        <textarea id="txt" placeholder="Type your message…" aria-label="Chat message input"></textarea>
         <div class="hint">
           <span id="charCount">0</span>
         </div>
@@ -265,18 +247,18 @@
       const messagesEl = document.getElementById('messages');
       const txt = document.getElementById('txt');
       const sendBtn = document.getElementById('send');
-      const charCount = document.getElementById('charCount');
 
       let sessionId = null;
       let busy = false;
 
-      // Helpers
       function timeNow() {
         return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       }
+
       function escapeHtml(str) {
         return String(str || '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' })[m]);
       }
+
       function renderMarkdown(text) {
         let html = escapeHtml(text)
           .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
@@ -300,8 +282,7 @@
 
         row.append(msg, metaEl);
         messagesEl.appendChild(row);
-        // ensure browser paints new content then scroll
-        requestAnimationFrame(() => scrollToBottom());
+        scrollToBottom();
       }
 
       function showTyping() {
@@ -335,7 +316,7 @@
         setBusy(true);
         addMessage({ from: 'user', text: message });
         txt.value = '';
-        charCount.textContent = '0';
+        document.getElementById('charCount').textContent = '0';
 
         const typing = showTyping();
 
@@ -351,16 +332,17 @@
           if (data?.text) {
             addMessage({ from: 'agent', text: data.text });
 
-            // AUTO FOLLOW-UP example preserved (but harmless)
+            // AUTO FOLLOW-UP: if agent says one of the trigger phrases → auto-send "what's the update" after 2 seconds
             const lowerText = data.text.toLowerCase();
             if (lowerText.includes('hold on for a moment') || lowerText.includes('creating the ticket now')) {
               setTimeout(() => {
                 txt.value = "what's the update";
-                charCount.textContent = txt.value.length;
+                document.getElementById('charCount').textContent = txt.value.length;
                 sendMessage();
               }, 2000);
             }
-          } else {
+          }
+          else {
             addMessage({ from: 'agent', text: 'Sorry — no reply received.' });
           }
         } catch (err) {
@@ -368,7 +350,6 @@
           addMessage({ from: 'agent', text: 'Sorry — something went wrong. Try again?' });
         } finally {
           setBusy(false);
-          // focus back on input for quick follow-up
           txt.focus();
           scrollToBottom();
         }
@@ -377,104 +358,68 @@
       async function init() {
         setBusy(true);
         try {
-          // safe attempt to init session
           const res = await fetch('/api/chat/init', { method: 'POST' });
           if (!res.ok) throw new Error();
           const data = await res.json();
           sessionId = data.sessionId;
-          addMessage({ from: 'agent', text: data.text || 'Hi there! Welcome to InfiNET Broadband. Could you please share your name to get started?' });
+          addMessage({ from: 'agent', text: data.text || 'Hello, thank you for contacting InfiNET Broadband. I am your AI assistant. Nice to meet you.' });
         } catch {
           addMessage({ from: 'agent', text: 'Connection issue. Please try again later.' });
         } finally {
           setBusy(false);
-          // ensure bottom scroll after messages are present
-          setTimeout(scrollToBottom, 80);
-          setTimeout(scrollToBottom, 300);
         }
       }
 
-      // events
       sendBtn.addEventListener('click', sendMessage);
 
-      // send on Enter (no Shift); Shift+Enter creates newline.
       txt.addEventListener('keydown', e => {
-        if (e.key === 'Enter' && !e.shiftKey) {
+        if (e.key === 'Enter' && e.shiftKey) {
           e.preventDefault();
           sendMessage();
         }
       });
 
       txt.addEventListener('input', () => {
-        charCount.textContent = txt.value.length;
+        document.getElementById('charCount').textContent = txt.value.length;
       });
 
       function scrollToBottom() {
-        // some devices require a small timeout to let the visualViewport settle
-        requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
           messagesEl.scrollTop = messagesEl.scrollHeight;
         });
       }
 
-      // MOBILE: dynamic --vh to handle address bar/keyboard changes and compute keyboard inset
-      function updateVhAndInsets() {
-        // Set --vh to current visual viewport (or fallback)
+      // MOBILE: dynamic --vh to handle address bar/keyboard changes
+      function updateVh() {
         const vHeight = (window.visualViewport && window.visualViewport.height) ? window.visualViewport.height : window.innerHeight;
         document.documentElement.style.setProperty('--vh', (vHeight * 0.01) + 'px');
-
-        // Adjust messages bottom padding when keyboard opens (so content isn't hidden)
-        let spacingPx = 12; // default
-        try {
-          const raw = getComputedStyle(document.documentElement).getPropertyValue('--spacing') || '';
-          // try to parse px value or clamp result containing px
-          const pxMatch = raw.match(/([0-9]+)px/);
-          if (pxMatch) spacingPx = parseInt(pxMatch[1], 10);
-        } catch (e) { /* ignore */ }
-
-        let keyboardInset = 0;
-        if (window.visualViewport) {
-          // keyboard height is difference between layout viewport and visual viewport
-          keyboardInset = Math.max(0, window.innerHeight - window.visualViewport.height);
-        }
-        // also respect safe-area inset bottom if present (approximate)
-        const safeAreaBottom = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--safe-bottom')) || 0;
-
-        // apply padding: base spacing + keyboardInset + small margin (16)
-        const desiredPadding = spacingPx + keyboardInset + safeAreaBottom + 16;
-        messagesEl.style.paddingBottom = desiredPadding + 'px';
       }
 
-      // listen to visualViewport changes (mobile keyboard + address bar)
       if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', () => { updateVhAndInsets(); scrollToBottom(); });
-        window.visualViewport.addEventListener('scroll', () => { updateVhAndInsets(); });
+        window.visualViewport.addEventListener('resize', () => { updateVh(); scrollToBottom(); });
+        window.visualViewport.addEventListener('scroll', () => { updateVh(); });
       } else {
-        window.addEventListener('resize', () => { updateVhAndInsets(); scrollToBottom(); });
+        window.addEventListener('resize', () => { updateVh(); scrollToBottom(); });
       }
 
       txt.addEventListener('focus', () => {
-        // make sure font-size is at least 16px on mobile to avoid auto-zoom on iOS
-        // (we already set >=16px in mobile CSS, but ensure here too)
-        if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-          txt.style.fontSize = '16px';
-        }
-        updateVhAndInsets();
-        // multiple delayed scrolls help on iOS where keyboard opens after focus event
-        setTimeout(scrollToBottom, 60);
-        setTimeout(scrollToBottom, 220);
-        setTimeout(scrollToBottom, 500);
+        updateVh();
+        setTimeout(scrollToBottom, 50);
+        setTimeout(scrollToBottom, 300);
       });
 
       txt.addEventListener('blur', () => {
-        setTimeout(updateVhAndInsets, 80);
-        setTimeout(scrollToBottom, 120);
+        setTimeout(updateVh, 80);
       });
 
-      // Mutation observer to always scroll when new messages are appended
-      const observer = new MutationObserver(() => { scrollToBottom(); });
-      observer.observe(messagesEl, { childList: true, subtree: true });
+      updateVh();
 
-      // init on load
-      updateVhAndInsets();
+      // auto-scroll when messages change
+      const observer = new MutationObserver(() => { scrollToBottom(); });
+      observer.observe(messagesEl, { childList: true });
+
+      init();
+
       window.addEventListener('load', () => {
         setTimeout(() => {
           if (!txt.disabled) txt.focus();
@@ -482,11 +427,7 @@
         }, 100);
       });
 
-      // expose a small helper for debugging in console
-      window._infinetChatHelpers = { updateVhAndInsets, scrollToBottom };
-
-      // Finally start chat
-      init();
+      window._infinetChatHelpers = { updateVh, scrollToBottom };
     })();
   </script>
 </body>
