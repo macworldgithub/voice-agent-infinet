@@ -4,17 +4,6 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>InfiNET Support Chat</title>
-
-  <!-- Set an initial --vh value early so the layout doesn't jump on iOS/Safari.
-       This avoids a first-frame layout where the widget can be too short and hides messages. -->
-  <script>
-    (function initVh() {
-      try {
-        document.documentElement.style.setProperty('--vh', (window.innerHeight * 0.01) + 'px');
-      } catch (e) { /* ignore */ }
-    })();
-  </script>
-
   <style>
     :root {
       --bg: #071025;
@@ -40,12 +29,9 @@
       background: linear-gradient(165deg, #031022 0%, #0b223f 100%);
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
-      -webkit-touch-callout: none;
     }
 
     body {
-      /* Provide both fallbacks so mobile browsers that mis-handle dvh don't collapse the layout */
-      min-height: 100vh;
       min-height: 100dvh;
       display: grid;
       place-items: center;
@@ -54,7 +40,6 @@
 
     .widget {
       width: min(100%, 420px);
-      /* use the dynamic vh custom property set by JS to avoid iOS address-bar / keyboard layout jumps */
       height: min(calc(var(--vh, 1vh) * 96), 760px);
       border-radius: 20px;
       background: var(--glass);
@@ -64,8 +49,6 @@
       display: flex;
       flex-direction: column;
       backdrop-filter: blur(8px);
-      -webkit-backface-visibility: hidden;
-      -webkit-transform: translateZ(0); /* help with compositing on iOS */
     }
 
     .header {
@@ -96,8 +79,6 @@
       display: flex; flex-direction: column; gap: clamp(10px, 3vw, 14px);
       scroll-behavior: smooth;
       -webkit-overflow-scrolling: touch;
-      /* ensure the scroller is on its own compositing layer for smoother scroll on iOS */
-      -webkit-transform: translateZ(0);
     }
     .bubble-row {
       display: flex;
@@ -117,14 +98,11 @@
       opacity: 0;
       transform: translateY(8px);
       word-break: break-word;
-      background-clip: padding-box;
-      -webkit-font-smoothing: antialiased;
     }
     .msg.agent {
       background: rgba(255,255,255,0.045);
       border: 1px solid rgba(255,255,255,0.08);
       border-radius: 15px 15px 15px 5px;
-      color: inherit;
     }
     .msg.user {
       background: linear-gradient(135deg, var(--accent-2), var(--accent));
@@ -163,8 +141,6 @@
       background: rgba(255,255,255,0.035);
       border: 1px solid rgba(255,255,255,0.09);
       color: inherit; font: inherit; outline: none; line-height: 1.42;
-      -webkit-appearance: none;
-      -webkit-font-smoothing: antialiased;
       /* default font-size is inherited */
     }
     textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2.5px rgba(0,194,179,0.22); }
@@ -306,20 +282,14 @@
 
         row.append(msg, metaEl);
         messagesEl.appendChild(row);
-
-        // Ensure the UI has painted before scrolling (helps in iOS Safari)
-        requestAnimationFrame(() => {
-          // extra small delay to let layout settle on some devices
-          setTimeout(scrollToBottom, 45);
-        });
+        scrollToBottom();
       }
 
       function showTyping() {
         const row = document.createElement('div');
         row.className = 'bubble-row';
-        row.dataset.typing = '1';
         row.innerHTML = `
-          <div class="typing-indicator" aria-hidden="true">
+          <div class="typing-indicator">
             <span>Thinking</span>
             <div class="typing-dots">
               <div class="typing-dot"></div>
@@ -329,8 +299,7 @@
           </div>
         `;
         messagesEl.appendChild(row);
-        // give browser a tick to paint
-        requestAnimationFrame(() => setTimeout(scrollToBottom, 30));
+        scrollToBottom();
         return row;
       }
 
@@ -352,47 +321,37 @@
         const typing = showTyping();
 
         try {
-          // keep a conservative timeout for the fetch in case network stalls (optional)
           const res = await fetch('/api/chat/message', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ sessionId, message, channel: 'web' })
-          }).catch(() => null);
-
-          // small safety: if fetch failed, treat as no reply
-          let data = null;
-          if (res && res.ok) {
-            try { data = await res.json(); } catch (e) { data = null; }
-          }
-
-          // remove typing row if still present
-          if (typing && typing.parentNode) typing.remove();
+          });
+          const data = await res.json();
+          typing.remove();
 
           if (data?.text) {
             addMessage({ from: 'agent', text: data.text });
 
-            // AUTO FOLLOW-UP: if agent says one of the trigger phrases → auto-send "what's the update" after a short delay
+            // AUTO FOLLOW-UP: if agent says one of the trigger phrases → auto-send "what's the update" after 2 seconds
             const lowerText = data.text.toLowerCase();
             if (lowerText.includes('hold on for a moment') || lowerText.includes('creating the ticket now')) {
-              // don't be too aggressive on mobile — wait a bit then send
               setTimeout(() => {
                 txt.value = "what's the update";
                 document.getElementById('charCount').textContent = txt.value.length;
                 sendMessage();
-              }, 1600);
+              }, 2000);
             }
-          } else {
+          }
+          else {
             addMessage({ from: 'agent', text: 'Sorry — no reply received.' });
           }
         } catch (err) {
-          if (typing && typing.parentNode) typing.remove();
+          typing.remove();
           addMessage({ from: 'agent', text: 'Sorry — something went wrong. Try again?' });
         } finally {
           setBusy(false);
-          // keep the textarea focused on desktop; on iOS focusing programmatically is often blocked
-          try { txt.focus(); } catch (e) {}
-          // ensure messages are scrolled after everything settles
-          requestAnimationFrame(() => setTimeout(scrollToBottom, 60));
+          txt.focus();
+          scrollToBottom();
         }
       }
 
@@ -400,7 +359,7 @@
         setBusy(true);
         try {
           const res = await fetch('/api/chat/init', { method: 'POST' });
-          if (!res || !res.ok) throw new Error();
+          if (!res.ok) throw new Error();
           const data = await res.json();
           sessionId = data.sessionId;
           addMessage({ from: 'agent', text: data.text || 'Hello, thank you for contacting InfiNET Broadband. I am your AI assistant. Nice to meet you.' });
@@ -408,16 +367,13 @@
           addMessage({ from: 'agent', text: 'Connection issue. Please try again later.' });
         } finally {
           setBusy(false);
-          // ensure the initial message is visible once the first frame has painted
-          requestAnimationFrame(() => setTimeout(scrollToBottom, 80));
         }
       }
 
       sendBtn.addEventListener('click', sendMessage);
 
-      // Send on Enter (without Shift). Shift+Enter inserts a newline.
       txt.addEventListener('keydown', e => {
-        if (e.key === 'Enter' && !e.shiftKey) {
+        if (e.key === 'Enter' && e.shiftKey) {
           e.preventDefault();
           sendMessage();
         }
@@ -428,18 +384,14 @@
       });
 
       function scrollToBottom() {
-        // robust scrolling: prefer smooth when available, otherwise instant
-        try {
-          messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: 'smooth' });
-        } catch (e) {
+        window.requestAnimationFrame(() => {
           messagesEl.scrollTop = messagesEl.scrollHeight;
-        }
+        });
       }
 
       // MOBILE: dynamic --vh to handle address bar/keyboard changes
       function updateVh() {
         const vHeight = (window.visualViewport && window.visualViewport.height) ? window.visualViewport.height : window.innerHeight;
-        // store px value so calc(var(--vh) * N) yields px * N
         document.documentElement.style.setProperty('--vh', (vHeight * 0.01) + 'px');
       }
 
@@ -452,7 +404,6 @@
 
       txt.addEventListener('focus', () => {
         updateVh();
-        // on iOS the keyboard changes layout — wait a bit and then ensure scrolled to bottom
         setTimeout(scrollToBottom, 50);
         setTimeout(scrollToBottom, 300);
       });
@@ -461,27 +412,21 @@
         setTimeout(updateVh, 80);
       });
 
-      // set an initial value for --vh (redundant but safe)
       updateVh();
 
-      // auto-scroll when messages change (covers programmatic and remote updates)
+      // auto-scroll when messages change
       const observer = new MutationObserver(() => { scrollToBottom(); });
       observer.observe(messagesEl, { childList: true });
 
-      // init chat
       init();
 
-      // ensure textarea gets focus on load for desktop but don't force focus on some mobile devices (can cause jump)
       window.addEventListener('load', () => {
         setTimeout(() => {
-          if (!txt.disabled && !/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-            txt.focus();
-          }
+          if (!txt.disabled) txt.focus();
           scrollToBottom();
-        }, 120);
+        }, 100);
       });
 
-      // expose helpers for debugging/dev (optional)
       window._infinetChatHelpers = { updateVh, scrollToBottom };
     })();
   </script>
