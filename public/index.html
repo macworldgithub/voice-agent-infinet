@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>InfiNET Support Chat</title>
   <style>
-    :root{
+    :root {
       --bg: #071025;
       --card: #081224;
       --muted: #a0b3d0;
@@ -15,419 +15,420 @@
       --radius: 16px;
       --fs-base: clamp(13.5px, 3.1vw, 15px);
       --spacing: clamp(10px, 3vw, 16px);
+      /* --vh will be updated by JS to the real viewport height unit */
       --vh: 1vh;
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       font-size: var(--fs-base);
       color: #f1f5f9;
+      -webkit-text-size-adjust: 100%; /* avoid iOS text-size auto adjustments */
     }
 
-    *{box-sizing:border-box;margin:0;padding:0}
-    html,body{height:100%;background:linear-gradient(165deg,#031022 0%,#0b223f 100%);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
-    body{
-      min-height:100dvh;
-      display:grid;
-      place-items:center;
-      padding:12px;
-      -webkit-tap-highlight-color: transparent;
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      background: linear-gradient(165deg, #031022 0%, #0b223f 100%);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
 
-    /* widget */
-    .widget{
-      width: min(100%, 920px);
-      max-width: 920px;
-      height: min(calc(var(--vh,1vh) * 92), 820px);
-      border-radius: 18px;
-      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
-      border: 1px solid rgba(255,255,255,0.06);
-      box-shadow: 0 18px 50px rgba(1,6,20,0.62);
+    body {
+      min-height: 100dvh;
+      display: grid;
+      place-items: center;
+      padding: 8px;
+    }
+
+    .widget {
+      width: min(100%, 420px);
+      height: min(calc(var(--vh, 1vh) * 96), 760px);
+      border-radius: 20px;
+      background: var(--glass);
+      border: 1px solid rgba(255,255,255,0.07);
+      box-shadow: 0 8px 44px rgba(0,0,0,0.6);
       overflow: hidden;
-      display:flex;
-      flex-direction:column;
+      display: flex;
+      flex-direction: column;
       backdrop-filter: blur(8px);
-      gap:0;
     }
 
-    /* header */
-    .header{
+    .header {
       padding: 12px 16px;
-      display:flex;
-      align-items:center;
-      gap:12px;
-      background: linear-gradient(90deg, rgba(59,130,246,0.06), rgba(0,194,179,0.04));
-      flex-shrink:0;
+      background: linear-gradient(90deg, rgba(59,130,246,0.09), rgba(0,194,179,0.06));
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
     }
-    .brand{display:flex;align-items:center;gap:12px;flex:1}
-    .logo{
-      width:46px;height:46px;border-radius:12px;
-      background:linear-gradient(135deg,var(--accent-2),var(--accent));
-      display:grid;place-items:center;font-weight:700;font-size:15px;color:white;box-shadow:0 4px 18px rgba(59,130,246,0.24)
+    .brand { display: flex; align-items: center; gap: 10px; flex: 1; }
+    .logo {
+      width: 42px; height: 42px; border-radius: 11px;
+      background: linear-gradient(135deg, var(--accent-2), var(--accent));
+      color: white; font-weight: 700; font-size: 15px;
+      display: grid; place-items: center;
+      box-shadow: 0 3px 10px rgba(59,130,246,0.3);
     }
-    .title h4{font-size:clamp(15px,3.8vw,17px);line-height:1}
-    .title p{font-size:clamp(11px,2.7vw,12px);color:var(--muted);margin-top:2px}
+    .title h4 { font-size: clamp(14.5px, 3.8vw, 16px); }
+    .title p { font-size: clamp(11px, 2.9vw, 12px); color: var(--muted); margin-top: 2px; }
+    .status { display: flex; align-items: center; gap: 7px; font-size: clamp(11px, 2.9vw, 12.5px); color: var(--muted); white-space: nowrap; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; }
+    .dot.online { background: #22c55e; box-shadow: 0 0 6px #22c55e80; }
 
-    .status{display:flex;align-items:center;gap:8px;color:var(--muted);white-space:nowrap;font-size:13px}
-    .dot{width:9px;height:9px;border-radius:50%}
-    .dot.online{background:#22c55e;box-shadow:0 0 6px #22c55e66}
-
-    /* messages area */
-    .messages-wrap{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden}
-    .messages{
-      flex:1;
-      overflow-y:auto;
-      padding:var(--spacing);
-      display:flex;
-      flex-direction:column;
-      gap: clamp(10px,3vw,14px);
+    .messages-wrap { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+    .messages {
+      flex: 1; overflow-y: auto; padding: var(--spacing);
+      display: flex; flex-direction: column; gap: clamp(10px, 3vw, 14px);
+      scroll-behavior: smooth;
       -webkit-overflow-scrolling: touch;
-      scroll-behavior:smooth;
     }
-
-    .bubble-row{display:flex;flex-direction:column;align-items:flex-start}
-    .bubble-row.user{align-items:flex-end}
-
-    .msg{
-      max-width:84%;
-      padding: clamp(9px,2.8vw,12px) clamp(12px,3.5vw,15px);
-      border-radius:15px;
-      line-height:1.45;
-      font-size:clamp(13.5px,3.4vw,14.5px);
-      word-break:break-word;
-      box-shadow: 0 6px 18px rgba(1,6,20,0.25);
-      animation: appear .22s ease-out both;
+    .bubble-row {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
     }
-    .msg.agent{
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.06);
-      border-radius: 15px 15px 15px 6px;
-      color: #e6eef6;
+    .bubble-row.user {
+      align-items: flex-end;
     }
-    .msg.user{
-      background: linear-gradient(135deg,var(--accent-2),var(--accent));
-      color:white;border-radius:15px 15px 6px 15px;
+    .msg {
+      max-width: 84%;
+      padding: clamp(9px, 2.8vw, 12px) clamp(12px, 3.5vw, 15px);
+      border-radius: 15px;
+      line-height: 1.45;
+      font-size: clamp(13.5px, 3.4vw, 14.5px);
+      animation: appear 0.24s ease-out forwards;
+      opacity: 0;
+      transform: translateY(8px);
+      word-break: break-word;
     }
-    .meta{margin-top:6px;font-size:12px;color:var(--muted);opacity:0.95}
-    .bubble-row.user .meta{text-align:right}
-
-    @keyframes appear{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-
-    /* composer */
-    .composer{
-      padding: clamp(10px,3vw,14px) var(--spacing);
-      background: linear-gradient(180deg, rgba(0,0,0,0.18), rgba(0,0,0,0.12));
-      display:flex;
-      gap:12px;
-      align-items:flex-end;
-      border-top:1px solid rgba(255,255,255,0.06);
-      flex-shrink:0;
+    .msg.agent {
+      background: rgba(255,255,255,0.045);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 15px 15px 15px 5px;
     }
-    .input-wrap{flex:1;display:flex;flex-direction:column;gap:6px}
-
-    textarea{
-      width:100%;
-      min-height:52px;
-      max-height:180px;
-      resize: none;
-      padding:12px;
-      border-radius:12px;
-      background: rgba(255,255,255,0.03);
-      border:1px solid rgba(255,255,255,0.07);
-      color:inherit;font:inherit;outline:none;line-height:1.45;
-      font-size:16px; /* >=16 prevents iOS auto-zoom */
-      overflow:auto;
+    .msg.user {
+      background: linear-gradient(135deg, var(--accent-2), var(--accent));
+      color: white;
+      border-radius: 15px 15px 5px 15px;
     }
-    textarea:focus{box-shadow:0 0 0 3px rgba(0,194,179,0.16);border-color:var(--accent)}
-
-    .hint{font-size:12px;color:var(--muted);display:flex;justify-content:space-between;padding:0 6px}
-
-    .btn{
-      background:linear-gradient(90deg,var(--accent-2),var(--accent));
-      border:none;padding:0 18px;border-radius:12px;color:white;font-weight:600;
-      font-size:15px;min-width:62px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
-      align-self:stretch;height:46px;
+    .meta {
+      margin-top: 4px;
+      font-size: clamp(10px, 2.7vw, 11px);
+      color: var(--muted);
+      opacity: 0.8;
     }
-    .btn:disabled{opacity:0.5;cursor:not-allowed}
-    .btn:hover:not(:disabled){transform:translateY(-1px)}
+    .bubble-row.user .meta { text-align: right; }
 
-    /* typing indicator */
-    .typing-indicator{display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,0.03);border-radius:18px 18px 18px 6px;color:var(--muted);max-width:84%}
-    .typing-dot{width:6px;height:6px;border-radius:50%;background:var(--muted);animation:typing 1.4s infinite ease-in-out}
-    .typing-dot:nth-child(2){animation-delay:.18s}
-    .typing-dot:nth-child(3){animation-delay:.36s}
-    @keyframes typing{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+    @keyframes appear { to { opacity:1; transform:none; } }
 
-    /* responsive adjustments */
-    @media (max-width: 720px){
-      body{padding:6px}
-      .widget{
-        position:fixed;
-        left:8px;right:8px;
-        top:calc(8px + env(safe-area-inset-top));
-        bottom:calc(env(safe-area-inset-bottom) + 8px);
-        width:auto;
-        height:auto;
-        max-height: calc(var(--vh,1vh) * 96);
-        border-radius:14px;
+    /* Composer: keep original horizontal layout, allow children to stretch so Send matches input height */
+    .composer {
+      padding: clamp(10px, 3vw, 14px) var(--spacing);
+      background: rgba(0,0,0,0.28);
+      display: flex;
+      gap: 10px;
+      flex-shrink: 0;
+      border-top: 1px solid rgba(255,255,255,0.07);
+      align-items: stretch; /* restored so the send button stretches to match textarea height like your reference */
+    }
+    .input-wrap { flex: 1; display: flex; flex-direction: column; gap: 5px; }
+
+    textarea {
+      width: 100%;
+      min-height: 46px;
+      max-height: 140px;
+      resize: vertical;
+      padding: 11px 13px;
+      border-radius: 13px;
+      background: rgba(255,255,255,0.035);
+      border: 1px solid rgba(255,255,255,0.09);
+      color: inherit; font: inherit; outline: none; line-height: 1.42;
+      /* default font-size is inherited */
+    }
+    textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2.5px rgba(0,194,179,0.22); }
+
+    .hint { font-size: clamp(10px, 2.7vw, 11.5px); color: var(--muted); display: flex; justify-content: space-between; padding: 0 5px; }
+
+    /* Keep the exact Send button style from your reference: padding: 0 18px */
+    .btn {
+      background: linear-gradient(90deg, var(--accent-2), var(--accent));
+      border: none;
+      padding: 0 18px;          /* <-- same as your reference code */
+      border-radius: 12px;
+      color: white; font-weight: 600; font-size: clamp(13px, 3.4vw, 14.5px);
+      min-width: 62px; cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      align-self: stretch;     /* stretch vertically to match textarea height (keeps the same visual size) */
+    }
+    .btn:hover:not(:disabled) { opacity: 0.94; transform: translateY(-1px); }
+    .btn:disabled { opacity: 0.48; cursor: not-allowed; }
+
+    .typing-indicator {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 16px; background: rgba(255,255,255,0.03);
+      border-radius: 18px 18px 18px 4px; font-size: 14px; color: var(--muted);
+      max-width: 84%;
+    }
+    .typing-dots { display: flex; gap: 4px; }
+    .typing-dot { width: 6px; height: 6px; background: var(--muted); border-radius: 50%; animation: typing 1.4s infinite ease-in-out; }
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes typing { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+
+    /* MOBILE-SPECIFIC */
+    @media (max-width: 720px) {
+      body { padding: 0; }
+
+      .widget {
+        position: fixed;
+        left: 8px;
+        right: 8px;
+        top: calc(8px + env(safe-area-inset-top));
+        bottom: calc(env(safe-area-inset-bottom) + 8px);
+        width: auto;
+        height: auto;
+        max-height: calc(var(--vh, 1vh) * 96);
+        border-radius: 14px;
       }
-      .composer{padding-bottom: calc(env(safe-area-inset-bottom) + 10px)}
-      textarea{min-height:56px;font-size:16px}
-      .messages{padding-bottom: calc(var(--spacing) + 10px)}
+
+      .composer {
+        padding-bottom: calc(env(safe-area-inset-bottom) + 10px);
+        z-index: 5;
+      }
+
+      /* ensure >=16px on mobile to prevent browser auto-zoom */
+      textarea { font-size: 16px; min-height: 54px; }
+
+      /* keep send button same padding but let it stretch vertically with composer */
+      .btn { padding: 0 18px; }
+
+      .messages { padding-bottom: calc(var(--spacing) + 10px); }
     }
 
-    /* larger desktop: card gets wider and paddings increase slightly */
-    @media (min-width: 920px){
-      .widget{height: min(calc(var(--vh,1vh) * 88), 820px)}
-      .messages{padding:24px}
+    @media (orientation: landscape) and (max-height: 420px) {
+      textarea { font-size: 16px; }
+      .btn { padding: 0 18px; }
     }
-
-    /* small accessibility helpers */
-    .visually-hidden{position:absolute !important;height:1px;width:1px;overflow:hidden;clip:rect(1px,1px,1px,1px);white-space:nowrap}
   </style>
 </head>
 <body>
   <div class="widget" role="region" aria-label="InfiNET customer support chat">
     <div class="header">
       <div class="brand">
-        <div class="logo" aria-hidden="true">IN</div>
+        <div class="logo">IN</div>
         <div class="title">
           <h4>InfiNET Support</h4>
           <p>Outages · Billing · Plans</p>
         </div>
       </div>
-      <div class="status" id="status" aria-live="polite"><div class="dot online" id="statusDot" aria-hidden="true"></div><span id="statusText">Online</span></div>
+      <div class="status" id="status">
+        <div class="dot online" id="statusDot"></div>
+        <span id="statusText">Online</span>
+      </div>
     </div>
 
     <div class="messages-wrap">
-      <div id="messages" class="messages" aria-live="polite" aria-atomic="false"></div>
+      <div id="messages" class="messages" aria-live="polite"></div>
     </div>
 
-    <div class="composer" role="form" aria-label="Message composer">
+    <div class="composer">
       <div class="input-wrap">
-        <textarea id="txt" placeholder="Type your message…" aria-label="Chat message input" rows="2"></textarea>
+        <textarea id="txt" placeholder="Type your message…" aria-label="Chat message input"></textarea>
         <div class="hint">
           <span id="charCount">0</span>
-          <span style="opacity:.8">Press Enter to send — Shift+Enter for newline</span>
         </div>
       </div>
-      <button class="btn" id="send" aria-label="Send message">Send</button>
+      <button class="btn" id="send">Send</button>
     </div>
   </div>
 
   <script>
-  (function(){
-    const messagesEl = document.getElementById('messages');
-    const txt = document.getElementById('txt');
-    const sendBtn = document.getElementById('send');
-    const charCountEl = document.getElementById('charCount');
+    (function () {
+      const messagesEl = document.getElementById('messages');
+      const txt = document.getElementById('txt');
+      const sendBtn = document.getElementById('send');
 
-    let sessionId = null;
-    let busy = false;
-    let greetingRow = null;
+      let sessionId = null;
+      let busy = false;
 
-    // Time helper
-    function timeNow(){ return new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
-
-    // Escape and simple markdown renderer
-    function escapeHtml(str){
-      return String(str || '').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]);
-    }
-    function renderMarkdown(text){
-      let html = escapeHtml(text)
-        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-        .replace(/\n\s*\n/g, '</p><p>')
-        .replace(/\n/g, '<br>');
-      return `<p>${html}</p>`;
-    }
-
-    // Add message (returns DOM row so caller can modify if needed)
-    function addMessage({from='agent', text='', meta='' , replaceRow=null}){
-      if (replaceRow) {
-        // replace content in an existing row
-        const msgEl = replaceRow.querySelector('.msg');
-        const metaEl = replaceRow.querySelector('.meta');
-        if (msgEl) msgEl.innerHTML = (from==='agent' ? renderMarkdown(text) : escapeHtml(text));
-        if (metaEl) metaEl.textContent = meta || timeNow();
-        scrollToBottom();
-        return replaceRow;
+      function timeNow() {
+        return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       }
 
-      const row = document.createElement('div');
-      row.className = `bubble-row ${from === 'user' ? 'user' : ''}`;
+      function escapeHtml(str) {
+        return String(str || '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' })[m]);
+      }
 
-      const msg = document.createElement('div');
-      msg.className = `msg ${from}`;
-      msg.innerHTML = (from === 'agent') ? renderMarkdown(text) : escapeHtml(text);
+      function renderMarkdown(text) {
+        let html = escapeHtml(text)
+          .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+          .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+          .replace(/\n\s*\n/g, '</p><p>')
+          .replace(/\n/g, '<br>');
+        return `<p>${html}</p>`.replace(/<p><\/p>/g, '');
+      }
 
-      const metaEl = document.createElement('div');
-      metaEl.className = 'meta';
-      metaEl.textContent = meta || timeNow();
+      function addMessage({ from = 'agent', text = '', meta = '' }) {
+        const row = document.createElement('div');
+        row.className = `bubble-row ${from === 'user' ? 'user' : ''}`;
 
-      row.append(msg, metaEl);
-      messagesEl.appendChild(row);
-      scrollToBottom();
-      return row;
-    }
+        const msg = document.createElement('div');
+        msg.className = `msg ${from}`;
+        msg.innerHTML = from === 'agent' ? renderMarkdown(text) : escapeHtml(text);
 
-    function showTyping(){
-      const row = document.createElement('div');
-      row.className = 'bubble-row';
-      row.innerHTML = `
-        <div class="typing-indicator" aria-hidden="true">
-          <span>Thinking</span>
-          <div style="display:flex;gap:6px">
-            <div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>
+        const metaEl = document.createElement('div');
+        metaEl.className = 'meta';
+        metaEl.textContent = meta || timeNow();
+
+        row.append(msg, metaEl);
+        messagesEl.appendChild(row);
+        scrollToBottom();
+      }
+
+      function showTyping() {
+        const row = document.createElement('div');
+        row.className = 'bubble-row';
+        row.innerHTML = `
+          <div class="typing-indicator">
+            <span>Thinking</span>
+            <div class="typing-dots">
+              <div class="typing-dot"></div>
+              <div class="typing-dot"></div>
+              <div class="typing-dot"></div>
+            </div>
           </div>
-        </div>
-      `;
-      messagesEl.appendChild(row);
-      scrollToBottom();
-      return row;
-    }
-
-    function setBusy(state){
-      busy = state;
-      sendBtn.disabled = state;
-      txt.disabled = state;
-    }
-
-    function scrollToBottom(){
-      // ensure this runs after DOM paint
-      requestAnimationFrame(()=>{ messagesEl.scrollTop = messagesEl.scrollHeight; });
-    }
-
-    // Auto-resize textarea (simple)
-    function autosize(el){
-      el.style.height = 'auto';
-      const sh = Math.min(el.scrollHeight, 180);
-      el.style.height = sh + 'px';
-    }
-
-    // Update dynamic --vh for iOS address-bar + keyboard changes
-    function updateVh(){
-      const vHeight = (window.visualViewport && window.visualViewport.height) ? window.visualViewport.height : window.innerHeight;
-      document.documentElement.style.setProperty('--vh', (vHeight * 0.01) + 'px');
-    }
-
-    // Send message to server
-    async function sendMessage(){
-      const message = txt.value.replace(/\u00A0/g, ' ').trim();
-      if (!message || busy) return;
-      setBusy(true);
-
-      // Add user message immediately
-      addMessage({from:'user', text: message});
-      txt.value = '';
-      charCountEl.textContent = '0';
-      autosize(txt);
-
-      // show typing indicator while we wait
-      const typingRow = showTyping();
-
-      try {
-        const res = await fetch('/api/chat/message', {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ sessionId, message, channel:'web' })
-        });
-
-        let data = null;
-        try { data = await res.json(); } catch(e) { data = null; }
-
-        typingRow.remove();
-        if (data && data.text) {
-          addMessage({from:'agent', text: data.text});
-          // optional automated follow-up (keeps your original behavior)
-          const lower = (data.text || '').toLowerCase();
-          if (lower.includes('hold on for a moment') || lower.includes('creating the ticket now')) {
-            // small debounce to avoid spamming
-            setTimeout(()=>{ if (!busy) { txt.value = "what's the update"; charCountEl.textContent = txt.value.length; autosize(txt); sendMessage(); } }, 1600);
-          }
-        } else {
-          addMessage({from:'agent', text: 'Sorry — no reply received.'});
-        }
-      } catch(err){
-        typingRow.remove();
-        addMessage({from:'agent', text: 'Sorry — something went wrong. Try again?'});
-      } finally {
-        setBusy(false);
+        `;
+        messagesEl.appendChild(row);
         scrollToBottom();
+        return row;
       }
-    }
 
-    // Initialize session - but immediately show a friendly greeting placeholder so users on iPhone see content
-    async function init(){
-      setBusy(true);
+      function setBusy(isBusy) {
+        busy = isBusy;
+        sendBtn.disabled = isBusy;
+        txt.disabled = isBusy;
+      }
 
-      // immediate local greeting placeholder (so UI is not empty on slow networks / mobile)
-      greetingRow = addMessage({from:'agent', text: 'Hello! 👋 I am your InfiNET assistant — how can I help you today?'});
+      async function sendMessage() {
+        const message = txt.value.trim();
+        if (!message || busy) return;
 
-      try {
-        const res = await fetch('/api/chat/init', { method: 'POST' });
-        if (!res.ok) throw new Error('init failed');
-        const data = await res.json();
-        sessionId = data.sessionId || sessionId;
+        setBusy(true);
+        addMessage({ from: 'user', text: message });
+        txt.value = '';
+        document.getElementById('charCount').textContent = '0';
 
-        // replace the placeholder with server-provided greeting if available
-        if (data && data.text) {
-          addMessage({from:'agent', text: data.text, replaceRow: greetingRow});
-        } else {
-          // keep placeholder but update meta time
-          addMessage({from:'agent', text: 'Hello! 👋 I am your InfiNET assistant — how can I help you today?', replaceRow: greetingRow});
+        const typing = showTyping();
+
+        try {
+          const res = await fetch('/api/chat/message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId, message, channel: 'web' })
+          });
+          const data = await res.json();
+          typing.remove();
+
+          if (data?.text) {
+            addMessage({ from: 'agent', text: data.text });
+
+            // AUTO FOLLOW-UP: if agent says one of the trigger phrases → auto-send "what's the update" after 2 seconds
+            const lowerText = data.text.toLowerCase();
+            if (lowerText.includes('hold on for a moment') || lowerText.includes('creating the ticket now')) {
+              setTimeout(() => {
+                txt.value = "what's the update";
+                document.getElementById('charCount').textContent = txt.value.length;
+                sendMessage();
+              }, 2000);
+            }
+          }
+          else {
+            addMessage({ from: 'agent', text: 'Sorry — no reply received.' });
+          }
+        } catch (err) {
+          typing.remove();
+          addMessage({ from: 'agent', text: 'Sorry — something went wrong. Try again?' });
+        } finally {
+          setBusy(false);
+          txt.focus();
+          scrollToBottom();
         }
-      } catch (err) {
-        // if init failed, update placeholder to show offline message
-        addMessage({from:'agent', text: 'Connection issue. Please try again later.', replaceRow: greetingRow});
-      } finally {
-        setBusy(false);
       }
-    }
 
-    // --- events ---
-    sendBtn.addEventListener('click', sendMessage);
-
-    // Enter = send; Shift+Enter = newline
-    txt.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
+      async function init() {
+        setBusy(true);
+        try {
+          const res = await fetch('/api/chat/init', { method: 'POST' });
+          if (!res.ok) throw new Error();
+          const data = await res.json();
+          sessionId = data.sessionId;
+          addMessage({ from: 'agent', text: data.text || 'Hello, thank you for contacting InfiNET Broadband. I am your AI assistant. Nice to meet you.' });
+        } catch {
+          addMessage({ from: 'agent', text: 'Connection issue. Please try again later.' });
+        } finally {
+          setBusy(false);
+        }
       }
-    });
 
-    // auto-size and char count
-    const updateCharCount = () => charCountEl.textContent = txt.value.length;
-    txt.addEventListener('input', () => { updateCharCount(); autosize(txt); });
+      sendBtn.addEventListener('click', sendMessage);
 
-    // Update viewport unit when visual viewport changes (mobile keyboard/address bar)
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', ()=>{ updateVh(); scrollToBottom(); });
-      window.visualViewport.addEventListener('scroll', updateVh);
-    } else {
-      window.addEventListener('resize', ()=>{ updateVh(); scrollToBottom(); });
-    }
+      txt.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && e.shiftKey) {
+          e.preventDefault();
+          sendMessage();
+        }
+      });
 
-    // keep messages scrolled on new nodes
-    const observer = new MutationObserver(()=> scrollToBottom());
-    observer.observe(messagesEl, { childList: true });
+      txt.addEventListener('input', () => {
+        document.getElementById('charCount').textContent = txt.value.length;
+      });
 
-    // Set initial CSS var
-    updateVh();
+      function scrollToBottom() {
+        window.requestAnimationFrame(() => {
+          messagesEl.scrollTop = messagesEl.scrollHeight;
+        });
+      }
 
-    // Initialize, but DO NOT focus input on load (avoids iPhone keyboard hiding messages)
-    init();
+      // MOBILE: dynamic --vh to handle address bar/keyboard changes
+      function updateVh() {
+        const vHeight = (window.visualViewport && window.visualViewport.height) ? window.visualViewport.height : window.innerHeight;
+        document.documentElement.style.setProperty('--vh', (vHeight * 0.01) + 'px');
+      }
 
-    // focus only when user intentionally taps into textarea
-    txt.addEventListener('focus', ()=> { updateVh(); setTimeout(scrollToBottom, 50); });
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', () => { updateVh(); scrollToBottom(); });
+        window.visualViewport.addEventListener('scroll', () => { updateVh(); });
+      } else {
+        window.addEventListener('resize', () => { updateVh(); scrollToBottom(); });
+      }
 
-    // helper available for debugging in console
-    window._infinetChatHelpers = { updateVh, scrollToBottom, addMessage };
+      txt.addEventListener('focus', () => {
+        updateVh();
+        setTimeout(scrollToBottom, 50);
+        setTimeout(scrollToBottom, 300);
+      });
 
-    // small accessibility: clicking composer area focuses the textarea
-    document.querySelector('.composer').addEventListener('click', (e) => {
-      if (e.target === sendBtn) return;
-      txt.focus();
-    });
+      txt.addEventListener('blur', () => {
+        setTimeout(updateVh, 80);
+      });
 
-  })();
+      updateVh();
+
+      // auto-scroll when messages change
+      const observer = new MutationObserver(() => { scrollToBottom(); });
+      observer.observe(messagesEl, { childList: true });
+
+      init();
+
+      window.addEventListener('load', () => {
+        setTimeout(() => {
+          if (!txt.disabled) txt.focus();
+          scrollToBottom();
+        }, 100);
+      });
+
+      window._infinetChatHelpers = { updateVh, scrollToBottom };
+    })();
   </script>
 </body>
 </html>
