@@ -734,7 +734,6 @@
         } finally {
           setBusy(false);
           txt.focus();
-          scrollToBottom();
         }
       }
 
@@ -751,10 +750,6 @@
         } finally {
           setBusy(false);
         }
-      }
-
-      function scrollToBottom() {
-        messagesEl.scrollTop = messagesEl.scrollHeight;
       }
 
       function updateVh() {
@@ -805,9 +800,9 @@
         }
       });
 
-      // Auto-scroll on message mutations
+      // Message observer for future enhancements
       const observer = new MutationObserver(() => {
-        scrollToBottom(true);
+        // Layout naturally adapts - no scroll needed
       });
       observer.observe(messagesEl, { childList: true });
 
@@ -819,7 +814,6 @@
       window.addEventListener('load', () => {
         setTimeout(() => {
           if (!txt.disabled) txt.focus();
-          scrollToBottom();
         }, 50);
       });
 
@@ -827,12 +821,11 @@
       window.addEventListener('orientationchange', () => {
         setTimeout(() => {
           updateVh();
-          scrollToBottom();
         }, 100);
       });
 
       // Expose helpers
-      window._infinetChatHelpers = { updateVh, scrollToBottom };
+      window._infinetChatHelpers = { updateVh };
     })();
   </script>
 </body>
