@@ -15,7 +15,7 @@
       --radius: 16px;
       --fs-base: clamp(13.5px, 3.1vw, 15px);
       --spacing: clamp(10px, 3vw, 16px);
-      /* --vh will be updated by JS to the real viewport height unit (1vh) */
+      /* --vh will be updated by JS to the real viewport height unit */
       --vh: 1vh;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       font-size: var(--fs-base);
@@ -31,9 +31,8 @@
       -moz-osx-font-smoothing: grayscale;
     }
 
-    /* Use the real viewport height instead of 100dvh to avoid mobile address-bar/keyboard jumps */
     body {
-      min-height: calc(var(--vh, 1vh) * 100);
+      min-height: 100dvh;
       display: grid;
       place-items: center;
       padding: 8px;
@@ -41,7 +40,6 @@
 
     .widget {
       width: min(100%, 420px);
-      /* height uses --vh (updated by JS). max to avoid too large on desktops */
       height: min(calc(var(--vh, 1vh) * 96), 760px);
       border-radius: 20px;
       background: var(--glass);
@@ -51,7 +49,6 @@
       display: flex;
       flex-direction: column;
       backdrop-filter: blur(8px);
-      position: relative;
     }
 
     .header {
@@ -187,15 +184,14 @@
         left: 8px;
         right: 8px;
         top: calc(8px + env(safe-area-inset-top));
-        /* remove bottom anchor — rely on height computed from --vh, updated by JS */
+        bottom: calc(env(safe-area-inset-bottom) + 8px);
         width: auto;
-        height: calc(var(--vh, 1vh) * 96);
+        height: auto;
         max-height: calc(var(--vh, 1vh) * 96);
         border-radius: 14px;
       }
 
       .composer {
-        /* allow safe-area inset at bottom when keyboard closed; adjust via JS when keyboard opens */
         padding-bottom: calc(env(safe-area-inset-bottom) + 10px);
         z-index: 5;
       }
@@ -213,13 +209,10 @@
       textarea { font-size: 16px; }
       .btn { padding: 0 18px; }
     }
-
-    /* small visual tweak when keyboard is open */
-    .keyboard-open .widget { transition: height 120ms ease; }
   </style>
 </head>
 <body>
-  <div class="widget" role="region" aria-label="InfiNET customer support chat" id="widget">
+  <div class="widget" role="region" aria-label="InfiNET customer support chat">
     <div class="header">
       <div class="brand">
         <div class="logo">IN</div>
@@ -238,7 +231,7 @@
       <div id="messages" class="messages" aria-live="polite"></div>
     </div>
 
-    <div class="composer" id="composer">
+    <div class="composer">
       <div class="input-wrap">
         <textarea id="txt" placeholder="Type your message…" aria-label="Chat message input"></textarea>
         <div class="hint">
@@ -254,8 +247,6 @@
       const messagesEl = document.getElementById('messages');
       const txt = document.getElementById('txt');
       const sendBtn = document.getElementById('send');
-      const widget = document.getElementById('widget');
-      const composer = document.getElementById('composer');
 
       let sessionId = null;
       let busy = false;
@@ -381,9 +372,8 @@
 
       sendBtn.addEventListener('click', sendMessage);
 
-      // Send on Enter, newline on Shift+Enter — mobile friendly
       txt.addEventListener('keydown', e => {
-        if (e.key === 'Enter' && !e.shiftKey) {
+        if (e.key === 'Enter' && e.shiftKey) {
           e.preventDefault();
           sendMessage();
         }
@@ -393,95 +383,51 @@
         document.getElementById('charCount').textContent = txt.value.length;
       });
 
-      function scrollToBottom(behavior = 'auto') {
-        // call inside requestAnimationFrame so layout updates are applied first
+      function scrollToBottom() {
         window.requestAnimationFrame(() => {
-          // ensure we scroll the messages container only
-          messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior });
+          messagesEl.scrollTop = messagesEl.scrollHeight;
         });
       }
 
-      // MOBILE: dynamic --vh to handle address bar / keyboard changes
+      // MOBILE: dynamic --vh to handle address bar/keyboard changes
       function updateVh() {
         const vHeight = (window.visualViewport && window.visualViewport.height) ? window.visualViewport.height : window.innerHeight;
-        // set --vh to *1vh* value (1% of the visual viewport height)
         document.documentElement.style.setProperty('--vh', (vHeight * 0.01) + 'px');
-
-        // When viewport shrinks (keyboard open), adjust messages padding so composer doesn't overlap content
-        adjustMessagesPadding();
       }
 
-      function adjustMessagesPadding() {
-        try {
-          // compute composer height & safe area bottom space
-          const composerRect = composer.getBoundingClientRect();
-          const composerHeight = composerRect.height || 0;
-
-          // Add a small buffer (8-12px) so messages aren't flush against composer
-          const buffer = 12;
-
-          // Set messages padding-bottom so content remains visible above composer
-          messagesEl.style.paddingBottom = `calc(${composerHeight}px + ${buffer}px)`;
-        } catch (e) {
-          // fallback: keep default padding
-          messagesEl.style.paddingBottom = '';
-        }
-
-        scrollToBottom('auto');
-      }
-
-      // If visualViewport is available, use it (best for iOS/Android keyboard)
       if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', () => {
-          updateVh();
-          // scroll a little later as well (some mobile browsers report sizes first, then shift)
-          setTimeout(() => { adjustMessagesPadding(); scrollToBottom('smooth'); }, 50);
-        });
-        // on scroll of visual viewport also update — handles some browser quirks
+        window.visualViewport.addEventListener('resize', () => { updateVh(); scrollToBottom(); });
         window.visualViewport.addEventListener('scroll', () => { updateVh(); });
       } else {
-        // fallback to window resize
-        window.addEventListener('resize', () => { updateVh(); });
+        window.addEventListener('resize', () => { updateVh(); scrollToBottom(); });
       }
 
-      // Ensure updates when the textarea is focused (keyboard likely opening)
       txt.addEventListener('focus', () => {
-        document.body.classList.add('keyboard-open');
         updateVh();
-        // extra small delays to catch platform-specific animations
-        setTimeout(() => { adjustMessagesPadding(); scrollToBottom('smooth'); }, 50);
-        setTimeout(() => { adjustMessagesPadding(); scrollToBottom('smooth'); }, 300);
+        setTimeout(scrollToBottom, 50);
+        setTimeout(scrollToBottom, 300);
       });
 
-      // On blur, restore spacing (keyboard closed)
       txt.addEventListener('blur', () => {
-        document.body.classList.remove('keyboard-open');
-        setTimeout(() => { updateVh(); adjustMessagesPadding(); }, 80);
+        setTimeout(updateVh, 80);
       });
+
+      updateVh();
 
       // auto-scroll when messages change
-      const observer = new MutationObserver(() => { adjustMessagesPadding(); scrollToBottom('smooth'); });
-      observer.observe(messagesEl, { childList: true, subtree: true });
-
-      // initial layout adjustments
-      updateVh();
-      adjustMessagesPadding();
+      const observer = new MutationObserver(() => { scrollToBottom(); });
+      observer.observe(messagesEl, { childList: true });
 
       init();
 
       window.addEventListener('load', () => {
         setTimeout(() => {
           if (!txt.disabled) txt.focus();
-          scrollToBottom('smooth');
+          scrollToBottom();
         }, 100);
       });
 
-      // expose helpers (useful for debugging)
-      window._infinetChatHelpers = {
-        updateVh,
-        scrollToBottom,
-        adjustMessagesPadding
-      };
+      window._infinetChatHelpers = { updateVh, scrollToBottom };
     })();
   </script>
 </body>
