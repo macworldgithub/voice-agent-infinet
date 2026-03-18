@@ -5152,7 +5152,7 @@ app.post("/api/chat/message", async (req, res) => {
       assistantText = finalResp.choices?.[0]?.message?.content?.trim() || "Thanks — I have your details.";
       session.messages.push({ role: "assistant", content: assistantText });
     } else if (firstMsg?.content) {
-      assistantText = "Hold on, let me check that for you...";
+      assistantText = firstMsg.content;
       session.messages.push({ role: "assistant", content: assistantText });
     }
     session.lastSeen = new Date().toISOString();
