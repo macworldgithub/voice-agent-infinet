@@ -184,10 +184,10 @@
         left: 8px;
         right: 8px;
         top: calc(8px + env(safe-area-inset-top));
-        bottom: calc(env(safe-area-inset-bottom) + 8px);
+        bottom: auto;
         width: auto;
-        height: auto;
-        max-height: calc(var(--vh, 1vh) * 96);
+        height: calc(var(--vh, 1vh) * 100 - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 16px);
+        max-height: none;
         border-radius: 14px;
       }
 
