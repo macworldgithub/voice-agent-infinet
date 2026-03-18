@@ -5105,7 +5105,8 @@ app.post("/api/chat/message", async (req, res) => {
     const response = await splynx.request("POST", "admin/support/tickets", urlEncoded);
 
     // ← UPDATED LOGIC (no longer checks customer_id)
-    const isSupportTicket = session.collected.customerType === "existing";
+    // const isSupportTicket = session.collected.customerType === "existing";
+    const isSupportTicket = true;
 
     toolContent = JSON.stringify({ success: true, ticket_id: response.id });
     await sendTicketEmail(response.id, fixedArgs, session.collected, isSupportTicket);
