@@ -3959,7 +3959,7 @@ if (!process.env.SMTP_PASS) {
 
 async function sendTicketEmail(ticketId, ticketArgs, collectedFields, isSupportTicket = false) {
   if (!process.env.SMTP_PASS) return;
-  const recipient = isSupportTicket ? "support@infinetbroadband.com.au" : "sales@infinetbroadband.com.au";
+  const recipient = isSupportTicket ? "support@infinetbroadband.com.au" : "support@infinetbroadband.com.au";
   const type = isSupportTicket ? "Support" : "Sales";
   const subject = `New ${type} Enquiry — Ticket #${ticketId} — ${ticketArgs.subject || "Inquiry"}`;
   const html = `
@@ -4450,7 +4450,7 @@ RELOCATION FLOW - follow these steps exactly (ONLY for existing customers who se
 12. Collect email if missing.
 13. When ALL details collected (preferredName, customer_id, email, leadInterest, address (new), terminationDate, connectionDate, serviceToTerminate) → Call create_ticket with:
     - customer_id (looked-up ID)
-    - subject: "Relocation Request — [leadInterest]"
+    - subject: "Sales Inquiry Request — [leadInterest]"
     - message: { message: "Relocation from \${preferredName}:\nOld service to terminate: \${serviceToTerminate} on \${terminationDate}\nNew address: \${address}\nNew connection date: \${connectionDate}\nNew plan: \${leadInterest}\nFull conversation summary." }
     - priority: "medium"
     - reporter_type: "api"
