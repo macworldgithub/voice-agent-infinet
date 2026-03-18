@@ -735,10 +735,19 @@
         }
       }
 
-      function scrollToBottom() {
-        window.requestAnimationFrame(() => {
+      function scrollToBottom(immediate = false) {
+        const scroll = () => {
           messagesEl.scrollTop = messagesEl.scrollHeight;
-        });
+        };
+        
+        if (immediate) {
+          scroll();
+          window.requestAnimationFrame(scroll);
+        } else {
+          window.requestAnimationFrame(() => {
+            window.requestAnimationFrame(scroll);
+          });
+        }
       }
 
       function updateVh() {
@@ -756,26 +765,31 @@
       if (window.visualViewport) {
         window.visualViewport.addEventListener('resize', () => {
           updateVh();
-          scrollToBottom();
+          scrollToBottom(true);
         });
 
         window.visualViewport.addEventListener('scroll', () => {
-          scrollToBottom();
+          scrollToBottom(true);
         });
       }
 
       // Window resize as fallback
       window.addEventListener('resize', () => {
         updateVh();
-        scrollToBottom();
+        scrollToBottom(true);
       });
 
       // Textarea focus handling
       txt.addEventListener('focus', () => {
         setTimeout(() => {
           updateVh();
-          scrollToBottom();
-        }, 100);
+          scrollToBottom(true);
+        }, 50);
+        
+        // Extra scroll on mobile keyboard open
+        setTimeout(() => {
+          scrollToBottom(true);
+        }, 200);
       });
 
       txt.addEventListener('blur', () => {
@@ -800,7 +814,7 @@
 
       // Auto-scroll on message mutations
       const observer = new MutationObserver(() => {
-        scrollToBottom();
+        scrollToBottom(true);
       });
       observer.observe(messagesEl, { childList: true });
 
@@ -812,7 +826,20 @@
       window.addEventListener('load', () => {
         setTimeout(() => {
           if (!txt.disabled) txt.focus();
-          scrollToBottom();
+          scrollToBottom(true);
+        }, 50);
+        
+        // Extra scroll for slower devices
+        setTimeout(() => {
+          scrollToBottom(true);
+        }, 300);
+      });
+
+      // Orientation change handling
+      window.addEventListener('orientationchange', () => {
+        setTimeout(() => {
+          updateVh();
+          scrollToBottom(true);
         }, 100);
       });
 
