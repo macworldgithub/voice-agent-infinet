@@ -4194,7 +4194,7 @@ if (!process.env.SMTP_PASS) {
 
 async function sendTicketEmail(ticketId, ticketArgs, collectedFields, isSupportTicket = false) {
   if (!process.env.SMTP_PASS) return;
-  const recipient = isSupportTicket ? "support@infinetbroadband.com.au" : "support@infinetbroadband.com.au";
+  const recipient = isSupportTicket ? "support@infinetbroadband.com.au" : "sales@infinetbroadband.com.au";
   const type = isSupportTicket ? "Support" : "Sales";
   const subject = `New ${type} Enquiry — Ticket #${ticketId} — ${ticketArgs.subject || "Inquiry"}`;
   const html = `
