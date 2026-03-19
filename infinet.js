@@ -4190,6 +4190,8 @@ Knowledge base for InfiNET Broadband (use this to answer customer calls and chat
   "Not able to login to the customer portal? Just email support@infinetbroadband.com.au and our accounts team will be able to assist."
 - NBN vs OptiComm:
   "Both NBN and OptiComm deliver fibre internet in Australia. The main difference is availability: NBN is the national wholesale network while OptiComm is a private fibre network available in selected estates and buildings. Both offer similar speeds. InfiNET Broadband can connect you to either depending on what's available at your address."
+- Private Fibre Networks for Developers:
+  "If you're interested in developments or private fibre networks for new estates or buildings, please visit https://www.infinetbroadband.com.au/private-fibre-networks-for-developers/. How else can I assist you today?"
 - Opticomm Free to Air TV issue:
   "Infinet Broadband does not support your free to air television service. Please contact Opticomm directly — you can visit https://online.telco.opticomm.com.au/television-fault Thank you, goodbye."
 - Common Qs to answer concisely:
@@ -4395,6 +4397,7 @@ STRICT RULES:
 - Use get_ticket_types, get_ticket_groups, get_ticket_statuses if you need IDs for types, groups, statuses when creating tickets.
 - To verify existing customers or lookup account, use the customer_lookup tool with name, email, or phone. If multiple matches, ask for more details. If no match, politely say you can't find the account and switch to sales flow if appropriate. NEVER create tickets for non-customers.
 - For existing customer flows (support/accounts/relocation), ask for name, email, or phone to lookup the account. Use the looked up customer_id for tickets.
+- PRIVATE NETWORK / DEVELOPMENT HANDLING: At any point in the conversation, if the customer mentions "private network", "development", "developer", "estate", "private fibre", "bulk fibre", "developers network", or similar terms, immediately respond with the exact message: "If you're interested in developments or private fibre networks for new estates or buildings, please visit https://www.infinetbroadband.com.au/private-fibre-networks-for-developers/. How else can I assist you today?" and continue the current flow.
 
 NEW SERVICE HANDLING (CRITICAL – ONLY ACTIVE SERVICES):
 - customer_lookup returns services: { internet: [], voice: [], recurring: [] } filtered to status === 'active' ONLY.
@@ -4489,7 +4492,6 @@ ${KB}
 Locations (states) with IDs:
 ${LOCATIONS.map((l) => `${l.id}: ${l.name}`).join("\n")}
 `;
-
 const extractFunction = {
   name: "extract_call_fields",
   description: "Extract fields from user message: intent (support/sales/general/account), issueSummary, preferredName (what they want to be called), email, priority, callbackRequest (boolean), timeline, leadInterest, accountNumber, name, phone, terminationDate, connectionDate, serviceToTerminate. Omit fields not present.",

@@ -278,6 +278,18 @@
     .msg strong { font-weight: 600; }
     .msg em { font-style: italic; }
 
+    /* ── NEW: Link styling in agent messages ── */
+    .msg.agent a {
+      color: #7dd3fc;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      transition: color 0.15s;
+    }
+
+    .msg.agent a:hover {
+      color: #67e8f9;
+    }
+
     .meta {
       font-size: 0.7rem;
       color: var(--muted);
@@ -551,13 +563,32 @@
         return String(str || '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' })[m]);
       }
 
+      // ── Improved: detect URLs and make them clickable ──
       function renderMarkdown(text) {
-        let html = escapeHtml(text)
+        // First escape HTML
+        let safe = escapeHtml(text);
+
+        // Convert **bold** and *italic*
+        safe = safe
           .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-          .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+          .replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+        // Convert newlines
+        safe = safe
           .replace(/\n\s*\n/g, '</p><p>')
           .replace(/\n/g, '<br>');
-        return `<p>${html}</p>`.replace(/<p><\/p>/g, '');
+
+        // Convert http/https/www URLs to clickable links
+        safe = safe.replace(
+          /(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+)/gi,
+          url => {
+            let href = url;
+            if (url.startsWith('www.')) href = 'https://' + url;
+            return `<a href="${href}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+          }
+        );
+
+        return `<p>${safe}</p>`.replace(/<p><\/p>/g, '');
       }
 
       function addMessage({ from = 'agent', text = '', meta = '' }) {
@@ -629,25 +660,25 @@
           const data = await res.json();
           typing.remove();
 
-         if (data?.text) {
-  addMessage({ from: 'agent', text: data.text });
+          if (data?.text) {
+            addMessage({ from: 'agent', text: data.text });
 
-  const lowerText = data.text.toLowerCase();
+            const lowerText = data.text.toLowerCase();
 
-  const waitPattern =
-    /\b(hold on(?:\s+for\s+(?:a\s+)?moment)?|one moment(?:\s*,?\s*please)?|just(?:\s+one)?\s+moment|please wait(?:\s+while.*)?|please hold(?:\s+on)?|kindly wait|hang on|creating (?:the |your )?ticket(?: now)?)\b/;
+            const waitPattern =
+              /\b(hold on(?:\s+for\s+(?:a\s+)?moment)?|one moment(?:\s*,?\s*please)?|just(?:\s+one)?\s+moment|please wait(?:\s+while.*)?|please hold(?:\s+on)?|kindly wait|hang on|creating (?:the |your )?ticket(?: now)?)\b/;
 
-  if (waitPattern.test(lowerText)) {
-    setTimeout(() => {
-      txt.value = "what's the update";
-      charCount.textContent = txt.value.length;
-      autoResize();
-      sendMessage(true);
-    }, 2000);
-  }
-} else {
-  addMessage({ from: 'agent', text: 'Sorry — no reply received.' });
-}
+            if (waitPattern.test(lowerText)) {
+              setTimeout(() => {
+                txt.value = "what's the update";
+                charCount.textContent = txt.value.length;
+                autoResize();
+                sendMessage(true);
+              }, 2000);
+            }
+          } else {
+            addMessage({ from: 'agent', text: 'Sorry — no reply received.' });
+          }
         } catch (err) {
           typing.remove();
           addMessage({ from: 'agent', text: 'Sorry — something went wrong. Try again?' });
@@ -675,7 +706,6 @@
 
       sendBtn.addEventListener('click', () => sendMessage());
 
-      // Preserve original behavior: Shift+Enter sends, Enter creates new line
       txt.addEventListener('keydown', e => {
         if (e.key === 'Enter' && e.shiftKey) {
           e.preventDefault();
@@ -702,7 +732,6 @@
           let viewportHeight;
           if (window.visualViewport) {
             viewportHeight = window.visualViewport.height;
-            // Position widget at the top of the visual viewport
             const offsetTop = window.visualViewport.offsetTop;
             widget.style.top = offsetTop + 'px';
           } else {

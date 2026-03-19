@@ -606,12 +606,14 @@
         txt.style.height = Math.min(txt.scrollHeight, 120) + 'px';
       }
 
-      async function sendMessage() {
+      async function sendMessage(hideUserMessage = false) {
         const message = txt.value.trim();
         if (!message || busy) return;
 
         setBusy(true);
-        addMessage({ from: 'user', text: message });
+        if (!hideUserMessage) {
+          addMessage({ from: 'user', text: message });
+        }
         txt.value = '';
         charCount.textContent = '0';
         autoResize();
@@ -640,7 +642,7 @@
       txt.value = "what's the update";
       charCount.textContent = txt.value.length;
       autoResize();
-      sendMessage();
+      sendMessage(true);
     }, 2000);
   }
 } else {
@@ -671,7 +673,7 @@
         }
       }
 
-      sendBtn.addEventListener('click', sendMessage);
+      sendBtn.addEventListener('click', () => sendMessage());
 
       // Preserve original behavior: Shift+Enter sends, Enter creates new line
       txt.addEventListener('keydown', e => {
