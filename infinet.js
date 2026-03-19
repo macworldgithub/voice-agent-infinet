@@ -4192,28 +4192,78 @@ if (!process.env.SMTP_PASS) {
   console.warn("⚠️ SMTP_PASS not set in .env — email notifications will be DISABLED");
 }
 
+// async function sendTicketEmail(ticketId, ticketArgs, collectedFields, isSupportTicket = false) {
+//   if (!process.env.SMTP_PASS) return;
+//   const recipient = isSupportTicket ? "support@infinetbroadband.com.au" : "sales@infinetbroadband.com.au";
+//   const type = isSupportTicket ? "Support" : "Sales";
+//   const subject = `New ${type} Enquiry — Ticket #${ticketId} — ${ticketArgs.subject || "Inquiry"}`;
+//   const html = `
+// <!DOCTYPE html>
+// <html>
+// <head><meta charset="utf-8"></head>
+// <body style="font-family: Arial, sans-serif; line-height: 1.6;">
+//   <h2>New ${type} Enquiry Received</h2>
+//   <p><strong>Ticket ID:</strong> ${ticketId}</p>
+//   <p><strong>Subject:</strong> ${ticketArgs.subject || "N/A"}</p>
+//   <p><strong>Priority:</strong> ${ticketArgs.priority || "medium"}</p>
+//   ${ticketArgs.customer_id ? `<p><strong>Customer ID:</strong> ${ticketArgs.customer_id}</p>` : `<p><strong>New Lead (no customer ID)</strong></p>`}
+//   <h3>Message Body</h3>
+//   <p>${(ticketArgs.message && (ticketArgs.message.message || ticketArgs.message)) || "No additional message provided"}</p>
+//   <hr>
+//   <p><small>This is an automated email from the InfiNET Broadband AI Assistant.<br>
+//   View ticket: https://infinetbroadband-portal.com.au/admin/support/tickets/${ticketId}</small></p>
+// </body>
+// </html>`;
+//   try {
+//     await transporter.sendMail({
+//       from: '"InfiNET AI Assistant" <noreply@infinetbroadband.com.au>',
+//       to: ["karimjawwad09@gmail.com", recipient],
+//       subject,
+//       html,
+//     });
+//     console.log(`📧 Email notification sent for ticket #${ticketId}`);
+//   } catch (err) {
+//     console.error("Failed to send ticket email:", err.message);
+//   }
+// }
 async function sendTicketEmail(ticketId, ticketArgs, collectedFields, isSupportTicket = false) {
   if (!process.env.SMTP_PASS) return;
-  const recipient = isSupportTicket ? "support@infinetbroadband.com.au" : "sales@infinetbroadband.com.au";
+
+  const recipient = isSupportTicket 
+    ? "support@infinetbroadband.com.au" 
+    : "sales@infinetbroadband.com.au";
+  
   const type = isSupportTicket ? "Support" : "Sales";
-  const subject = `New ${type} Enquiry — Ticket #${ticketId} — ${ticketArgs.subject || "Inquiry"}`;
+  
+  const referenceLine = ticketId 
+    ? `<p><strong>Ticket / Reference:</strong> ${ticketId}</p>`
+    : `<p><strong>Reference:</strong> New ${type.toLowerCase()} enquiry (no ticket ID yet)</p>`;
+
+  const subject = `New ${type} Enquiry ${ticketId ? `— Ticket #${ticketId}` : ""} — ${ticketArgs.subject || "Inquiry"}`;
+
   const html = `
 <!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
 <body style="font-family: Arial, sans-serif; line-height: 1.6;">
   <h2>New ${type} Enquiry Received</h2>
-  <p><strong>Ticket ID:</strong> ${ticketId}</p>
+  ${referenceLine}
   <p><strong>Subject:</strong> ${ticketArgs.subject || "N/A"}</p>
   <p><strong>Priority:</strong> ${ticketArgs.priority || "medium"}</p>
-  ${ticketArgs.customer_id ? `<p><strong>Customer ID:</strong> ${ticketArgs.customer_id}</p>` : `<p><strong>New Lead (no customer ID)</strong></p>`}
+  ${ticketArgs.customer_id 
+    ? `<p><strong>Customer ID:</strong> ${ticketArgs.customer_id}</p>` 
+    : `<p><strong>New Lead (no customer ID)</strong></p>`}
   <h3>Message Body</h3>
   <p>${(ticketArgs.message && (ticketArgs.message.message || ticketArgs.message)) || "No additional message provided"}</p>
   <hr>
   <p><small>This is an automated email from the InfiNET Broadband AI Assistant.<br>
-  View ticket: https://infinetbroadband-portal.com.au/admin/support/tickets/${ticketId}</small></p>
+  ${isSupportTicket && ticketId 
+    ? `View ticket: https://infinetbroadband-portal.com.au/admin/support/tickets/${ticketId}` 
+    : `This is a ${type.toLowerCase()} enquiry — to be followed up manually.`}
+  </small></p>
 </body>
 </html>`;
+
   try {
     await transporter.sendMail({
       from: '"InfiNET AI Assistant" <noreply@infinetbroadband.com.au>',
@@ -4221,12 +4271,11 @@ async function sendTicketEmail(ticketId, ticketArgs, collectedFields, isSupportT
       subject,
       html,
     });
-    console.log(`📧 Email notification sent for ticket #${ticketId}`);
+    console.log(`📧 Email notification sent for ${type.toLowerCase()} enquiry${ticketId ? ` #${ticketId}` : ""}`);
   } catch (err) {
     console.error("Failed to send ticket email:", err.message);
   }
 }
-
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -4711,10 +4760,11 @@ RELOCATION FLOW - follow these steps exactly (ONLY for existing customers who se
     After success, reply EXACTLY: "Thank you \${preferredName}! I have raised sales inquiry ticket for you. You will receive the details via email shortly. Our team will contact you shortly."
 
 SUPPORT FLOW (for existing customers only):
-- First, ask for name, email, or phone, then call customer_lookup to get customer_id and services.
-- If not found, say "Sorry, I couldn't find your account. Are you sure you're an existing customer?" and switch to sales if needed.
-- Answer any question using the Knowledge base.
-- If the issue cannot be fully resolved → Ask for issueSummary then additional details. Combine into final issueSummary.
+- First, ask for name, email, or phone if not collected, then immediately call customer_lookup tool to get customer_id and services.
+- After successful lookup: Reply EXACTLY: "Found your account successfully, \${preferredName}. Please provide a brief description of the issue you're facing."
+- Do NOT list or mention any active services automatically (this is not for support flow).
+- If issueSummary is not collected, ask: "Please provide a brief description of the issue." Once a basic description is provided, immediately ask for additional high-level details to help our support team (e.g. "Any more details like when it started, affected devices, error messages, or speed test results?").
+- Combine everything into the final issueSummary.
 - When ALL details collected (preferredName, customer_id, email, issueSummary) → Call create_ticket with customer_id, subject based on issueSummary, message: full issueSummary, reporter_type: 'api', priority: 'medium', type_id for support.
 
 ACCOUNTS FLOW (billing/financing, for existing customers only):
@@ -5343,29 +5393,72 @@ app.post("/api/chat/message", async (req, res) => {
         } catch (err) {
           toolContent = JSON.stringify({ success: false, error: err.message });
         }
-     } else if (funcName === "create_ticket") {
+     } 
+  //    else if (funcName === "create_ticket") {
+  // try {
+  //   let fixedArgs = { ...args };
+  //   if (typeof fixedArgs.message === "string") {
+  //     fixedArgs.message = { message: fixedArgs.message };
+  //   }
+
+  //   const urlEncoded = objectToUrlEncoded(fixedArgs);
+  //   console.log("Creating ticket with args:", JSON.stringify(fixedArgs));
+
+  //   const response = await splynx.request("POST", "admin/support/tickets", urlEncoded);
+
+
+  //   const isSupportTicket = !!fixedArgs?.customer_id;
+  //   toolContent = JSON.stringify({ success: true, ticket_id: response.id });
+  //   await sendTicketEmail(response.id, fixedArgs, session.collected, isSupportTicket);
+  //       } catch (err) {
+  //         console.error("Create ticket failed with args:", JSON.stringify(args), "error:", err);
+  //         toolContent = JSON.stringify({ success: false, error: err.message || "Failed to create ticket" });
+  //       }
+  //     } 
+  else if (funcName === "create_ticket") {
   try {
     let fixedArgs = { ...args };
     if (typeof fixedArgs.message === "string") {
       fixedArgs.message = { message: fixedArgs.message };
     }
 
-    const urlEncoded = objectToUrlEncoded(fixedArgs);
-    console.log("Creating ticket with args:", JSON.stringify(fixedArgs));
+    const isSupportTicket = !!fixedArgs?.customer_id;
+    let ticketId = null;
+    let referenceText = "Pending";
 
-    const response = await splynx.request("POST", "admin/support/tickets", urlEncoded);
+    // Only create real ticket in Splynx for support cases
+    if (isSupportTicket) {
+      const urlEncoded = objectToUrlEncoded(fixedArgs);
+      console.log("Creating support ticket with args:", JSON.stringify(fixedArgs));
 
-    // ← UPDATED LOGIC (no longer checks customer_id)
-    // const isSupportTicket = session.collected.customerType === "existing";
-    const isSupportTicket = true;
+      const response = await splynx.request("POST", "admin/support/tickets", urlEncoded);
+      ticketId = response.id;
+      referenceText = `Ticket #${ticketId}`;
+    } else {
+      console.log("Sales enquiry received — no Splynx ticket created.");
+      // ticketId remains null
+      // You can optionally store it somewhere else (CRM, Google Sheet, etc.) if needed later
+    }
 
-    toolContent = JSON.stringify({ success: true, ticket_id: response.id });
-    await sendTicketEmail(response.id, fixedArgs, session.collected, isSupportTicket);
-        } catch (err) {
-          console.error("Create ticket failed with args:", JSON.stringify(args), "error:", err);
-          toolContent = JSON.stringify({ success: false, error: err.message || "Failed to create ticket" });
-        }
-      } else if (funcName === "get_ticket_types") {
+    toolContent = JSON.stringify({ 
+      success: true, 
+      ticket_id: ticketId,                // will be null for sales
+      is_support_ticket: isSupportTicket,
+      reference: referenceText
+    });
+
+    // Always send notification email
+    await sendTicketEmail(ticketId, fixedArgs, session.collected, isSupportTicket);
+
+  } catch (err) {
+    console.error("Create ticket handler failed with args:", JSON.stringify(args), "error:", err);
+    toolContent = JSON.stringify({ 
+      success: false, 
+      error: err.message || "Failed to process ticket/enquiry" 
+    });
+  }
+}
+      else if (funcName === "get_ticket_types") {
         try {
           const types = await splynx.request("GET", "admin/support/tickets-types");
           toolContent = JSON.stringify({ success: true, types });
