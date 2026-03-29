@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InfiNET Broadband • AI Voice Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+        body {
+            font-family: 'Inter', system_ui, sans-serif;
+        }
+        .chat-bubble-assistant {
+            background: #f1f5f9;
+            border-radius: 20px 20px 20px 4px;
+        }
+        .chat-bubble-user {
+            background: #00bfff;
+            color: white;
+            border-radius: 20px 20px 4px 20px;
+        }
+        .mic-button {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .recording {
+            animation: pulse-ring 1.5s infinite;
+        }
+        @keyframes pulse-ring {
+            0% { box-shadow: 0 0 0 0 rgba(234, 63, 63, 0.4); }
+            70% { box-shadow: 0 0 0 20px rgba(234, 63, 63, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(234, 63, 63, 0); }
+        }
+        .waveform {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+        }
+        .bar {
+            width: 4px;
+            height: 20px;
+            background: #00bfff;
+            animation: soundwave 1.2s ease-in-out infinite;
+        }
+        .bar:nth-child(2) { animation-delay: 0.1s; height: 28px; }
+        .bar:nth-child(3) { animation-delay: 0.2s; height: 16px; }
+        .bar:nth-child(4) { animation-delay: 0.3s; height: 24px; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col">
+    <!-- Header -->
+    <div class="bg-slate-900 border-b border-slate-800 px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-x-3">
+            <div class="w-9 h-9 bg-[#00bfff] rounded-2xl flex items-center justify-center text-white text-2xl font-bold">📡</div>
+            <div>
+                <h1 class="text-2xl font-semibold tracking-tight">InfiNET Broadband</h1>
+                <p class="text-xs text-emerald-400 flex items-center gap-x-1">
+                    <span class="relative flex h-2 w-2">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+                    </span>
+                    AI Voice Agent • ElevenLabs + OpenAI (Ultra-low latency)
+                </p>
+            </div>
+        </div>
+        
+        <button onclick="newSession()" 
+                class="flex items-center gap-x-2 bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-3xl text-sm font-medium transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.058 11H1M12 3v2m0 16v2m9-9H15m-6 0a8 8 0 01-7.714-6.314" />
+            </svg>
+            New Session
+        </button>
+    </div>
+
+    <div class="flex-1 flex flex-col max-w-4xl mx-auto w-full px-4 py-6">
+        
+        <!-- Chat Container -->
+        <div id="chat-container" class="flex-1 bg-slate-900 rounded-3xl shadow-2xl border border-slate-800 p-6 overflow-y-auto mb-6 space-y-6"></div>
+
+        <!-- Voice & Controls -->
+        <div class="flex flex-col items-center gap-y-4">
+            <div class="flex items-center gap-x-3 text-sm font-medium text-slate-400">
+                <span id="status-text">Ready to speak</span>
+            </div>
+
+            <button onclick="toggleRecording()" 
+                    id="mic-button"
+                    class="mic-button w-24 h-24 bg-[#00bfff] hover:bg-[#00a8e0] text-white rounded-full flex items-center justify-center text-6xl shadow-2xl shadow-cyan-500/50 focus:outline-none">
+                🎤
+            </button>
+
+            <div class="flex items-center gap-x-8 text-xs text-slate-400">
+                <div class="flex items-center gap-x-1">
+                    <div class="w-3 h-3 bg-emerald-400 rounded-full animate-pulse"></div>
+                    OpenAI Logic
+                </div>
+                <div class="flex items-center gap-x-1">
+                    <div class="w-3 h-3 bg-violet-400 rounded-full"></div>
+                    ElevenLabs Voice
+                </div>
+                <div class="text-emerald-400 font-medium">Turbo v2.5 • Minimum latency</div>
+            </div>
+
+            <!-- Text fallback -->
+            <div class="w-full max-w-md mt-4">
+                <div class="flex gap-x-2">
+                    <input id="text-input" 
+                           type="text" 
+                           placeholder="Or type a message..." 
+                           class="flex-1 bg-slate-800 border border-slate-700 focus:border-[#00bfff] rounded-3xl px-5 py-3 text-sm outline-none transition-colors"
+                           onkeydown="if(event.keyCode===13) sendTextMessage()">
+                    <button onclick="sendTextMessage()" 
+                            class="bg-slate-800 hover:bg-slate-700 px-6 rounded-3xl text-[#00bfff] font-medium">→</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const BACKEND_URL = "http://localhost:3003";
+        let sessionId = null;
+        let isRecording = false;
+        let mediaRecorder = null;
+        let audioChunks = [];
+
+        function playAudio(base64) {
+            if (!base64) return;
+            const audio = new Audio(`data:audio/mp3;base64,${base64}`);
+            audio.play().catch(err => console.log("Audio play prevented:", err));
+        }
+
+        function appendMessage(role, text, isAudio = false, base64 = null) {
+            const container = document.getElementById("chat-container");
+            const bubble = document.createElement("div");
+            bubble.className = `flex ${role === "assistant" ? "justify-start" : "justify-end"}`;
+            
+            if (role === "assistant") {
+                bubble.innerHTML = `
+                    <div class="max-w-[80%]">
+                        <div class="flex items-center gap-x-2 mb-1">
+                            <div class="w-6 h-6 bg-[#00bfff] text-white rounded-2xl flex items-center justify-center text-xs">🤖</div>
+                            <span class="text-xs text-slate-400">InfiNET AI</span>
+                        </div>
+                        <div class="chat-bubble-assistant px-5 py-4 text-slate-800 text-[15px] leading-relaxed">${text}</div>
+                        ${isAudio && base64 ? `
+                        <button onclick="playAudio('${base64}')" 
+                                class="mt-2 text-xs flex items-center gap-x-1 text-slate-400 hover:text-[#00bfff]">
+                            <span>🔊</span> Play voice
+                        </button>` : ''}
+                    </div>
+                `;
+            } else {
+                bubble.innerHTML = `
+                    <div class="max-w-[80%]">
+                        <div class="chat-bubble-user px-5 py-4 text-white text-[15px] leading-relaxed">${text}</div>
+                    </div>
+                `;
+            }
+            
+            container.appendChild(bubble);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function setStatus(message, recording = false) {
+            document.getElementById("status-text").innerHTML = message;
+            const mic = document.getElementById("mic-button");
+            if (recording) {
+                mic.classList.add("recording", "bg-red-500", "hover:bg-red-600");
+                mic.innerHTML = `<div class="waveform"><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div></div>`;
+            } else {
+                mic.classList.remove("recording", "bg-red-500", "hover:bg-red-600");
+                mic.innerHTML = "🎤";
+            }
+        }
+
+        async function initSession() {
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/voice-chat/init`, { method: "POST" });
+                const data = await res.json();
+                sessionId = data.sessionId;
+                appendMessage("assistant", data.text, true, data.audioBase64);
+                if (data.audioBase64) playAudio(data.audioBase64);
+            } catch (err) {
+                alert("Cannot connect to backend. Make sure server.js is running on http://localhost:3003");
+            }
+        }
+
+        async function newSession() {
+            document.getElementById("chat-container").innerHTML = "";
+            sessionId = null;
+            initSession();
+        }
+
+        async function toggleRecording() {
+            if (!sessionId) {
+                alert("Please wait for session to start");
+                return;
+            }
+            
+            if (isRecording) {
+                mediaRecorder.stop();
+                isRecording = false;
+                setStatus("Processing with OpenAI + ElevenLabs...", false);
+            } else {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 16000 }
+                    });
+                    
+                    mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+                    audioChunks = [];
+                    
+                    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+                    mediaRecorder.onstop = async () => {
+                        const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+                        const formData = new FormData();
+                        formData.append("audio", audioBlob, "recording.webm");
+                        formData.append("sessionId", sessionId);
+                        
+                        const response = await fetch(`${BACKEND_URL}/api/voice`, {
+                            method: "POST",
+                            body: formData
+                        });
+                        
+                        const result = await response.json();
+                        
+                        if (result.userText) appendMessage("user", result.userText);
+                        if (result.text) {
+                            appendMessage("assistant", result.text, true, result.audioBase64);
+                            if (result.audioBase64) playAudio(result.audioBase64);
+                        }
+                        setStatus("Ready to speak", false);
+                    };
+                    
+                    mediaRecorder.start();
+                    isRecording = true;
+                    setStatus("Listening... <span class='text-red-400 font-medium'>SPEAK NOW</span>", true);
+                } catch (err) {
+                    alert("Microphone access denied or not available.");
+                }
+            }
+        }
+
+        function sendTextMessage() {
+            const input = document.getElementById("text-input");
+            const msg = input.value.trim();
+            if (!msg || !sessionId) return;
+            
+            appendMessage("user", msg);
+            input.value = "";
+            setStatus("Thinking...", false);
+            
+            // Simple delay for demo (text fallback is not fully wired to backend)
+            setTimeout(() => {
+                setStatus("Ready to speak", false);
+            }, 1500);
+        }
+
+        window.onload = () => {
+            initSession();
+        };
+    </script>
+</body>
+</html>
