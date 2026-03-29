@@ -4151,6 +4151,41 @@
 // Locations (states) with IDs:
 // ${LOCATIONS.map((l) => `${l.id}: ${l.name}`).join("\n")}
 // `;
+
+// async function sendTicketEmail(ticketId, ticketArgs, collectedFields, isSupportTicket = false) {
+//   if (!process.env.SMTP_PASS) return;
+//   const recipient = isSupportTicket ? "support@infinetbroadband.com.au" : "sales@infinetbroadband.com.au";
+//   const type = isSupportTicket ? "Support" : "Sales";
+//   const subject = `New ${type} Enquiry — Ticket #${ticketId} — ${ticketArgs.subject || "Inquiry"}`;
+//   const html = `
+// <!DOCTYPE html>
+// <html>
+// <head><meta charset="utf-8"></head>
+// <body style="font-family: Arial, sans-serif; line-height: 1.6;">
+//   <h2>New ${type} Enquiry Received</h2>
+//   <p><strong>Ticket ID:</strong> ${ticketId}</p>
+//   <p><strong>Subject:</strong> ${ticketArgs.subject || "N/A"}</p>
+//   <p><strong>Priority:</strong> ${ticketArgs.priority || "medium"}</p>
+//   ${ticketArgs.customer_id ? `<p><strong>Customer ID:</strong> ${ticketArgs.customer_id}</p>` : `<p><strong>New Lead (no customer ID)</strong></p>`}
+//   <h3>Message Body</h3>
+//   <p>${(ticketArgs.message && (ticketArgs.message.message || ticketArgs.message)) || "No additional message provided"}</p>
+//   <hr>
+//   <p><small>This is an automated email from the InfiNET Broadband AI Assistant.<br>
+//   View ticket: https://infinetbroadband-portal.com.au/admin/support/tickets/${ticketId}</small></p>
+// </body>
+// </html>`;
+//   try {
+//     await transporter.sendMail({
+//       from: '"InfiNET AI Assistant" <noreply@infinetbroadband.com.au>',
+//       to: ["karimjawwad09@gmail.com", recipient],
+//       subject,
+//       html,
+//     });
+//     console.log(`📧 Email notification sent for ticket #${ticketId}`);
+//   } catch (err) {
+//     console.error("Failed to send ticket email:", err.message);
+//   }
+// }
 import express from "express";
 import multer from "multer";
 import fs from "fs";
@@ -4192,40 +4227,6 @@ if (!process.env.SMTP_PASS) {
   console.warn("⚠️ SMTP_PASS not set in .env — email notifications will be DISABLED");
 }
 
-// async function sendTicketEmail(ticketId, ticketArgs, collectedFields, isSupportTicket = false) {
-//   if (!process.env.SMTP_PASS) return;
-//   const recipient = isSupportTicket ? "support@infinetbroadband.com.au" : "sales@infinetbroadband.com.au";
-//   const type = isSupportTicket ? "Support" : "Sales";
-//   const subject = `New ${type} Enquiry — Ticket #${ticketId} — ${ticketArgs.subject || "Inquiry"}`;
-//   const html = `
-// <!DOCTYPE html>
-// <html>
-// <head><meta charset="utf-8"></head>
-// <body style="font-family: Arial, sans-serif; line-height: 1.6;">
-//   <h2>New ${type} Enquiry Received</h2>
-//   <p><strong>Ticket ID:</strong> ${ticketId}</p>
-//   <p><strong>Subject:</strong> ${ticketArgs.subject || "N/A"}</p>
-//   <p><strong>Priority:</strong> ${ticketArgs.priority || "medium"}</p>
-//   ${ticketArgs.customer_id ? `<p><strong>Customer ID:</strong> ${ticketArgs.customer_id}</p>` : `<p><strong>New Lead (no customer ID)</strong></p>`}
-//   <h3>Message Body</h3>
-//   <p>${(ticketArgs.message && (ticketArgs.message.message || ticketArgs.message)) || "No additional message provided"}</p>
-//   <hr>
-//   <p><small>This is an automated email from the InfiNET Broadband AI Assistant.<br>
-//   View ticket: https://infinetbroadband-portal.com.au/admin/support/tickets/${ticketId}</small></p>
-// </body>
-// </html>`;
-//   try {
-//     await transporter.sendMail({
-//       from: '"InfiNET AI Assistant" <noreply@infinetbroadband.com.au>',
-//       to: ["karimjawwad09@gmail.com", recipient],
-//       subject,
-//       html,
-//     });
-//     console.log(`📧 Email notification sent for ticket #${ticketId}`);
-//   } catch (err) {
-//     console.error("Failed to send ticket email:", err.message);
-//   }
-// }
 async function sendTicketEmail(ticketId, ticketArgs, collectedFields, isSupportTicket = false) {
   if (!process.env.SMTP_PASS) return;
 
