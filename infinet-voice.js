@@ -11,12 +11,17 @@ import axios from "axios";
 import crypto from "crypto";
 import FormData from "form-data";
 import nodemailer from "nodemailer";
+import http from "http";
+import dns from "dns";
+import { Server as SocketIOServer } from "socket.io";
+import WebSocket from "ws";
+import { setupRealtimeVoice } from "./realtime-handler.js";
 
 dotenv.config();
 
 if (ffmpegStatic) ffmpeg.setFfmpegPath(ffmpegStatic);
 
-const PORT = process.env.PORT || 3003;
+const PORT = process.env.PORT || 3004;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM";
@@ -48,13 +53,13 @@ if (!process.env.SMTP_PASS) {
 async function sendTicketEmail(ticketId, ticketArgs, collectedFields, isSupportTicket = false) {
   if (!process.env.SMTP_PASS) return;
 
-  const recipient = isSupportTicket 
-    ? "support@infinetbroadband.com.au" 
+  const recipient = isSupportTicket
+    ? "support@infinetbroadband.com.au"
     : "sales@infinetbroadband.com.au";
-  
+
   const type = isSupportTicket ? "Support" : "Sales";
-  
-  const referenceLine = ticketId 
+
+  const referenceLine = ticketId
     ? `<p><strong>Ticket / Reference:</strong> ${ticketId}</p>`
     : `<p><strong>Reference:</strong> New ${type.toLowerCase()} enquiry (no ticket ID yet)</p>`;
 
@@ -69,16 +74,16 @@ async function sendTicketEmail(ticketId, ticketArgs, collectedFields, isSupportT
   ${referenceLine}
   <p><strong>Subject:</strong> ${ticketArgs.subject || "N/A"}</p>
   <p><strong>Priority:</strong> ${ticketArgs.priority || "medium"}</p>
-  ${ticketArgs.customer_id 
-    ? `<p><strong>Customer ID:</strong> ${ticketArgs.customer_id}</p>` 
-    : `<p><strong>New Lead (no customer ID)</strong></p>`}
+  ${ticketArgs.customer_id
+      ? `<p><strong>Customer ID:</strong> ${ticketArgs.customer_id}</p>`
+      : `<p><strong>New Lead (no customer ID)</strong></p>`}
   <h3>Message Body</h3>
   <p>${(ticketArgs.message && (ticketArgs.message.message || ticketArgs.message)) || "No additional message provided"}</p>
   <hr>
   <p><small>This is an automated email from the InfiNET Broadband AI Assistant.<br>
-  ${isSupportTicket && ticketId 
-    ? `View ticket: https://infinetbroadband-portal.com.au/admin/support/tickets/${ticketId}` 
-    : `This is a ${type.toLowerCase()} enquiry — to be followed up manually.`}
+  ${isSupportTicket && ticketId
+      ? `View ticket: https://infinetbroadband-portal.com.au/admin/support/tickets/${ticketId}`
+      : `This is a ${type.toLowerCase()} enquiry — to be followed up manually.`}
   </small></p>
 </body>
 </html>`;
@@ -113,6 +118,22 @@ const CONFIG = {
   API_SECRET: "9b8b46ce928bea980a8d092a288372e0",
   USE_ACCESS_TOKEN: true,
 };
+
+console.log("🔧 Splynx base URL:", CONFIG.SPLYNX_BASE_URL);
+
+try {
+  dns.setDefaultResultOrder("ipv4first");
+} catch (_) { }
+
+(async () => {
+  try {
+    const host = new URL(CONFIG.SPLYNX_BASE_URL).hostname;
+    const res = await dns.promises.lookup(host, { all: true });
+    console.log("🔎 Splynx DNS lookup:", host, res);
+  } catch (e) {
+    console.error("🔎 Splynx DNS lookup failed:", e?.message || e, { code: e?.code, hostname: e?.hostname });
+  }
+})();
 
 class SplynxApiClient {
   constructor(config) {
@@ -157,7 +178,14 @@ class SplynxApiClient {
       console.log("✅ Splynx Access token generated");
       return data;
     } catch (err) {
-      console.error("Token generation failed:", err.response?.data || err.message);
+      const extra = {
+        code: err?.code,
+        hostname: err?.hostname,
+        syscall: err?.syscall,
+        address: err?.address,
+        port: err?.port,
+      };
+      console.error("Token generation failed:", err.response?.data || err.message, extra);
       throw err;
     }
   }
@@ -757,6 +785,7 @@ function mkSession(sessionId) {
     collected: {},
     messages: [{ role: "system", content: SYSTEM_PROMPT }],
     lastSeen: new Date().toISOString(),
+    hasGreeted: false,
   };
   sessions.set(id, session);
   return session;
@@ -833,6 +862,7 @@ async function customerLookup({ name, email, phone }) {
   const searchParams = { main_attributes };
   console.log("Customer lookup with params:", searchParams);
   const customers = await splynx.searchCustomers(searchParams);
+  console.log("Customer lookup result:", customers);
   if (!customers || customers.length === 0) {
     return { success: false, message: "No customer found" };
   }
@@ -840,6 +870,7 @@ async function customerLookup({ name, email, phone }) {
     return { success: true, multiple: true, customers };
   }
   const customer = customers[0];
+  console.log("Selected customer:", customer);
   let services = { internet: [], voice: [], recurring: [] };
   try {
     let allInternet = await splynx.getCustomerInternetServices(customer.id);
@@ -1002,11 +1033,11 @@ app.post("/api/voice", upload.single("audio"), async (req, res) => {
       const ttsBuf = await makeTTS(prompt);
       session.lastSeen = new Date().toISOString();
       sessions.set(session.id, session);
-      return res.json({ 
-        sessionId: session.id, 
-        text: prompt, 
+      return res.json({
+        sessionId: session.id,
+        text: prompt,
         audioBase64: ttsBuf ? ttsBuf.toString("base64") : null,
-        userText: null 
+        userText: null
       });
     }
     session.messages.push({ role: "user", content: userTextRaw });
@@ -1144,10 +1175,10 @@ app.post("/api/voice", upload.single("audio"), async (req, res) => {
   } finally {
     try {
       if (uploadedPath && fs.existsSync(uploadedPath)) fs.unlinkSync(uploadedPath);
-    } catch (_) {}
+    } catch (_) { }
     try {
       if (convertedPath && convertedPath !== uploadedPath && fs.existsSync(convertedPath)) fs.unlinkSync(convertedPath);
-    } catch (_) {}
+    } catch (_) { }
   }
 });
 
@@ -1155,6 +1186,35 @@ app.get("/", (req, res) => {
   res.send(`<h1 style="text-align:center;margin-top:100px;font-family:sans-serif;color:#00bfff">✅ InfiNET AI Backend is running!<br><br>Open index.html in your browser.</h1>`);
 });
 
-console.log(`🚀 InfiNET Broadband AI Server running on port ${PORT}`);
-console.log(`🎤 ElevenLabs Turbo v2.5 + OpenAI • Minimum latency mode active`);
-app.listen(PORT);
+// ==================== HTTP SERVER + SOCKET.IO + REALTIME VOICE ====================
+const httpServer = http.createServer(app);
+const io = new SocketIOServer(httpServer, {
+  cors: { origin: "*" },
+  maxHttpBufferSize: 1e7,
+});
+
+setupRealtimeVoice(io, {
+  OPENAI_API_KEY,
+  ELEVENLABS_API_KEY,
+  ELEVENLABS_VOICE_ID,
+  SYSTEM_PROMPT,
+  LOCATIONS,
+  tools,
+  mkSession,
+  sessions,
+  normalizeText,
+  safeParseJSON,
+  applyExtractionToSession,
+  fetchTariffs,
+  determineLocationId,
+  customerLookup,
+  objectToUrlEncoded,
+  splynx,
+  sendTicketEmail,
+});
+
+httpServer.listen(PORT, () => {
+  console.log(`🚀 InfiNET Broadband AI Server running on port ${PORT}`);
+  console.log(`🎤 Realtime API + ElevenLabs WebSocket • Ultra-low latency mode`);
+  console.log(`🔌 Socket.IO ready for voice clients`);
+});
