@@ -669,27 +669,19 @@ export function setupRealtimeVoice(io, deps) {
         // 2 second delay for stability
         await new Promise(r => setTimeout(r, 2000));
 
-        // Now trigger the specific greeting ONLY IF not already greeted
+        // Now trigger the AI to greet the user naturally using its SYSTEM_PROMPT instructions
         if (!session.hasGreeted) {
           session.hasGreeted = true;
-          const greeting = "Hi there! Welcome to InfiNET Broadband. Could you please share your name to get started?";
-          console.log("🗣️ Greeting the user...");
+          console.log("🗣️ Triggering natural AI greeting...");
           
           if (openaiWs?.readyState === WebSocket.OPEN) {
-            // Add greeting to OpenAI history so it knows what it just said
-            openaiWs.send(JSON.stringify({
-              type: "conversation.item.create",
-              item: { type: "message", role: "assistant", content: [{ type: "text", text: greeting }] },
-            }));
+            // Trigger the model's first turn - it will follow the SYSTEM_PROMPT's "START the conversation" rule
+            openaiWs.send(JSON.stringify({ type: "response.create" }));
           }
-          
-          // Save to session and speak via ElevenLabs
-          session.messages.push({ role: "assistant", content: greeting });
           sessions.set(session.id, session);
-          socket.emit("assistant_text_done", greeting);
-          speakViaElevenLabs(greeting);
         } else {
           console.log("ℹ️ Skipping redundant greeting for existing session.");
+          socket.emit("status", "listening");
           socket.emit("status", "listening");
         }
       } catch (err) {
