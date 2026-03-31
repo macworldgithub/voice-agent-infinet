@@ -34,6 +34,61 @@ export function setupRealtimeVoice(io, deps) {
     let elevenLabsReady = false;
     const PCM_SAMPLE_RATE = 16000;
     let assistantSpeaking = false;
+    let awaitingStructuredInput = false;
+    let structuredInputField = null;
+
+    // ═══════════════ Structured Input Detection ═══════════════
+    function detectStructuredInputRequest(text) {
+      if (!text) return null;
+      const lower = text.toLowerCase();
+      const emailPatterns = [
+        /\b(your|the|an?)\s+email/i,
+        /email\s+address/i,
+        /provide.*email/i,
+        /share.*email/i,
+        /enter.*email/i,
+        /what('?s|\s+is)\s+your\s+email/i,
+        /could you.*email/i,
+        /please.*email/i,
+        /confirm.*email/i,
+      ];
+      const phonePatterns = [
+        /\b(your|the|a)\s+(phone|mobile|contact)\s*(number)?/i,
+        /phone\s+number/i,
+        /contact\s+number/i,
+        /mobile\s+number/i,
+        /provide.*phone/i,
+        /share.*phone/i,
+        /what('?s|\s+is)\s+your\s+(phone|mobile|contact)/i,
+        /could you.*phone/i,
+        /please.*(phone|mobile|contact)/i,
+        /confirm.*(phone|mobile|contact)/i,
+      ];
+      for (const p of emailPatterns) {
+        if (p.test(text)) return "email";
+      }
+      for (const p of phonePatterns) {
+        if (p.test(text)) return "phone";
+      }
+      return null;
+    }
+
+    /**
+     * Detect if a voice transcript looks like a poorly-transcribed email or phone.
+     * e.g., "john at gmail dot com" or "zero four one two three..."
+     */
+    function detectBadTranscription(text) {
+      if (!text) return null;
+      const lower = text.toLowerCase();
+      // Email-like patterns from voice
+      const emailVoicePatterns = /\b(at\s+(gmail|yahoo|hotmail|outlook|icloud)|dot\s+(com|net|org|au|co)|at\s+\w+\s+dot)\b/i;
+      if (emailVoicePatterns.test(lower)) return "email";
+      // Phone: mostly digits spelled out or a long sequence of spoken digits
+      const spelledDigits = lower.replace(/[^a-z0-9\s]/g, "");
+      const digitWords = (spelledDigits.match(/\b(zero|one|two|three|four|five|six|seven|eight|nine|oh)\b/g) || []);
+      if (digitWords.length >= 6) return "phone";
+      return null;
+    }
 
     async function speakViaElevenLabsRest(text) {
       if (!text?.trim()) return;
@@ -88,7 +143,7 @@ export function setupRealtimeVoice(io, deps) {
               instructions,
               modalities: ["text"],
               input_audio_format: "pcm16",
-              turn_detection: { type: "server_vad", threshold: 0.5, silence_duration_ms: 800, prefix_padding_ms: 300 },
+              turn_detection: { type: "server_vad", threshold: 0.8, silence_duration_ms: 500, prefix_padding_ms: 300 },
               tools: realtimeTools,
               tool_choice: "auto",
               input_audio_transcription: { model: "whisper-1" },
@@ -304,19 +359,13 @@ export function setupRealtimeVoice(io, deps) {
           break;
 
         case "input_audio_buffer.speech_started":
-          // Ignore speech detection during the very first part of assistant speech (mitigate echo)
-          // or if the assistant has just started responding.
-          if (assistantSpeaking) {
-            console.log("🤫 VAD detection during assistant speech (potential echo suppression)");
-            // We still emit barge-in events, but maybe delay them?
-            // For now, let's just allow it but ensure assistantSpeaking is true
-          }
+          console.log(`🎙️ User started speaking...`);
           socket.emit("status", "user_speaking");
           socket.emit("interrupt");
           socket.emit("audio_interrupt");
           // Reset any in-progress TTS chunking for the previous response.
           clearTtsStreamingState();
-          // Strong reset for current voice generation
+          // Reset for current voice generation
           ttsChunks = [];
           lastTtsText = "";
           ttsInFlight = false;
@@ -325,8 +374,7 @@ export function setupRealtimeVoice(io, deps) {
           if (ttsSendTimer) { clearTimeout(ttsSendTimer); ttsSendTimer = null; }
           try {
             if (elevenLabsWs?.readyState === WebSocket.OPEN) {
-              // Attempt to terminate any in-flight generation
-              elevenLabsWs.send(JSON.stringify({ text: "", flush: true }));
+              elevenLabsWs.send(JSON.stringify({ text: " ", flush: true }));
             }
           } catch (_) { }
           break;
@@ -351,6 +399,24 @@ export function setupRealtimeVoice(io, deps) {
               if (assistantSpeaking && (looksLikeEmail || looksLikePhone)) {
                 console.log(`🟡 Transcript during assistant speech allowed (identifier detected): "${cleaned.substring(0, 80)}..."`);
               }
+
+              // Fallback: detect poorly-transcribed email/phone and auto-trigger input UI
+              if (!awaitingStructuredInput) {
+                const badTranscript = detectBadTranscription(cleaned);
+                if (badTranscript) {
+                  console.log(`⚠️ Bad transcription detected (${badTranscript}): "${cleaned.substring(0, 80)}" — triggering structured input`);
+                  awaitingStructuredInput = true;
+                  structuredInputField = badTranscript;
+                  const placeholder = badTranscript === "email" ? "Enter your email address" : "Enter your phone number";
+                  socket.emit("request_structured_input", {
+                    field: badTranscript,
+                    prompt: placeholder,
+                  });
+                  // Don't forward this mangled transcript to the AI
+                  break;
+                }
+              }
+
               console.log(`👤 User: "${cleaned}"`);
               socket.emit("user_transcript", cleaned);
               session.messages.push({ role: "user", content: cleaned });
@@ -374,6 +440,19 @@ export function setupRealtimeVoice(io, deps) {
             session.messages.push({ role: "assistant", content: event.text });
             sessions.set(session.id, session);
             socket.emit("assistant_text_done", event.text);
+
+            // Check if AI is asking for email or phone → trigger structured input UI
+            const detectedField = detectStructuredInputRequest(event.text);
+            if (detectedField) {
+              awaitingStructuredInput = true;
+              structuredInputField = detectedField;
+              const placeholder = detectedField === "email" ? "Enter your email address" : "Enter your phone number";
+              console.log(`📋 Structured input requested: ${detectedField}`);
+              socket.emit("request_structured_input", {
+                field: detectedField,
+                prompt: placeholder,
+              });
+            }
           }
           break;
 
@@ -441,10 +520,32 @@ export function setupRealtimeVoice(io, deps) {
       catch (err) { result = JSON.stringify({ success: false, error: err.message }); }
 
       if (openaiWs?.readyState === WebSocket.OPEN) {
-        openaiWs.send(JSON.stringify({ type: "conversation.item.create", item: { type: "function_call_output", call_id, output: result } }));
-        openaiWs.send(JSON.stringify({ type: "response.create" }));
+        // Send the tool output
+        console.log(`📤 [WS-1] Sending tool output for ${fn}`);
+        openaiWs.send(JSON.stringify({
+          type: "conversation.item.create",
+          item: {
+            type: "function_call_output",
+            call_id,
+            output: result
+          }
+        }));
+
+        // Explicitly trigger the next response turn after a tiny sync delay
+        // This ensures the tool output is fully processed by the session first.
+        setTimeout(() => {
+          if (openaiWs?.readyState === WebSocket.OPEN) {
+            openaiWs.send(JSON.stringify({ type: "response.create" }));
+          }
+        }, 200);
       }
+      // Decrement counter
       pendingFunctionCalls = Math.max(0, pendingFunctionCalls - 1);
+
+      // If no more tools pending, ensure we are ready for user or AI speech
+      if (pendingFunctionCalls === 0) {
+        socket.emit("status", "processing"); // AI will take over with response.create
+      }
     }
 
     async function execTool(fn, args) {
@@ -476,6 +577,9 @@ export function setupRealtimeVoice(io, deps) {
     // ═══════════════ Client Audio → OpenAI ═══════════════
     let lastAudioLog = 0;
     socket.on("audio_chunk", (b64) => {
+      // Suppress audio forwarding while waiting for structured input (mic muted on frontend)
+      if (awaitingStructuredInput) return;
+
       const now = Date.now();
       if (now - lastAudioLog > 2000) {
         // Calculate Volume (RMS)
@@ -486,7 +590,7 @@ export function setupRealtimeVoice(io, deps) {
           let sum = 0;
           for (let i = 0; i < i16.length; i++) sum += i16[i] * i16[i];
           rms = Math.sqrt(sum / i16.length) / 32768;
-        } catch (_) {}
+        } catch (_) { }
 
         const state = ["CONNECTING", "OPEN", "CLOSING", "CLOSED"][openaiWs?.readyState] || "UNKNOWN";
         console.log(`🎤 [${socket.id}] [Vol: ${(rms * 100).toFixed(1)}%] [OpenAI: ${state}]`);
@@ -495,6 +599,53 @@ export function setupRealtimeVoice(io, deps) {
       if (openaiWs?.readyState === WebSocket.OPEN) {
         openaiWs.send(JSON.stringify({ type: "input_audio_buffer.append", audio: b64 }));
       }
+    });
+
+    // ═══════════════ Structured Input (bypasses STT) ═══════════════
+    socket.on("structured_input", (payload) => {
+      if (!payload || !payload.field || !payload.value) {
+        console.warn("⚠️ Invalid structured_input payload:", payload);
+        return;
+      }
+      const { field, value } = payload;
+      console.log(`📋 Structured input received: ${field} = "${value}"`);
+
+      // Clear the awaiting state
+      awaitingStructuredInput = false;
+      structuredInputField = null;
+
+      // Save to session collected fields
+      if (field === "email") {
+        session.collected.email = value;
+      } else if (field === "phone") {
+        session.collected.phone = value;
+      }
+      sessions.set(session.id, session);
+
+      // Inject the typed value as a user message into the OpenAI conversation
+      const userMessage = field === "email" ? `My email is ${value}` : `My phone number is ${value}`;
+      session.messages.push({ role: "user", content: userMessage });
+      sessions.set(session.id, session);
+
+      socket.emit("user_transcript", userMessage);
+
+      if (openaiWs?.readyState === WebSocket.OPEN) {
+        // Add as conversation item
+        openaiWs.send(JSON.stringify({
+          type: "conversation.item.create",
+          item: {
+            type: "message",
+            role: "user",
+            content: [{ type: "input_text", text: userMessage }],
+          },
+        }));
+        // Trigger AI to respond
+        openaiWs.send(JSON.stringify({ type: "response.create" }));
+      }
+
+      // Tell frontend to resume mic
+      socket.emit("structured_input_accepted", { field, value });
+      socket.emit("status", "listening");
     });
 
     // ═══════════════ Cleanup ═══════════════
@@ -518,16 +669,21 @@ export function setupRealtimeVoice(io, deps) {
         // 2 second delay for stability
         await new Promise(r => setTimeout(r, 2000));
 
-        // Now send greeting ONLY IF not already greeted
+        // Now trigger the specific greeting ONLY IF not already greeted
         if (!session.hasGreeted) {
+          session.hasGreeted = true;
           const greeting = "Hi there! Welcome to InfiNET Broadband. Could you please share your name to get started?";
+          console.log("🗣️ Greeting the user...");
+          
           if (openaiWs?.readyState === WebSocket.OPEN) {
+            // Add greeting to OpenAI history so it knows what it just said
             openaiWs.send(JSON.stringify({
               type: "conversation.item.create",
               item: { type: "message", role: "assistant", content: [{ type: "text", text: greeting }] },
             }));
           }
-          session.hasGreeted = true;
+          
+          // Save to session and speak via ElevenLabs
           session.messages.push({ role: "assistant", content: greeting });
           sessions.set(session.id, session);
           socket.emit("assistant_text_done", greeting);

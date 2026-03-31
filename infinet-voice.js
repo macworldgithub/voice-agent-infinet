@@ -237,6 +237,7 @@ class SplynxApiClient {
         url,
         headers,
         params,
+        timeout: 15000,
         ...(data && { data: data instanceof URLSearchParams ? data.toString() : data }),
       };
       const response = await axios(config);
@@ -523,6 +524,7 @@ STRICT RULES:
 - If the user has a preferredName in collected fields, ALWAYS address them warmly by that name in every response.
 - Do NOT say anything like "we will connect you to a sales agent", "transferring you to support", "handover to human", "I'll put you through" or similar phrases.
 - When enough information is collected per the flow below, call the create_ticket tool with appropriate parameters (generate subject based on the conversation, use issueSummary or leadInterest in the message body).
+- IMPORTANT: Once a tool (like address lookup, customer lookup, or plans) returns a result, you MUST proceed with your summary or next question IMMEDIATELY without waiting for further user input.
 - After create_ticket succeeds, reply with the exact message including the ticket ID: "Thank you \${preferredName}! I have raised a ticket for you. You will receive the ticket details via email shortly. Our team will contact you shortly."
 - Use the Knowledge base below to answer questions concisely.
 - For support issues, if issueSummary is not collected, ask: "Please provide a brief description of the issue." Once a basic description is provided, immediately ask for additional high-level details to help our support team (e.g. "Any more details like when it started, issues, or error messages?"). Combine everything into the final issueSummary.
@@ -743,6 +745,7 @@ const createTicketTool = {
           mail_bcc: { type: "string" },
         },
       },
+
     },
     required: ["subject", "priority"],
   },
@@ -1025,7 +1028,7 @@ app.post("/api/voice", upload.single("audio"), async (req, res) => {
     }
     const transcriptionResp = await openai.audio.transcriptions.create({
       file: fs.createReadStream(convertedPath),
-      model: "gpt-4o-mini-transcribe",
+      model: "whisper-1",
     });
     const userTextRaw = normalizeText(transcriptionResp?.text || "");
     if (!userTextRaw) {
@@ -1179,6 +1182,106 @@ app.post("/api/voice", upload.single("audio"), async (req, res) => {
     try {
       if (convertedPath && convertedPath !== uploadedPath && fs.existsSync(convertedPath)) fs.unlinkSync(convertedPath);
     } catch (_) { }
+  }
+});
+
+// ==================== STRUCTURED INPUT (HTTP fallback) ====================
+app.post("/api/voice/structured-input", async (req, res) => {
+  try {
+    const { sessionId, type, field, value } = req.body || {};
+    if (!sessionId || !field || !value) {
+      return res.status(400).json({ error: "Missing sessionId, field, or value" });
+    }
+    if (!["email", "phone"].includes(field)) {
+      return res.status(400).json({ error: "Field must be 'email' or 'phone'" });
+    }
+    const session = sessions.get(sessionId);
+    if (!session) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+
+    // Save to collected fields
+    session.collected[field] = value;
+
+    // Inject as user message
+    const userMessage = field === "email" ? `My email is ${value}` : `My phone number is ${value}`;
+    session.messages.push({ role: "user", content: userMessage });
+
+    // Get AI response
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: session.messages,
+      functions: tools,
+      function_call: "auto",
+      temperature: 0.0,
+      max_tokens: 300,
+    });
+    const msg = completion.choices?.[0]?.message;
+    let assistantText = null;
+
+    if (msg?.function_call) {
+      const funcName = msg.function_call.name;
+      const args = safeParseJSON(msg.function_call.arguments) || {};
+      session.messages.push(msg);
+      let toolContent;
+
+      if (funcName === "extract_call_fields") {
+        applyExtractionToSession(session, args);
+        toolContent = JSON.stringify({ success: true });
+      } else if (funcName === "customer_lookup") {
+        try { toolContent = JSON.stringify(await customerLookup(args)); }
+        catch (err) { toolContent = JSON.stringify({ success: false, error: err.message }); }
+      } else if (funcName === "create_ticket") {
+        try {
+          let fixedArgs = { ...args };
+          if (typeof fixedArgs.message === "string") fixedArgs.message = { message: fixedArgs.message };
+          const urlEncoded = objectToUrlEncoded(fixedArgs);
+          const response = await splynx.request("POST", "admin/support/tickets", urlEncoded);
+          const isSupportTicket = session.collected.customerType === "existing";
+          toolContent = JSON.stringify({ success: true, ticket_id: response.id });
+          await sendTicketEmail(response.id, fixedArgs, session.collected, isSupportTicket);
+        } catch (err) {
+          toolContent = JSON.stringify({ success: false, error: err.message || "Failed to create ticket" });
+        }
+      } else {
+        toolContent = JSON.stringify({ error: `Unhandled tool: ${funcName}` });
+      }
+
+      session.messages.push({ role: "function", name: funcName, content: toolContent });
+      const collectedSummary = `CollectedFields: ${JSON.stringify(session.collected || {})}.`;
+      const followupSystem = `You are a concise assistant for ISP CRM. Use collected fields and ask for remaining missing info concisely.`;
+      const finalMessages = [
+        { role: "system", content: followupSystem },
+        ...session.messages,
+        { role: "system", content: collectedSummary },
+      ];
+      const finalResp = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: finalMessages,
+        temperature: 0.0,
+        max_tokens: 350,
+      });
+      assistantText = finalResp.choices?.[0]?.message?.content?.trim() || "Thanks — I have your details.";
+      session.messages.push({ role: "assistant", content: assistantText });
+    } else if (msg?.content) {
+      assistantText = msg.content;
+      session.messages.push({ role: "assistant", content: assistantText });
+    }
+
+    const ttsBuf = await makeTTS(assistantText);
+    session.lastSeen = new Date().toISOString();
+    sessions.set(session.id, session);
+
+    return res.json({
+      sessionId: session.id,
+      text: assistantText,
+      audioBase64: ttsBuf ? ttsBuf.toString("base64") : null,
+      userText: userMessage,
+      collected: session.collected,
+    });
+  } catch (err) {
+    console.error("structured-input error:", err);
+    return res.status(500).json({ error: err?.message || "server error" });
   }
 });
 
