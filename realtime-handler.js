@@ -226,7 +226,7 @@ export function setupRealtimeVoice(io, deps) {
             }
 
             if (msg.audio) {
-              if (!ttsInFlight && ttsChunks.length === 0) {
+              if (!ttsInFlight && !ttsStartedForResponse && ttsChunks.length === 0) {
                 // If we timed out or another request started, ignore delayed WS audio
                 return;
               }
@@ -241,18 +241,18 @@ export function setupRealtimeVoice(io, deps) {
               if (ttsChunks.length > 0) {
                 const fullBuffer = Buffer.concat(ttsChunks);
                 // Only send audio_complete if we haven't already fallen back or finished
-                if (ttsInFlight) {
-                  socket.emit("audio_complete", fullBuffer.toString("base64"));
-                  console.log(`🔊 [WS-2] Sent ${ttsChunks.length} audio chunks (${fullBuffer.length} bytes)`);
-                }
+                socket.emit("audio_complete", fullBuffer.toString("base64"));
+                console.log(`🔊 [WS-2] Sent ${ttsChunks.length} audio chunks (${fullBuffer.length} bytes)`);
                 ttsChunks = [];
                 ttsInFlight = false;
+                ttsStartedForResponse = false;
                 if (ttsTimeout) { clearTimeout(ttsTimeout); ttsTimeout = null; }
               } else {
-                console.warn("[WS-2] Final received but no audio chunks were produced");
+                console.warn("⚠️ [WS-2] Final received but no audio chunks were produced");
                 socket.emit("error_msg", "ElevenLabs produced no audio. Check voice/model configuration.");
                 // Fallback: generate via REST so the user still hears something.
                 ttsInFlight = false;
+                ttsStartedForResponse = false;
                 if (ttsTimeout) { clearTimeout(ttsTimeout); ttsTimeout = null; }
                 speakViaElevenLabsRest(lastTtsText);
               }
@@ -456,6 +456,19 @@ export function setupRealtimeVoice(io, deps) {
           }
           break;
 
+        case "response.output_item.added":
+          if (event.item?.type === "function_call") {
+            const fnName = event.item.name || event.item.function_call?.name;
+            if (fnName === "create_ticket") {
+              session.finalLock = true;
+              console.log(`🔒 Tool '${fnName}' planned. Mic locked.`);
+              if (openaiWs?.readyState === WebSocket.OPEN) {
+                openaiWs.send(JSON.stringify({ type: "input_audio_buffer.clear" }));
+              }
+            }
+          }
+          break;
+
         case "response.output_item.done":
           if (event.item?.type === "function_call") {
             pendingFunctionCalls++;
@@ -479,17 +492,21 @@ export function setupRealtimeVoice(io, deps) {
                   speakViaElevenLabsRest(assistantTextBuffer);
                 }, 9000);
               }
-              if (ttsSendTimer) {
-                clearTimeout(ttsSendTimer);
-                ttsSendTimer = null;
-              }
               sendTtsChunkNow({ flush: true });
               clearTtsStreamingState();
             } else {
               // WS not available: do one-shot REST TTS.
+              console.warn("⚠️ [WS-2] WebSocket not available, falling back to REST");
               speakViaElevenLabsRest(assistantTextBuffer);
             }
-            // Ensure status returns to listening if we have a mic open
+            
+            // Clear final lock if we hear a confirmation-like message
+            const t = assistantTextBuffer.toLowerCase();
+            if (t.includes("raised") || t.includes("ticket") || t.includes("email") || t.includes("confirm")) {
+              session.finalLock = false;
+              console.log("🔓 Final confirmation detected. Mic unlocked.");
+            }
+
             if (!pendingFunctionCalls) {
               socket.emit("status", "listening");
             }
@@ -516,6 +533,11 @@ export function setupRealtimeVoice(io, deps) {
       console.log(`🔧 Tool: ${fn}`, JSON.stringify(args).substring(0, 200));
 
       let result;
+      socket.emit("status", "processing"); // Lock mic during external API work
+      // Clear OpenAI's audio buffer to prevent "distractions" from noise during the tool call
+      if (openaiWs?.readyState === WebSocket.OPEN) {
+        openaiWs.send(JSON.stringify({ type: "input_audio_buffer.clear" }));
+      }
       try { result = await execTool(fn, args); }
       catch (err) { result = JSON.stringify({ success: false, error: err.message }); }
 
@@ -535,21 +557,25 @@ export function setupRealtimeVoice(io, deps) {
         // This ensures the tool output is fully processed by the session first.
         setTimeout(() => {
           if (openaiWs?.readyState === WebSocket.OPEN) {
+            console.log(`📡 [WS-1] Triggering AI confirm turn (response.create)...`);
             openaiWs.send(JSON.stringify({ type: "response.create" }));
           }
-        }, 200);
+        }, 250);
       }
       // Decrement counter
       pendingFunctionCalls = Math.max(0, pendingFunctionCalls - 1);
 
       // If no more tools pending, ensure we are ready for user or AI speech
       if (pendingFunctionCalls === 0) {
-        socket.emit("status", "processing"); // AI will take over with response.create
+        socket.emit("status", "processing"); // Stay in processing, AI will take over with response.create
       }
     }
 
     async function execTool(fn, args) {
-      if (fn === "extract_call_fields") { applyExtractionToSession(session, args); return JSON.stringify({ success: true }); }
+      if (fn === "extract_call_fields") { 
+        applyExtractionToSession(session, args); 
+        return JSON.stringify({ success: true }); 
+      }
       if (fn === "get_internet_plans") {
         const t = await fetchTariffs();
         return JSON.stringify({ success: true, plans: t.map(x => ({ id: x.id, title: x.title, price: parseFloat(x.price), download: `${x.speed_download / 1000} Mbps`, upload: `${x.speed_upload / 1000} Mbps`, available_for_locations: x.available_for_locations || [] })) });
@@ -577,8 +603,15 @@ export function setupRealtimeVoice(io, deps) {
     // ═══════════════ Client Audio → OpenAI ═══════════════
     let lastAudioLog = 0;
     socket.on("audio_chunk", (b64) => {
-      // Suppress audio forwarding while waiting for structured input (mic muted on frontend)
-      if (awaitingStructuredInput) return;
+      // Robust Mic Lock:
+      // 1. Lock while waiting for structured input
+      // 2. Lock while a tool is running (locks mic during API calls)
+      // 3. Lock during the "Email -> Ticket" final transition
+      const shouldSuppress = awaitingStructuredInput || 
+                             pendingFunctionCalls > 0 || 
+                             session.finalLock;
+                             
+      if (shouldSuppress) return;
 
       const now = Date.now();
       if (now - lastAudioLog > 2000) {

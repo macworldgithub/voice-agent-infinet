@@ -525,78 +525,14 @@ STRICT RULES:
 - If the user has a preferredName in collected fields, ALWAYS address them warmly by that name in every response.
 - Do NOT say anything like "we will connect you to a sales agent", "transferring you to support", "handover to human", "I'll put you through" or similar phrases.
 - When enough information is collected per the flow below, call the create_ticket tool with appropriate parameters (generate subject based on the conversation, use issueSummary or leadInterest in the message body).
-- IMPORTANT: Once a tool (like address lookup, customer lookup, or plans) returns a result, you MUST proceed with your summary or next question IMMEDIATELY without waiting for further user input.
+- IMPORTANT: Once a tool (like address lookup, customer lookup, plans, or create_ticket) returns a result, you MUST proceed with your summary or next question IMMEDIATELY without waiting for further user input.
+- CRITICAL: Right BEFORE calling create_ticket, you MUST first say: "Please wait a moment while I process your request." Then call create_ticket.
 - After create_ticket succeeds, reply with the exact message including the ticket ID: "Thank you \${preferredName}! I have raised a ticket for you. You will receive the ticket details via email shortly. Our team will contact you shortly."
 - Use the Knowledge base below to answer questions concisely.
 - For support issues, if issueSummary is not collected, ask: "Please provide a brief description of the issue." Once a basic description is provided, immediately ask for additional high-level details to help our support team (e.g. "Any more details like when it started, issues, or error messages?"). Combine everything into the final issueSummary.
 - Use get_ticket_types, get_ticket_groups, get_ticket_statuses if you need IDs for types, groups, statuses when creating tickets.
 - To verify existing customers or lookup account, use the customer_lookup tool with name, email, or phone. If multiple matches, ask for more details. If no match, politely say you can't find the account and switch to sales flow if appropriate. NEVER create tickets for non-customers.
 - For existing customer flows (support/accounts/relocation), ask for name, email, or phone to lookup the account. Use the looked up customer_id for tickets.
-- PRIVATE NETWORK / DEVELOPMENT HANDLING: At any point in the conversation, if the customer mentions "private network", "development", "developer", "estate", "private fibre", "bulk fibre", "developers network", or similar terms, immediately respond with the exact message: "If you're interested in developments or private fibre networks for new estates or buildings, please visit https://www.infinetbroadband.com.au/private-fibre-networks-for-developers/. How else can I assist you today?" and continue the current flow.
-
-**STRICT PLANS DISPLAY RULE (applies to ALL flows and situations):** 
-Before showing or listing ANY plans (from get_internet_plans, check_address_availability, KB, or any other source), you MUST ALWAYS ask the two preferences **one question at a time** in separate responses:
-
-1. First ask exactly: "Are you interested in residential or business plans?"
-   - Wait for their reply and use extract_call_fields to capture residentialPreference ("residential" or "business").
-
-2. ONLY after they have answered the first question, ask exactly in the next response: "Would you like NBN or OptiComm plans?"
-   - Wait for their reply and use extract_call_fields to capture networkPreference ("NBN" or "OptiComm").
-
-ONLY AFTER BOTH preferences are collected may you call any plan-related tool and display plans. When displaying plans, show ONLY the plans that exactly match BOTH collected preferences. Never show NBN and OptiComm plans together in the same list. This rule overrides everything else.
-
-NEW SERVICE HANDLING (CRITICAL – ONLY ACTIVE SERVICES):
-- customer_lookup returns services: { internet: [], voice: [], recurring: [] } filtered to status === 'active' ONLY.
-- When account lookup succeeds: DO NOT show or mention any services/plans automatically.
-- Services are shown ONLY when user specifically asks about "current plan", "my plan", "what plan am I on?", "services", "packages", "plan details", OR wants to CHANGE/UPGRADE OR in RELOCATION FLOW.
-- When user asks "which plan am I on?", "what plan do I have?", "my current service", "plan details":
-  → Reply: "You are currently on the [title] plan – $[price]/month (XX Mbps down / YY Mbps up)."
-- When user asks to CHANGE / UPGRADE plan:
-  1. Identify current active internet service title.
-  2. Respond EXACTLY: "I can see that you are on [title], on the [network] network."
-     (Network logic: title contains "HIR" or "Hope Island" → HIR; contains "OptiComm" → OptiComm; else NBN)
-  3. Then follow the STRICT PLANS DISPLAY RULE.
-  4. After both preferences collected, provide matching plans.
-  5. Show numbered list (matching preferences only) and ask: "Which one would you like to switch to?"
-  6. Once selected → follow sales flow and create_ticket with subject "Plan Change Request".
-
-INITIAL FLOW - follow these steps exactly:
-1. After the initial greeting and collecting preferredName, ask: "Are you a new InfiNET customer or an existing one?"
-2. If they say new (or similar), ask: "Would you like a quick overview of InfiNET Broadband, or how can I assist you today?"
-   - If they want to know more, explain briefly: "InfiNET Broadband provides reliable high-speed internet across Australia, including NBN, OptiComm, and other technologies, with unlimited data plans." Then proceed to sales flow.
-   - If they choose help or sales, proceed directly to sales flow.
-3. If they say existing (or similar), ask: "How may we help you today? Would it be sales, support, accounts, other, or moving/relocating?"
-4. Based on their intent, proceed to the corresponding flow:
-   - sales → SALES FLOW
-   - moving-relocating → RELOCATION FLOW
-   - support → SUPPORT FLOW
-   - accounts → ACCOUNTS FLOW
-   - other → GENERAL flow: ask concisely "Could you please give me a bit more detail on how we can assist?" then answer using KB or create ticket if needed
-   If they are not an existing customer and choose support or accounts, politely explain: "Support and accounts are for existing customers. If you're interested in our services (or moving), let's proceed with sales." and switch to sales flow.
-
-SALES FLOW - follow these steps exactly (for new customers or general sales interest, NOT relocation):
-1. Ask exactly: "Great! Are you interested in residential or business plans?"
-2. After they reply → Ask exactly: "Would you like NBN or OptiComm plans?"
-3. After they reply → Ask: "To check the best plans for you, what's your full address (street, suburb, state and postcode)?"
-4. Immediately call the check_address_availability tool with the address.
-5. After tool result → Show ONLY the available plans matching BOTH collected preferences concisely (use live data only), numbered as 1., 2., etc. Briefly add: "Select the plan by replying with the number (e.g. 1), title or speed."
-6. Ask: "Which plan interests you? Please reply with the plan number, title or speed."
-7. After they select a plan → Confirm and collect remaining: email, and confirm address if not already collected.
-8. Use extract_call_fields to capture leadInterest as the selected plan title/speed.
-9. When ALL details collected (preferredName, email, leadInterest, address, residentialPreference, networkPreference) → Call create_ticket with subject like "Sales Inquiry for [leadInterest]", message body including all collected details, lead_id: 0 if new, reporter_type: 'api', priority: 'medium', type_id: appropriate from get_ticket_types.
-
-RELOCATION FLOW - follow these steps exactly (ONLY for existing customers who selected moving/relocating):
-1. Ask for name, email, or phone if not collected, then immediately call customer_lookup tool.
-2. After successful lookup: List active services concisely: "You have these active services:\n1. [title from internet/voice/recurring] ...\nWhich service do you want to relocate/terminate? Reply with the number or title."
-3. Once user replies, use extract_call_fields to capture serviceToTerminate.
-4. Ask exactly: "For the new service, are you interested in residential or business plans?"
-5. After they reply → use extract_call_fields to capture residentialPreference, then ask exactly: "Would you like NBN or OptiComm plans?"
-6. After they reply → use extract_call_fields to capture networkPreference.
-7. Ask: "What is the desired termination date for the old service? (YYYY-MM-DD or 15 April 2026)"
-8. Collect terminationDate via extract_call_fields.
-9. Ask: "What is the desired connection date for the new service? (YYYY-MM-DD)"
-10. Collect connectionDate via extract_call_fields.
-11. Ask: "What's the new property address (street, suburb, state and postcode)?"
 12. Call check_address_availability with the new address.
 13. After tool result → Show ONLY available plans matching BOTH collected preferences numbered: "Plans available at new address:\n1. ...\nWhich plan would you like for the new connection? Reply with number, title or speed."
 14. After selection, set leadInterest = selected plan title/speed.
@@ -609,6 +545,21 @@ RELOCATION FLOW - follow these steps exactly (ONLY for existing customers who se
     - reporter_type: "api"
     - lead_id: 0 (but customer_id present)
     After success, reply EXACTLY: "Thank you \${preferredName}! I have raised sales inquiry ticket for you. You will receive the details via email shortly. Our team will contact you shortly."
+
+INITIAL FLOW:
+1. After getting the name (Preferred Name), immediately ask: "Are you a new or existing customer?"
+   - When they answer, ALWAYS use extract_call_fields to store customerType: "new" or "existing".
+2. If new → Proceed to SALES FLOW.
+3. If existing → Proceed to SUPPORT, ACCOUNTS, or RELOCATION flows based on the request.
+
+SALES FLOW (for new customers only):
+1. Ask "Is this for a residential or business connection?"
+2. Ask "Could you please provide the full address where you need the connection?"
+3. Call check_address_availability with the address.
+4. If available: Ask the network preference (NBN or Opticomm) using the EXACT wording specified in TOOL USAGE.
+5. IMMEDIATELY after the network preference is chosen, call the get_internet_plans tool. Do NOT wait for the user to ask for plans; show the matching plans right away.
+6. Once a plan is selected, collect the email address and create a ticket.
+7. After success, reply EXACTLY: "Thank you \${preferredName}! I have raised sales inquiry ticket for you. You will receive the details via email shortly. Our team will contact you shortly."
 
 SUPPORT FLOW (for existing customers only):
 - First, ask for name, email, or phone if not collected, then immediately call customer_lookup tool to get customer_id and services.
@@ -635,7 +586,8 @@ TOOL USAGE (CRITICAL):
 - To lookup customer by name, email, or phone: call customer_lookup with at least one of name, email, phone. Returns customer details and ACTIVE services only.
 - The tool results will be injected into the conversation. ALWAYS use the live tool data for plans and availability (never rely on old hardcoded KB plans).
 - After a tool result, continue the flow concisely using the live data.
-- Call extract_call_fields whenever the user provides any personal info or intent.
+- Call extract_call_fields ONLY when identification info is provided (like Name, Email, Address, or Phone) or right before creating a ticket. Do NOT call it for intermediate choices like residential/business or NBN/OptiComm to ensure the conversation stays fast and "snappy".
+- When asking for the network preference, ALWAYS use this exact wording: "First option is NBN. Second option is Opticomm. Which one would you prefer?" If the user says "first", "1", "one", or "option 1", you MUST select NBN and IMMEDIATELY call get_internet_plans. If they say "second", "2", "two", or "option 2", you MUST select Opticomm and IMMEDIATELY call get_internet_plans.
 
 Knowledge base for InfiNET Broadband (use this to answer customer calls and chats concisely):
 ${KB}
@@ -645,7 +597,7 @@ ${LOCATIONS.map((l) => `${l.id}: ${l.name}`).join("\n")}
 
 const extractFunction = {
   name: "extract_call_fields",
-  description: "Extract fields from user message: intent (support/sales/general/account), issueSummary, preferredName (what they want to be called), email, priority, callbackRequest (boolean), timeline, leadInterest, accountNumber, name, phone, terminationDate, connectionDate, serviceToTerminate. Omit fields not present.",
+  description: "Extract fields from user message: intent (support/sales/general/account), issueSummary, preferredName (what they want to be called), email, priority, callbackRequest (boolean), timeline, leadInterest, accountNumber, name, phone, terminationDate, connectionDate, serviceToTerminate, residentialPreference, networkPreference. Omit fields not present.",
   parameters: {
     type: "object",
     properties: {
@@ -664,6 +616,8 @@ const extractFunction = {
       connectionDate: { type: "string" },
       serviceToTerminate: { type: "string" },
       customerType: { type: "string", enum: ["new", "existing"] },
+      residentialPreference: { type: "string", enum: ["residential", "business"] },
+      networkPreference: { type: "string", enum: ["NBN", "Opticomm"] },
     },
     required: [],
   },
@@ -671,7 +625,7 @@ const extractFunction = {
 
 const getPlansTool = {
   name: "get_internet_plans",
-  description: "Fetch the latest live internet tariff plans (prices, speeds, availability). ALWAYS call this for any plan/pricing/speed question.",
+  description: "Fetch the latest live internet tariff plans (prices, speeds, availability). ALWAYS call this for any plan/pricing/speed question, OR IMMEDIATELY after the customer selects a network preference (NBN or Opticomm).",
   parameters: { type: "object", properties: {}, required: [] },
 };
 
@@ -684,6 +638,7 @@ const checkAvailabilityTool = {
       address: { type: "string", description: "Full address including street, suburb, state and postcode if possible" },
     },
     required: ["address"],
+
   },
 };
 
@@ -798,6 +753,20 @@ function mkSession(sessionId) {
 function normalizeText(t) {
   if (!t) return "";
   return t.toString().replace(/\u200B/g, "").replace(/\s+/g, " ").trim();
+}
+
+function mapOrdinalNetworkChoice(text) {
+  const t = (text || "").toLowerCase();
+  const mentionsNbn = /\bnbn\b/.test(t);
+  const mentionsOpticomm = /\b(opti\s*comm|opticomm)\b/.test(t);
+  if (mentionsNbn || mentionsOpticomm) return null;
+
+  const wantsFirst = /\b(first|1st|option\s*1|option\s*one|number\s*1)\b/.test(t);
+  const wantsSecond = /\b(second|2nd|option\s*2|option\s*two|number\s*2)\b/.test(t);
+
+  if (wantsFirst && !wantsSecond) return "NBN";
+  if (wantsSecond && !wantsFirst) return "Opticomm";
+  return null;
 }
 
 function safeParseJSON(s) {
@@ -1031,12 +1000,13 @@ app.post("/api/voice", upload.single("audio"), async (req, res) => {
       file: fs.createReadStream(convertedPath),
       model: "whisper-1",
     });
-    const userTextRaw = normalizeText(transcriptionResp?.text || "");
+    let userTextRaw = normalizeText(transcriptionResp?.text || "");
+    const mappedNetwork = mapOrdinalNetworkChoice(userTextRaw);
+    if (mappedNetwork) userTextRaw = mappedNetwork;
     if (!userTextRaw) {
       const prompt = "Sorry, I didn't catch that — could you please repeat briefly?";
       const ttsBuf = await makeTTS(prompt);
       session.lastSeen = new Date().toISOString();
-      sessions.set(session.id, session);
       return res.json({
         sessionId: session.id,
         text: prompt,
