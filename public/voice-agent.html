@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,32 +9,59 @@
     <script src="/socket.io/socket.io.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        body { font-family: 'Inter', system-ui, sans-serif; }
 
-        .mic-button { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+        }
 
-        .recording { animation: pulse-ring 1.8s infinite ease-in-out; }
+        .mic-button {
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
 
-        .thinking { animation: spin 2s linear infinite; }
+        .recording {
+            animation: pulse-ring 1.8s infinite ease-in-out;
+        }
+
+        .thinking {
+            animation: spin 2s linear infinite;
+        }
 
         .speaking-glow {
             animation: glow-pulse 1.2s ease-in-out infinite alternate;
         }
 
         @keyframes pulse-ring {
-            0% { box-shadow: 0 0 0 0 rgba(234, 63, 63, 0.7); }
-            70% { box-shadow: 0 0 0 35px rgba(234, 63, 63, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(234, 63, 63, 0); }
+            0% {
+                box-shadow: 0 0 0 0 rgba(234, 63, 63, 0.7);
+            }
+
+            70% {
+                box-shadow: 0 0 0 35px rgba(234, 63, 63, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(234, 63, 63, 0);
+            }
         }
 
         @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
+            from {
+                transform: rotate(0deg);
+            }
+
+            to {
+                transform: rotate(360deg);
+            }
         }
 
         @keyframes glow-pulse {
-            from { box-shadow: 0 0 20px 5px rgba(0, 191, 255, 0.3); }
-            to { box-shadow: 0 0 40px 15px rgba(0, 191, 255, 0.6); }
+            from {
+                box-shadow: 0 0 20px 5px rgba(0, 191, 255, 0.3);
+            }
+
+            to {
+                box-shadow: 0 0 40px 15px rgba(0, 191, 255, 0.6);
+            }
         }
 
         .volume-bar {
@@ -43,14 +71,23 @@
             transition: height 0.05s ease;
         }
 
-        .end-call { transition: all 0.3s ease; }
+        .end-call {
+            transition: all 0.3s ease;
+        }
 
         #transcript-box {
             scrollbar-width: thin;
             scrollbar-color: #334155 transparent;
         }
-        #transcript-box::-webkit-scrollbar { width: 4px; }
-        #transcript-box::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+
+        #transcript-box::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        #transcript-box::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
 
         /* Structured Input Overlay */
         #structured-input-container {
@@ -64,11 +101,13 @@
             transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.35s ease;
             pointer-events: none;
         }
+
         #structured-input-container.visible {
             transform: translateY(0);
             opacity: 1;
             pointer-events: auto;
         }
+
         .si-backdrop {
             background: rgba(15, 23, 42, 0.85);
             backdrop-filter: blur(20px);
@@ -76,6 +115,7 @@
             border-top: 1px solid rgba(100, 116, 139, 0.25);
             box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.5);
         }
+
         .si-input {
             background: rgba(30, 41, 59, 0.9);
             border: 1.5px solid rgba(100, 116, 139, 0.35);
@@ -88,13 +128,16 @@
             transition: border-color 0.3s ease, box-shadow 0.3s ease;
             font-family: 'Inter', system-ui, sans-serif;
         }
+
         .si-input:focus {
             border-color: #00bfff;
             box-shadow: 0 0 0 3px rgba(0, 191, 255, 0.15), 0 0 20px rgba(0, 191, 255, 0.1);
         }
+
         .si-input::placeholder {
             color: rgba(148, 163, 184, 0.7);
         }
+
         .si-submit {
             background: linear-gradient(135deg, #00bfff 0%, #0ea5e9 100%);
             color: white;
@@ -108,19 +151,23 @@
             font-family: 'Inter', system-ui, sans-serif;
             white-space: nowrap;
         }
+
         .si-submit:hover {
             background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
             transform: translateY(-1px);
             box-shadow: 0 4px 20px rgba(0, 191, 255, 0.3);
         }
+
         .si-submit:active {
             transform: translateY(0);
         }
+
         .si-submit:disabled {
             opacity: 0.5;
             cursor: not-allowed;
             transform: none;
         }
+
         .si-label {
             color: #94a3b8;
             font-size: 0.8rem;
@@ -132,9 +179,11 @@
             align-items: center;
             gap: 6px;
         }
+
         .si-icon {
             font-size: 1rem;
         }
+
         .mic-muted-badge {
             display: inline-flex;
             align-items: center;
@@ -147,16 +196,37 @@
             font-weight: 500;
             letter-spacing: 0.03em;
         }
+
         @keyframes si-shake {
-            0%, 100% { transform: translateX(0); }
-            20% { transform: translateX(-6px); }
-            40% { transform: translateX(6px); }
-            60% { transform: translateX(-4px); }
-            80% { transform: translateX(4px); }
+
+            0%,
+            100% {
+                transform: translateX(0);
+            }
+
+            20% {
+                transform: translateX(-6px);
+            }
+
+            40% {
+                transform: translateX(6px);
+            }
+
+            60% {
+                transform: translateX(-4px);
+            }
+
+            80% {
+                transform: translateX(4px);
+            }
         }
-        .si-shake { animation: si-shake 0.5s ease; }
+
+        .si-shake {
+            animation: si-shake 0.5s ease;
+        }
     </style>
 </head>
+
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col overflow-hidden">
 
     <!-- Header -->
@@ -169,7 +239,7 @@
             </div>
         </div>
         <button onclick="newSession()"
-                class="px-6 py-3 bg-slate-800 hover:bg-slate-700 rounded-3xl text-sm font-medium flex items-center gap-x-2 transition-colors">
+            class="px-6 py-3 bg-slate-800 hover:bg-slate-700 rounded-3xl text-sm font-medium flex items-center gap-x-2 transition-colors">
             New Conversation
         </button>
     </div>
@@ -181,14 +251,13 @@
 
             <!-- Status -->
             <div id="status-text"
-                 class="text-2xl font-medium text-slate-300 text-center min-h-[64px] flex items-center">
+                class="text-2xl font-medium text-slate-300 text-center min-h-[64px] flex items-center">
                 Initializing connections...
             </div>
 
             <!-- Big Mic Button -->
-            <button onclick="toggleMic()"
-                    id="mic-button"
-                    class="mic-button w-44 h-44 bg-[#00bfff] text-white rounded-full flex items-center justify-center text-7xl shadow-2xl focus:outline-none active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+            <button onclick="toggleMic()" id="mic-button"
+                class="mic-button w-44 h-44 bg-[#00bfff] text-white rounded-full flex items-center justify-center text-7xl shadow-2xl focus:outline-none active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
                 🎤
             </button>
 
@@ -203,7 +272,7 @@
 
             <!-- Live Transcript -->
             <div id="transcript-box"
-                 class="w-full max-w-md max-h-40 overflow-y-auto bg-slate-900/60 border border-slate-800 rounded-2xl p-4 text-sm text-slate-300 leading-relaxed hidden">
+                class="w-full max-w-md max-h-40 overflow-y-auto bg-slate-900/60 border border-slate-800 rounded-2xl p-4 text-sm text-slate-300 leading-relaxed hidden">
                 <div id="transcript-content"></div>
             </div>
 
@@ -213,9 +282,8 @@
         </div>
 
         <!-- Floating End Call Button -->
-        <button onclick="endCall()"
-                id="end-call-btn"
-                class="end-call hidden fixed bottom-10 right-10 bg-red-600 hover:bg-red-700 text-white px-6 py-4 rounded-3xl flex items-center gap-x-3 text-sm font-medium shadow-xl">
+        <button onclick="endCall()" id="end-call-btn"
+            class="end-call hidden fixed bottom-10 right-10 bg-red-600 hover:bg-red-700 text-white px-6 py-4 rounded-3xl flex items-center gap-x-3 text-sm font-medium shadow-xl">
             <span class="text-xl">✕</span>
             <span>End Call</span>
         </button>
@@ -235,16 +303,12 @@
                     </div>
                 </div>
                 <form id="si-form" class="flex gap-3" autocomplete="off">
-                    <input id="si-input"
-                           class="si-input flex-1"
-                           type="email"
-                           placeholder="Enter your email address"
-                           required
-                           autocomplete="off"
-                           spellcheck="false" />
+                    <input id="si-input" class="si-input flex-1" type="email" placeholder="Enter your email address"
+                        required autocomplete="off" spellcheck="false" />
                     <button type="submit" id="si-submit" class="si-submit">Submit</button>
                 </form>
-                <p class="text-slate-500 text-xs mt-2" id="si-hint">Type accurately — voice will resume after submission</p>
+                <p class="text-slate-500 text-xs mt-2" id="si-hint">Type accurately — voice will resume after submission
+                </p>
             </div>
         </div>
     </div>
@@ -255,88 +319,88 @@
     </div>
 
     <script>
-    (function () {
-        // ──────── State ────────
-        let socket = null;
-        let micStream = null;
-        let audioCtx = null;
-        let pcmWorklet = null;
-        let micSource = null;
-        let isMicOpen = false;
-        let isReady = false;
-        let volumeInterval = null;
-        let micMutedForInput = false;  // true when structured input is showing
+        (function () {
+            // ──────── State ────────
+            let socket = null;
+            let micStream = null;
+            let audioCtx = null;
+            let pcmWorklet = null;
+            let micSource = null;
+            let isMicOpen = false;
+            let isReady = false;
+            let volumeInterval = null;
+            let micMutedForInput = false;  // true when structured input is showing
 
-        // Playback
-        let playbackCtx = null;
-        let nextPlayTime = 0;
-        let activeSources = [];
-        let assistantFullText = "";
+            // Playback
+            let playbackCtx = null;
+            let nextPlayTime = 0;
+            let activeSources = [];
+            let assistantFullText = "";
 
-        const SAMPLE_RATE = 24000;
+            const SAMPLE_RATE = 24000;
 
-        // ──────── UI Helpers ────────
-        function setStatus(msg, state) {
-            const el = document.getElementById("status-text");
-            const btn = document.getElementById("mic-button");
-            const vol = document.getElementById("volume-container");
-            const endBtn = document.getElementById("end-call-btn");
+            // ──────── UI Helpers ────────
+            function setStatus(msg, state) {
+                const el = document.getElementById("status-text");
+                const btn = document.getElementById("mic-button");
+                const vol = document.getElementById("volume-container");
+                const endBtn = document.getElementById("end-call-btn");
 
-            el.textContent = msg;
-            btn.classList.remove("recording", "bg-red-500", "thinking", "bg-violet-500", "speaking-glow", "bg-[#00bfff]", "bg-slate-700");
+                el.textContent = msg;
+                btn.classList.remove("recording", "bg-red-500", "thinking", "bg-violet-500", "speaking-glow", "bg-[#00bfff]", "bg-slate-700");
 
-            if (state === "listening") {
-                btn.classList.add("recording", "bg-red-500");
-                btn.innerHTML = '<div class="flex gap-1"><div class="w-1.5 h-5 bg-white rounded animate-pulse"></div><div class="w-1.5 h-8 bg-white rounded animate-pulse" style="animation-delay:.15s"></div><div class="w-1.5 h-4 bg-white rounded animate-pulse" style="animation-delay:.3s"></div><div class="w-1.5 h-7 bg-white rounded animate-pulse" style="animation-delay:.1s"></div></div>';
-                vol.classList.add("opacity-100");
-                endBtn.classList.remove("hidden");
-            } else if (state === "processing") {
-                btn.classList.add("thinking", "bg-violet-500");
-                btn.innerHTML = "⟳";
-                vol.classList.remove("opacity-100");
-            } else if (state === "speaking") {
-                btn.classList.add("speaking-glow", "bg-[#00bfff]");
-                btn.innerHTML = "🔊";
-                vol.classList.remove("opacity-100");
-            } else {
-                btn.classList.add("bg-[#00bfff]");
-                btn.innerHTML = "🎤";
-                vol.classList.remove("opacity-100");
-                if (state === "idle") endBtn.classList.add("hidden");
-            }
-        }
-
-        function appendTranscript(role, text) {
-            const box = document.getElementById("transcript-box");
-            const content = document.getElementById("transcript-content");
-            box.classList.remove("hidden");
-            const line = document.createElement("div");
-            line.className = role === "user"
-                ? "mb-2 text-cyan-300"
-                : "mb-2 text-slate-200";
-            line.innerHTML = `<span class="font-semibold text-xs uppercase tracking-wide ${role === 'user' ? 'text-cyan-500' : 'text-emerald-500'}">${role === 'user' ? 'You' : 'AI'}:</span> ${text}`;
-            content.appendChild(line);
-            box.scrollTop = box.scrollHeight;
-        }
-
-        // ──────── PCM16 Audio Capture ────────
-        async function startMic() {
-            if (isMicOpen) return;
-
-            try {
-                micStream = await navigator.mediaDevices.getUserMedia({
-                    audio: { echoCancellation: true, noiseSuppression: true, sampleRate: SAMPLE_RATE }
-                });
-            } catch (e) {
-                alert("Microphone access denied.");
-                return;
+                if (state === "listening") {
+                    btn.classList.add("recording", "bg-red-500");
+                    btn.innerHTML = '<div class="flex gap-1"><div class="w-1.5 h-5 bg-white rounded animate-pulse"></div><div class="w-1.5 h-8 bg-white rounded animate-pulse" style="animation-delay:.15s"></div><div class="w-1.5 h-4 bg-white rounded animate-pulse" style="animation-delay:.3s"></div><div class="w-1.5 h-7 bg-white rounded animate-pulse" style="animation-delay:.1s"></div></div>';
+                    vol.classList.add("opacity-100");
+                    endBtn.classList.remove("hidden");
+                } else if (state === "processing") {
+                    btn.classList.add("thinking", "bg-violet-500");
+                    btn.innerHTML = "⟳";
+                    vol.classList.remove("opacity-100");
+                } else if (state === "speaking") {
+                    btn.classList.add("speaking-glow", "bg-[#00bfff]");
+                    btn.innerHTML = "🔊";
+                    vol.classList.remove("opacity-100");
+                } else {
+                    btn.classList.add("bg-[#00bfff]");
+                    btn.innerHTML = "🎤";
+                    vol.classList.remove("opacity-100");
+                    if (state === "idle") endBtn.classList.add("hidden");
+                }
             }
 
-            audioCtx = new AudioContext({ sampleRate: SAMPLE_RATE });
-            micSource = audioCtx.createMediaStreamSource(micStream);
+            function appendTranscript(role, text) {
+                const box = document.getElementById("transcript-box");
+                const content = document.getElementById("transcript-content");
+                box.classList.remove("hidden");
+                const line = document.createElement("div");
+                line.className = role === "user"
+                    ? "mb-2 text-cyan-300"
+                    : "mb-2 text-slate-200";
+                line.innerHTML = `<span class="font-semibold text-xs uppercase tracking-wide ${role === 'user' ? 'text-cyan-500' : 'text-emerald-500'}">${role === 'user' ? 'You' : 'AI'}:</span> ${text}`;
+                content.appendChild(line);
+                box.scrollTop = box.scrollHeight;
+            }
 
-            // Inline AudioWorklet for PCM16 conversion
-            const workletCode = `
+            // ──────── PCM16 Audio Capture ────────
+            async function startMic() {
+                if (isMicOpen) return;
+
+                try {
+                    micStream = await navigator.mediaDevices.getUserMedia({
+                        audio: { echoCancellation: true, noiseSuppression: true, sampleRate: SAMPLE_RATE }
+                    });
+                } catch (e) {
+                    alert("Microphone access denied.");
+                    return;
+                }
+
+                audioCtx = new AudioContext({ sampleRate: SAMPLE_RATE });
+                micSource = audioCtx.createMediaStreamSource(micStream);
+
+                // Inline AudioWorklet for PCM16 conversion
+                const workletCode = `
                 class PCM16Processor extends AudioWorkletProcessor {
                     process(inputs) {
                         const ch = inputs[0]?.[0];
@@ -353,475 +417,505 @@
                 }
                 registerProcessor('pcm16', PCM16Processor);
             `;
-            const blob = new Blob([workletCode], { type: "application/javascript" });
-            const url = URL.createObjectURL(blob);
-            await audioCtx.audioWorklet.addModule(url);
-            URL.revokeObjectURL(url);
+                const blob = new Blob([workletCode], { type: "application/javascript" });
+                const url = URL.createObjectURL(blob);
+                await audioCtx.audioWorklet.addModule(url);
+                URL.revokeObjectURL(url);
 
-            pcmWorklet = new AudioWorkletNode(audioCtx, "pcm16");
-            pcmWorklet.port.onmessage = (e) => {
-                if (socket?.connected) {
-                    const bytes = new Uint8Array(e.data);
-                    // Use a more efficient conversion method
-                    let binary = "";
-                    const chunkSize = 8192;
-                    for (let i = 0; i < bytes.length; i += chunkSize) {
-                        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+                pcmWorklet = new AudioWorkletNode(audioCtx, "pcm16");
+                pcmWorklet.port.onmessage = (e) => {
+                    if (socket?.connected) {
+                        const bytes = new Uint8Array(e.data);
+                        // Use a more efficient conversion method
+                        let binary = "";
+                        const chunkSize = 8192;
+                        for (let i = 0; i < bytes.length; i += chunkSize) {
+                            binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+                        }
+                        const b64 = btoa(binary);
+                        // Periodic log to confirm data is being sent
+                        if (Math.random() < 0.01) console.log(`📤 Sending audio chunk: ${b64.length} chars`);
+                        socket.emit("audio_chunk", b64);
                     }
-                    const b64 = btoa(binary);
-                    // Periodic log to confirm data is being sent
-                    if (Math.random() < 0.01) console.log(`📤 Sending audio chunk: ${b64.length} chars`);
-                    socket.emit("audio_chunk", b64);
-                }
-            };
-            micSource.connect(pcmWorklet);
-            pcmWorklet.connect(audioCtx.destination); // needed to keep worklet active (silent)
+                };
+                micSource.connect(pcmWorklet);
+                pcmWorklet.connect(audioCtx.destination); // needed to keep worklet active (silent)
 
-            isMicOpen = true;
-            startVolumeViz();
-            setStatus("Listening... Speak now", "listening");
-        }
-
-        function stopMic() {
-            if (pcmWorklet) { pcmWorklet.disconnect(); pcmWorklet = null; }
-            if (micSource) { micSource.disconnect(); micSource = null; }
-            if (audioCtx) { audioCtx.close(); audioCtx = null; }
-            if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
-            if (volumeInterval) { clearInterval(volumeInterval); volumeInterval = null; }
-            isMicOpen = false;
-        }
-
-        function startVolumeViz() {
-            if (volumeInterval) clearInterval(volumeInterval);
-            if (!audioCtx || !micSource) return;
-
-            const analyser = audioCtx.createAnalyser();
-            analyser.fftSize = 64;
-            micSource.connect(analyser);
-            const data = new Uint8Array(analyser.frequencyBinCount);
-            const bars = [
-                document.getElementById("bar1"), document.getElementById("bar2"),
-                document.getElementById("bar3"), document.getElementById("bar4"),
-                document.getElementById("bar5"),
-            ];
-
-            volumeInterval = setInterval(() => {
-                if (!isMicOpen) return;
-                analyser.getByteFrequencyData(data);
-                let avg = 0;
-                for (let i = 0; i < 8; i++) avg += data[i];
-                avg /= 8;
-                const level = Math.min(Math.floor(avg / 3), 100);
-                bars.forEach((bar, i) => {
-                    bar.style.height = `${Math.max(8, Math.floor(level * (0.6 + i * 0.1)))}px`;
-                });
-            }, 60);
-        }
-
-        // ──────── MP3 Audio Playback ────────
-        let currentAudio = null;
-        let audioUnlocked = false;
-        let pcmPlaying = false;
-        let pcmSampleRate = 16000;
-
-        async function unlockAudioOnce() {
-            if (audioUnlocked) return;
-            audioUnlocked = true;
-            try {
-                // Try unlocking both HTMLAudio autoplay and WebAudio policies.
-                const a = new Audio();
-                a.muted = true;
-                a.src = "data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAA";
-                await a.play().catch(() => {});
-                try { a.pause(); } catch (_) {}
-
-                if (!playbackCtx) playbackCtx = new (window.AudioContext || window.webkitAudioContext)();
-                if (playbackCtx.state === "suspended") {
-                    await playbackCtx.resume().catch(() => {});
-                }
-            } catch (_) {
-                // ignore
-            }
-        }
-
-        function playAudio(base64) {
-            return new Promise((resolve) => {
-                if (!base64) return resolve();
-                interruptPlayback();
-                currentAudio = new Audio(`data:audio/mp3;base64,${base64}`);
-                currentAudio.onended = () => { currentAudio = null; resolve(); };
-                currentAudio.onerror = () => { currentAudio = null; resolve(); };
-                currentAudio.play().catch(() => {
-                    setStatus("Audio blocked by browser. Tap mic again to enable sound.", "idle");
-                    currentAudio = null;
-                    resolve();
-                });
-            });
-        }
-
-        function interruptPlayback() {
-            if (currentAudio) {
-                try { currentAudio.pause(); currentAudio.currentTime = 0; } catch(_) {}
-                currentAudio = null;
-            }
-            stopPcmPlayback();
-        }
-
-        function stopPcmPlayback() {
-            pcmPlaying = false;
-            nextPlayTime = 0;
-            if (activeSources.length) {
-                activeSources.forEach((src) => {
-                    try { src.stop(0); } catch (_) {}
-                });
-                activeSources = [];
-            }
-        }
-
-        function pushPcm16Chunk(base64, sampleRate) {
-            if (!base64) return;
-            if (!playbackCtx) playbackCtx = new (window.AudioContext || window.webkitAudioContext)();
-            pcmSampleRate = sampleRate || 16000;
-
-            let bin;
-            try {
-                bin = atob(base64);
-            } catch (e) {
-                console.error("PCM chunk base64 decode failed:", e);
-                return;
-            }
-            const bytes = new Uint8Array(bin.length);
-            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-            const i16 = new Int16Array(bytes.buffer, bytes.byteOffset, Math.floor(bytes.byteLength / 2));
-
-            // Convert Int16 -> Float32
-            const f32 = new Float32Array(i16.length);
-            for (let i = 0; i < i16.length; i++) f32[i] = i16[i] / 32768;
-
-            const audioBuffer = playbackCtx.createBuffer(1, f32.length, pcmSampleRate);
-            audioBuffer.copyToChannel(f32, 0, 0);
-
-            const src = playbackCtx.createBufferSource();
-            src.buffer = audioBuffer;
-            src.connect(playbackCtx.destination);
-
-            const now = playbackCtx.currentTime;
-            if (!pcmPlaying || nextPlayTime < now) {
-                nextPlayTime = now + 0.02;
-                pcmPlaying = true;
+                isMicOpen = true;
+                startVolumeViz();
+                setStatus("Listening... Speak now", "listening");
             }
 
-            src.start(nextPlayTime);
-            nextPlayTime += audioBuffer.duration;
-
-            activeSources.push(src);
-            src.onended = () => {
-                activeSources = activeSources.filter((s) => s !== src);
-            };
-        }
-
-        // ──────── Structured Input UI ────────
-        const siContainer = document.getElementById("structured-input-container");
-        const siForm = document.getElementById("si-form");
-        const siInput = document.getElementById("si-input");
-        const siSubmit = document.getElementById("si-submit");
-        const siIcon = document.getElementById("si-icon");
-        const siLabelText = document.getElementById("si-label-text");
-        const siHint = document.getElementById("si-hint");
-
-        function showStructuredInput(field, prompt) {
-            // Configure input type and placeholder
-            if (field === "email") {
-                siInput.type = "email";
-                siInput.placeholder = prompt || "Enter your email address";
-                siIcon.textContent = "📧";
-                siLabelText.textContent = "Enter your email";
-                siHint.textContent = "Type accurately — voice will resume after submission";
-            } else if (field === "phone") {
-                siInput.type = "tel";
-                siInput.placeholder = prompt || "Enter your phone number";
-                siIcon.textContent = "📱";
-                siLabelText.textContent = "Enter your phone number";
-                siHint.textContent = "Type your number — voice will resume after submission";
+            function stopMic() {
+                if (pcmWorklet) { pcmWorklet.disconnect(); pcmWorklet = null; }
+                if (micSource) { micSource.disconnect(); micSource = null; }
+                if (audioCtx) { audioCtx.close(); audioCtx = null; }
+                if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+                if (volumeInterval) { clearInterval(volumeInterval); volumeInterval = null; }
+                isMicOpen = false;
             }
-            siInput.value = "";
-            siSubmit.disabled = false;
-            siContainer.dataset.field = field;
 
-            // Mute mic
-            muteMicForInput();
+            function startVolumeViz() {
+                if (volumeInterval) clearInterval(volumeInterval);
+                if (!audioCtx || !micSource) return;
 
-            // Show with animation
-            requestAnimationFrame(() => {
-                siContainer.classList.add("visible");
-                setTimeout(() => siInput.focus(), 400);
-            });
-        }
+                const analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 64;
+                micSource.connect(analyser);
+                const data = new Uint8Array(analyser.frequencyBinCount);
+                const bars = [
+                    document.getElementById("bar1"), document.getElementById("bar2"),
+                    document.getElementById("bar3"), document.getElementById("bar4"),
+                    document.getElementById("bar5"),
+                ];
 
-        function hideStructuredInput() {
-            siContainer.classList.remove("visible");
-            siInput.value = "";
-            siContainer.dataset.field = "";
-
-            // Unmute mic
-            unmuteMicForInput();
-        }
-
-        function muteMicForInput() {
-            if (micMutedForInput) return;
-            micMutedForInput = true;
-            // Disconnect the PCM worklet so no audio is sent
-            if (pcmWorklet) {
-                try { pcmWorklet.disconnect(); } catch(_) {}
+                volumeInterval = setInterval(() => {
+                    if (!isMicOpen) return;
+                    analyser.getByteFrequencyData(data);
+                    let avg = 0;
+                    for (let i = 0; i < 8; i++) avg += data[i];
+                    avg /= 8;
+                    const level = Math.min(Math.floor(avg / 3), 100);
+                    bars.forEach((bar, i) => {
+                        bar.style.height = `${Math.max(8, Math.floor(level * (0.6 + i * 0.1)))}px`;
+                    });
+                }, 60);
             }
-            if (micSource && pcmWorklet) {
-                try { micSource.disconnect(pcmWorklet); } catch(_) {}
-            }
-            console.log("🔇 Mic muted for structured input");
-        }
 
-        function unmuteMicForInput() {
-            if (!micMutedForInput) return;
-            micMutedForInput = false;
-            // Reconnect the PCM worklet
-            if (micSource && pcmWorklet && audioCtx) {
+            // ──────── MP3 Audio Playback ────────
+            let currentAudio = null;
+            let audioUnlocked = false;
+            let pcmPlaying = false;
+            let pcmSampleRate = 16000;
+
+            async function unlockAudioOnce() {
+                if (audioUnlocked) return;
+                audioUnlocked = true;
                 try {
-                    micSource.connect(pcmWorklet);
-                    pcmWorklet.connect(audioCtx.destination);
-                } catch(_) {}
-            }
-            console.log("🔊 Mic unmuted after structured input");
-        }
+                    // Try unlocking both HTMLAudio autoplay and WebAudio policies.
+                    const a = new Audio();
+                    a.muted = true;
+                    a.src = "data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAA";
+                    await a.play().catch(() => { });
+                    try { a.pause(); } catch (_) { }
 
-        // Form submit
-        siForm.addEventListener("submit", (e) => {
-            e.preventDefault();
-            const field = siContainer.dataset.field;
-            const value = siInput.value.trim();
-
-            if (!value) {
-                siInput.classList.add("si-shake");
-                setTimeout(() => siInput.classList.remove("si-shake"), 600);
-                return;
+                    if (!playbackCtx) playbackCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    if (playbackCtx.state === "suspended") {
+                        await playbackCtx.resume().catch(() => { });
+                    }
+                } catch (_) {
+                    // ignore
+                }
             }
 
-            // Basic validation
-            if (field === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-                siInput.classList.add("si-shake");
-                siHint.textContent = "Please enter a valid email address";
-                siHint.style.color = "#f87171";
-                setTimeout(() => {
-                    siInput.classList.remove("si-shake");
-                    siHint.style.color = "";
-                }, 1500);
-                return;
-            }
-            if (field === "phone" && !/^[\d\s\-\+\(\)]{6,20}$/.test(value)) {
-                siInput.classList.add("si-shake");
-                siHint.textContent = "Please enter a valid phone number";
-                siHint.style.color = "#f87171";
-                setTimeout(() => {
-                    siInput.classList.remove("si-shake");
-                    siHint.style.color = "";
-                }, 1500);
-                return;
-            }
-
-            siSubmit.disabled = true;
-            siSubmit.textContent = "Sending...";
-
-            // Send via Socket.IO
-            if (socket?.connected) {
-                socket.emit("structured_input", {
-                    type: "structured_input",
-                    field: field,
-                    value: value,
+            function playAudio(base64) {
+                return new Promise((resolve) => {
+                    if (!base64) return resolve();
+                    interruptPlayback();
+                    currentAudio = new Audio(`data:audio/mp3;base64,${base64}`);
+                    currentAudio.onended = () => { currentAudio = null; resolve(); };
+                    currentAudio.onerror = () => { currentAudio = null; resolve(); };
+                    currentAudio.play().catch(() => {
+                        setStatus("Audio blocked by browser. Tap mic again to enable sound.", "idle");
+                        currentAudio = null;
+                        resolve();
+                    });
                 });
             }
 
-            // Hide after short delay for visual feedback
-            setTimeout(() => {
-                hideStructuredInput();
-                siSubmit.textContent = "Submit";
-            }, 500);
-        });
-
-        // Allow Enter key to submit
-        siInput.addEventListener("keydown", (e) => {
-            if (e.key === "Escape") {
-                // Don't allow escape to close — user must submit
-                e.preventDefault();
+            function interruptPlayback() {
+                if (currentAudio) {
+                    try { currentAudio.pause(); currentAudio.currentTime = 0; } catch (_) { }
+                    currentAudio = null;
+                }
+                stopPcmPlayback();
             }
-        });
 
-        // ──────── Socket.IO ────────
-        function connectSocket() {
-            socket = io(window.location.origin, { transports: ["websocket"] });
+            function stopPcmPlayback() {
+                pcmPlaying = false;
+                nextPlayTime = 0;
+                if (activeSources.length) {
+                    activeSources.forEach((src) => {
+                        try { src.stop(0); } catch (_) { }
+                    });
+                    activeSources = [];
+                }
+            }
 
-            socket.on("connect", () => {
-                console.log("✅ Socket.IO connected");
-                setStatus("Establishing AI connections...", "processing");
+            function pushPcm16Chunk(base64, sampleRate) {
+                if (!base64) return;
+                if (!playbackCtx) playbackCtx = new (window.AudioContext || window.webkitAudioContext)();
+                pcmSampleRate = sampleRate || 16000;
+
+                let bin;
+                try {
+                    bin = atob(base64);
+                } catch (e) {
+                    console.error("PCM chunk base64 decode failed:", e);
+                    return;
+                }
+                const bytes = new Uint8Array(bin.length);
+                for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+                const i16 = new Int16Array(bytes.buffer, bytes.byteOffset, Math.floor(bytes.byteLength / 2));
+
+                // Convert Int16 -> Float32
+                const f32 = new Float32Array(i16.length);
+                for (let i = 0; i < i16.length; i++) f32[i] = i16[i] / 32768;
+
+                const audioBuffer = playbackCtx.createBuffer(1, f32.length, pcmSampleRate);
+                audioBuffer.copyToChannel(f32, 0, 0);
+
+                const src = playbackCtx.createBufferSource();
+                src.buffer = audioBuffer;
+                src.connect(playbackCtx.destination);
+
+                const now = playbackCtx.currentTime;
+                if (!pcmPlaying || nextPlayTime < now) {
+                    nextPlayTime = now + 0.02;
+                    pcmPlaying = true;
+                }
+
+                src.start(nextPlayTime);
+                nextPlayTime += audioBuffer.duration;
+
+                activeSources.push(src);
+                src.onended = () => {
+                    activeSources = activeSources.filter((s) => s !== src);
+                };
+            }
+
+            // ──────── Structured Input UI ────────
+            const siContainer = document.getElementById("structured-input-container");
+            const siForm = document.getElementById("si-form");
+            const siInput = document.getElementById("si-input");
+            const siSubmit = document.getElementById("si-submit");
+            const siIcon = document.getElementById("si-icon");
+            const siLabelText = document.getElementById("si-label-text");
+            const siHint = document.getElementById("si-hint");
+
+            function showStructuredInput(field, prompt) {
+                // Configure input type and placeholder based on field
+                if (field === "email") {
+                    siInput.type = "email";
+                    siInput.placeholder = prompt || "Enter your email address";
+                    siInput.inputMode = "email";
+                    siIcon.textContent = "📧";
+                    siLabelText.textContent = "Enter your email";
+                    siHint.textContent = "Type accurately — voice will resume after submission";
+                } else if (field === "phone") {
+                    siInput.type = "tel";
+                    siInput.placeholder = prompt || "Enter your phone number";
+                    siInput.inputMode = "tel";
+                    siIcon.textContent = "📱";
+                    siLabelText.textContent = "Enter your phone number";
+                    siHint.textContent = "Type your number — voice will resume after submission";
+                } else if (field === "address") {
+                    siInput.type = "text";
+                    siInput.placeholder = prompt || "e.g. 9 George St, North Strathfield NSW 2137";
+                    siInput.inputMode = "text";
+                    siIcon.textContent = "📍";
+                    siLabelText.textContent = "Enter your full address";
+                    siHint.textContent = "Include street, suburb, state & postcode for best results";
+                }
+
+                siInput.value = "";
+                siSubmit.disabled = false;
+                siSubmit.textContent = "Submit";
+                siHint.style.color = "";
+                siContainer.dataset.field = field;
+
+                // Remove the required attribute for non-email to avoid browser validation mismatch
+                if (field === "email") {
+                    siInput.setAttribute("required", "");
+                } else {
+                    siInput.removeAttribute("required");
+                }
+
+                // Mute mic
+                muteMicForInput();
+
+                // Show with animation
+                requestAnimationFrame(() => {
+                    siContainer.classList.add("visible");
+                    setTimeout(() => siInput.focus(), 400);
+                });
+            }
+
+            function hideStructuredInput() {
+                siContainer.classList.remove("visible");
+                siInput.value = "";
+                siContainer.dataset.field = "";
+
+                // Unmute mic
+                unmuteMicForInput();
+            }
+
+            function muteMicForInput() {
+                if (micMutedForInput) return;
+                micMutedForInput = true;
+                // Disconnect the PCM worklet so no audio is sent
+                if (pcmWorklet) {
+                    try { pcmWorklet.disconnect(); } catch (_) { }
+                }
+                if (micSource && pcmWorklet) {
+                    try { micSource.disconnect(pcmWorklet); } catch (_) { }
+                }
+                console.log("🔇 Mic muted for structured input");
+            }
+
+            function unmuteMicForInput() {
+                if (!micMutedForInput) return;
+                micMutedForInput = false;
+                // Reconnect the PCM worklet
+                if (micSource && pcmWorklet && audioCtx) {
+                    try {
+                        micSource.connect(pcmWorklet);
+                        pcmWorklet.connect(audioCtx.destination);
+                    } catch (_) { }
+                }
+                console.log("🔊 Mic unmuted after structured input");
+            }
+
+            // Form submit
+            siForm.addEventListener("submit", (e) => {
+                e.preventDefault();
+                const field = siContainer.dataset.field;
+                const value = siInput.value.trim();
+
+                if (!value) {
+                    siInput.classList.add("si-shake");
+                    setTimeout(() => siInput.classList.remove("si-shake"), 600);
+                    return;
+                }
+
+                // Validation per field type
+                if (field === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+                    siInput.classList.add("si-shake");
+                    siHint.textContent = "Please enter a valid email address";
+                    siHint.style.color = "#f87171";
+                    setTimeout(() => {
+                        siInput.classList.remove("si-shake");
+                        siHint.style.color = "";
+                    }, 1500);
+                    return;
+                }
+                if (field === "phone" && !/^[\d\s\-\+\(\)]{6,20}$/.test(value)) {
+                    siInput.classList.add("si-shake");
+                    siHint.textContent = "Please enter a valid phone number";
+                    siHint.style.color = "#f87171";
+                    setTimeout(() => {
+                        siInput.classList.remove("si-shake");
+                        siHint.style.color = "";
+                    }, 1500);
+                    return;
+                }
+                if (field === "address" && value.length < 5) {
+                    siInput.classList.add("si-shake");
+                    siHint.textContent = "Please enter a full address (street, suburb, state, postcode)";
+                    siHint.style.color = "#f87171";
+                    setTimeout(() => {
+                        siInput.classList.remove("si-shake");
+                        siHint.style.color = "";
+                    }, 1500);
+                    return;
+                }
+
+                siSubmit.disabled = true;
+                siSubmit.textContent = "Sending...";
+
+                // Send via Socket.IO
+                if (socket?.connected) {
+                    socket.emit("structured_input", {
+                        type: "structured_input",
+                        field: field,
+                        value: value,
+                    });
+                }
+
+                // Hide after short delay for visual feedback
+                setTimeout(() => {
+                    hideStructuredInput();
+                    siSubmit.textContent = "Submit";
+                }, 500);
             });
 
-            socket.on("connections_ready", () => {
-                console.log("✅ All connections ready");
-                isReady = true;
-                const btn = document.getElementById("mic-button");
-                btn.disabled = false;
-                btn.classList.remove("bg-slate-700");
-                btn.classList.add("bg-[#00bfff]");
+            // Allow Enter key to submit
+            siInput.addEventListener("keydown", (e) => {
+                if (e.key === "Escape") {
+                    // Don't allow escape to close — user must submit
+                    e.preventDefault();
+                }
+            });
 
-                // Auto-start mic for hands-free experience
-                if (!isMicOpen) {
+            // ──────── Socket.IO ────────
+            function connectSocket() {
+                socket = io(window.location.origin, { transports: ["websocket"] });
+
+                socket.on("connect", () => {
+                    console.log("✅ Socket.IO connected");
+                    setStatus("Establishing AI connections...", "processing");
+                });
+
+                socket.on("connections_ready", () => {
+                    console.log("✅ All connections ready");
+                    isReady = true;
+                    const btn = document.getElementById("mic-button");
+                    btn.disabled = false;
+                    btn.classList.remove("bg-slate-700");
+                    btn.classList.add("bg-[#00bfff]");
+
+                    // Auto-start mic for hands-free experience
+                    if (!isMicOpen) {
+                        startMic();
+                    }
+                });
+
+                socket.on("status", (st) => {
+                    // Don't change status if structured input is showing
+                    if (micMutedForInput && st === "listening") return;
+                    if (st === "user_speaking") setStatus("Listening...", "listening");
+                    else if (st === "processing") setStatus("Thinking...", "processing");
+                    else if (st === "speaking") setStatus("AI is speaking...", "speaking");
+                    else if (st === "listening") {
+                        if (isReady) setStatus("Listening... Speak now", "listening");
+                    }
+                });
+
+                socket.on("user_transcript", (text) => {
+                    appendTranscript("user", text);
+                });
+
+                socket.on("assistant_text_delta", (delta) => {
+                    assistantFullText += delta;
+                });
+
+                socket.on("assistant_text_done", (text) => {
+                    assistantFullText = "";
+                    appendTranscript("assistant", text);
+                });
+
+                // ── Structured Input Request from Server ──
+                socket.on("request_structured_input", (payload) => {
+                    console.log("📋 Structured input requested:", payload);
+                    const { field, prompt } = payload;
+                    showStructuredInput(field, prompt);
+                });
+
+                socket.on("structured_input_accepted", (payload) => {
+                    console.log("✅ Structured input accepted:", payload);
+                    // Input already hidden via submit handler
+                });
+
+                socket.on("audio_complete", async (base64) => {
+                    console.log("🔊 Received complete audio, playing...");
+                    setStatus("AI is speaking...", "speaking");
+                    if (isReady && isMicOpen && !micMutedForInput) {
+                        setStatus("Listening... Speak now", "listening");
+                    } else if (isReady) {
+                        setStatus("Ready • Tap mic to speak", "idle");
+                    }
+                });
+
+                socket.on("audio_chunk_pcm", (payload) => {
+                    setStatus("AI is speaking...", "speaking");
+                    pushPcm16Chunk(payload?.audio, payload?.sampleRate);
+                });
+
+                socket.on("audio_done", () => {
+                    console.log("✅ Audio generation done");
+                    if (isReady && isMicOpen && !micMutedForInput) {
+                        setStatus("Listening... Speak now", "listening");
+                    } else if (isReady) {
+                        setStatus("Ready • Tap mic to speak", "idle");
+                    }
+                });
+
+                socket.on("interrupt", () => {
+                    interruptPlayback();
+                    if (isReady && isMicOpen && !micMutedForInput) setStatus("Listening... Speak now", "listening");
+                });
+
+                socket.on("audio_interrupt", () => {
+                    stopPcmPlayback();
+                    if (isReady && isMicOpen && !micMutedForInput) setStatus("Listening... Speak now", "listening");
+                });
+
+                socket.on("error_msg", (msg) => {
+                    console.error("Server error:", msg);
+                    setStatus("Error: " + msg, "idle");
+                });
+
+                socket.on("disconnect", () => {
+                    console.log("Socket disconnected");
+                    isReady = false;
+                    hideStructuredInput();
+                    setStatus("Reconnecting to server...", "processing");
+                });
+            }
+
+            // ──────── Controls ────────
+            window.toggleMic = function () {
+                unlockAudioOnce();
+                if (!isReady && !socket) {
+                    // First tap: connect everything
+                    beginSession();
+                    return;
+                }
+                if (!isReady) return;
+                if (isMicOpen) {
+                    stopMic();
+                    setStatus("Mic off • Tap to resume", "idle");
+                } else {
                     startMic();
                 }
-            });
+            };
 
-            socket.on("status", (st) => {
-                // Don't change status if structured input is showing
-                if (micMutedForInput && st === "listening") return;
-                if (st === "user_speaking") setStatus("Listening...", "listening");
-                else if (st === "processing") setStatus("Thinking...", "processing");
-                else if (st === "speaking") setStatus("AI is speaking...", "speaking");
-                else if (st === "listening") {
-                    if (isReady) setStatus("Listening... Speak now", "listening");
-                }
-            });
+            // First mic tap → connect Socket.IO → server opens both WSs → 2s delay → greeting
+            async function beginSession() {
+                const btn = document.getElementById("mic-button");
+                btn.disabled = true;
+                setStatus("Connecting... please wait", "processing");
 
-            socket.on("user_transcript", (text) => {
-                appendTranscript("user", text);
-            });
+                await unlockAudioOnce();
 
-            socket.on("assistant_text_delta", (delta) => {
-                assistantFullText += delta;
-            });
-
-            socket.on("assistant_text_done", (text) => {
-                assistantFullText = "";
-                appendTranscript("assistant", text);
-            });
-
-            // ── Structured Input Request from Server ──
-            socket.on("request_structured_input", (payload) => {
-                console.log("📋 Structured input requested:", payload);
-                const { field, prompt } = payload;
-                showStructuredInput(field, prompt);
-            });
-
-            socket.on("structured_input_accepted", (payload) => {
-                console.log("✅ Structured input accepted:", payload);
-                // Input already hidden via submit handler
-            });
-
-            socket.on("audio_complete", async (base64) => {
-                console.log("🔊 Received complete audio, playing...");
-                setStatus("AI is speaking...", "speaking");
-                if (isReady && isMicOpen && !micMutedForInput) {
-                    setStatus("Listening... Speak now", "listening");
-                } else if (isReady) {
-                    setStatus("Ready • Tap mic to speak", "idle");
-                }
-            });
-
-            socket.on("audio_chunk_pcm", (payload) => {
-                setStatus("AI is speaking...", "speaking");
-                pushPcm16Chunk(payload?.audio, payload?.sampleRate);
-            });
-
-            socket.on("audio_done", () => {
-                console.log("✅ Audio generation done");
-                if (isReady && isMicOpen && !micMutedForInput) {
-                    setStatus("Listening... Speak now", "listening");
-                } else if (isReady) {
-                    setStatus("Ready • Tap mic to speak", "idle");
-                }
-            });
-
-            socket.on("interrupt", () => {
-                interruptPlayback();
-                if (isReady && isMicOpen && !micMutedForInput) setStatus("Listening... Speak now", "listening");
-            });
-
-            socket.on("audio_interrupt", () => {
-                stopPcmPlayback();
-                if (isReady && isMicOpen && !micMutedForInput) setStatus("Listening... Speak now", "listening");
-            });
-
-            socket.on("error_msg", (msg) => {
-                console.error("Server error:", msg);
-                setStatus("Error: " + msg, "idle");
-            });
-
-            socket.on("disconnect", () => {
-                console.log("Socket disconnected");
-                isReady = false;
-                hideStructuredInput();
-                setStatus("Reconnecting to server...", "processing");
-            });
-        }
-
-        // ──────── Controls ────────
-        window.toggleMic = function () {
-            unlockAudioOnce();
-            if (!isReady && !socket) {
-                // First tap: connect everything
-                beginSession();
-                return;
+                connectSocket();
             }
-            if (!isReady) return;
-            if (isMicOpen) {
+
+            window.endCall = function () {
                 stopMic();
-                setStatus("Mic off • Tap to resume", "idle");
-            } else {
-                startMic();
-            }
-        };
+                interruptPlayback();
+                hideStructuredInput();
+                micMutedForInput = false;
+                if (socket) { socket.disconnect(); socket = null; }
+                isReady = false;
+                document.getElementById("mic-button").disabled = false;
+                document.getElementById("mic-button").classList.remove("bg-slate-700");
+                document.getElementById("mic-button").classList.add("bg-[#00bfff]");
+                setStatus("Call ended. Tap mic to start again.", "idle");
+            };
 
-        // First mic tap → connect Socket.IO → server opens both WSs → 2s delay → greeting
-        async function beginSession() {
-            const btn = document.getElementById("mic-button");
-            btn.disabled = true;
-            setStatus("Connecting... please wait", "processing");
+            window.newSession = function () {
+                if (socket) { socket.disconnect(); socket = null; }
+                stopMic();
+                interruptPlayback();
+                hideStructuredInput();
+                micMutedForInput = false;
+                isReady = false;
+                assistantFullText = "";
+                document.getElementById("transcript-content").innerHTML = "";
+                document.getElementById("transcript-box").classList.add("hidden");
+                document.getElementById("mic-button").disabled = false;
+                document.getElementById("mic-button").classList.remove("bg-slate-700");
+                document.getElementById("mic-button").classList.add("bg-[#00bfff]");
+                setStatus("Tap the microphone to begin", "idle");
+            };
 
-            await unlockAudioOnce();
-
-            connectSocket();
-        }
-
-        window.endCall = function () {
-            stopMic();
-            interruptPlayback();
-            hideStructuredInput();
-            micMutedForInput = false;
-            if (socket) { socket.disconnect(); socket = null; }
-            isReady = false;
-            document.getElementById("mic-button").disabled = false;
-            document.getElementById("mic-button").classList.remove("bg-slate-700");
-            document.getElementById("mic-button").classList.add("bg-[#00bfff]");
-            setStatus("Call ended. Tap mic to start again.", "idle");
-        };
-
-        window.newSession = function () {
-            if (socket) { socket.disconnect(); socket = null; }
-            stopMic();
-            interruptPlayback();
-            hideStructuredInput();
-            micMutedForInput = false;
-            isReady = false;
-            assistantFullText = "";
-            document.getElementById("transcript-content").innerHTML = "";
-            document.getElementById("transcript-box").classList.add("hidden");
-            document.getElementById("mic-button").disabled = false;
-            document.getElementById("mic-button").classList.remove("bg-slate-700");
-            document.getElementById("mic-button").classList.add("bg-[#00bfff]");
-            setStatus("Tap the microphone to begin", "idle");
-        };
-
-        // Page load — just show idle state, no connections yet
-        window.addEventListener("load", () => {
-            setStatus("Tap the microphone to begin", "idle");
-        });
-    })();
+            // Page load — just show idle state, no connections yet
+            window.addEventListener("load", () => {
+                setStatus("Tap the microphone to begin", "idle");
+            });
+        })();
     </script>
 </body>
+
 </html>
