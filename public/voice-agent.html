@@ -71,10 +71,6 @@
             transition: height 0.05s ease;
         }
 
-        .end-call {
-            transition: all 0.3s ease;
-        }
-
         #transcript-box {
             scrollbar-width: thin;
             scrollbar-color: #334155 transparent;
@@ -180,10 +176,6 @@
             gap: 6px;
         }
 
-        .si-icon {
-            font-size: 1rem;
-        }
-
         .mic-muted-badge {
             display: inline-flex;
             align-items: center;
@@ -194,7 +186,6 @@
             padding: 3px 10px;
             border-radius: 20px;
             font-weight: 500;
-            letter-spacing: 0.03em;
         }
 
         @keyframes si-shake {
@@ -246,7 +237,6 @@
 
     <div class="flex-1 flex flex-col items-center justify-center px-6 relative">
 
-        <!-- Main Voice Interface -->
         <div class="flex flex-col items-center gap-y-8">
 
             <!-- Status -->
@@ -275,15 +265,11 @@
                 class="w-full max-w-md max-h-40 overflow-y-auto bg-slate-900/60 border border-slate-800 rounded-2xl p-4 text-sm text-slate-300 leading-relaxed hidden">
                 <div id="transcript-content"></div>
             </div>
-
-            <!-- Instruction -->
-            <div class="text-slate-400 text-center max-w-xs text-sm leading-relaxed">
-            </div>
         </div>
 
         <!-- Floating End Call Button -->
         <button onclick="endCall()" id="end-call-btn"
-            class="end-call hidden fixed bottom-10 right-10 bg-red-600 hover:bg-red-700 text-white px-6 py-4 rounded-3xl flex items-center gap-x-3 text-sm font-medium shadow-xl">
+            class="hidden fixed bottom-10 right-10 bg-red-600 hover:bg-red-700 text-white px-6 py-4 rounded-3xl flex items-center gap-x-3 text-sm font-medium shadow-xl transition-all">
             <span class="text-xl">✕</span>
             <span>End Call</span>
         </button>
@@ -295,7 +281,7 @@
             <div class="max-w-md mx-auto">
                 <div class="flex items-center justify-between mb-3">
                     <div class="si-label">
-                        <span class="si-icon" id="si-icon">📧</span>
+                        <span id="si-icon">📧</span>
                         <span id="si-label-text">Enter your email</span>
                     </div>
                     <div class="mic-muted-badge">
@@ -329,15 +315,17 @@
             let isMicOpen = false;
             let isReady = false;
             let volumeInterval = null;
-            let micMutedForInput = false;  // true when structured input is showing
+            let micMutedForInput = false;
 
             // Playback
             let playbackCtx = null;
             let nextPlayTime = 0;
             let activeSources = [];
+            let pcmPlaying = false;
             let assistantFullText = "";
 
             const SAMPLE_RATE = 24000;
+            const PCM_SAMPLE_RATE = 16000;
 
             // ──────── UI Helpers ────────
             function setStatus(msg, state) {
@@ -375,9 +363,7 @@
                 const content = document.getElementById("transcript-content");
                 box.classList.remove("hidden");
                 const line = document.createElement("div");
-                line.className = role === "user"
-                    ? "mb-2 text-cyan-300"
-                    : "mb-2 text-slate-200";
+                line.className = role === "user" ? "mb-2 text-cyan-300" : "mb-2 text-slate-200";
                 line.innerHTML = `<span class="font-semibold text-xs uppercase tracking-wide ${role === 'user' ? 'text-cyan-500' : 'text-emerald-500'}">${role === 'user' ? 'You' : 'AI'}:</span> ${text}`;
                 content.appendChild(line);
                 box.scrollTop = box.scrollHeight;
@@ -399,7 +385,6 @@
                 audioCtx = new AudioContext({ sampleRate: SAMPLE_RATE });
                 micSource = audioCtx.createMediaStreamSource(micStream);
 
-                // Inline AudioWorklet for PCM16 conversion
                 const workletCode = `
                 class PCM16Processor extends AudioWorkletProcessor {
                     process(inputs) {
@@ -416,7 +401,7 @@
                     }
                 }
                 registerProcessor('pcm16', PCM16Processor);
-            `;
+                `;
                 const blob = new Blob([workletCode], { type: "application/javascript" });
                 const url = URL.createObjectURL(blob);
                 await audioCtx.audioWorklet.addModule(url);
@@ -424,22 +409,19 @@
 
                 pcmWorklet = new AudioWorkletNode(audioCtx, "pcm16");
                 pcmWorklet.port.onmessage = (e) => {
-                    if (socket?.connected) {
+                    if (socket?.connected && !micMutedForInput) {
                         const bytes = new Uint8Array(e.data);
-                        // Use a more efficient conversion method
                         let binary = "";
                         const chunkSize = 8192;
                         for (let i = 0; i < bytes.length; i += chunkSize) {
                             binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
                         }
                         const b64 = btoa(binary);
-                        // Periodic log to confirm data is being sent
-                        if (Math.random() < 0.01) console.log(`📤 Sending audio chunk: ${b64.length} chars`);
                         socket.emit("audio_chunk", b64);
                     }
                 };
                 micSource.connect(pcmWorklet);
-                pcmWorklet.connect(audioCtx.destination); // needed to keep worklet active (silent)
+                pcmWorklet.connect(audioCtx.destination);
 
                 isMicOpen = true;
                 startVolumeViz();
@@ -482,52 +464,24 @@
                 }, 60);
             }
 
-            // ──────── MP3 Audio Playback ────────
-            let currentAudio = null;
+            // ──────── PCM16 Audio Playback ────────
             let audioUnlocked = false;
-            let pcmPlaying = false;
-            let pcmSampleRate = 16000;
 
             async function unlockAudioOnce() {
                 if (audioUnlocked) return;
                 audioUnlocked = true;
                 try {
-                    // Try unlocking both HTMLAudio autoplay and WebAudio policies.
                     const a = new Audio();
                     a.muted = true;
                     a.src = "data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAA";
                     await a.play().catch(() => { });
                     try { a.pause(); } catch (_) { }
-
                     if (!playbackCtx) playbackCtx = new (window.AudioContext || window.webkitAudioContext)();
-                    if (playbackCtx.state === "suspended") {
-                        await playbackCtx.resume().catch(() => { });
-                    }
-                } catch (_) {
-                    // ignore
-                }
-            }
-
-            function playAudio(base64) {
-                return new Promise((resolve) => {
-                    if (!base64) return resolve();
-                    interruptPlayback();
-                    currentAudio = new Audio(`data:audio/mp3;base64,${base64}`);
-                    currentAudio.onended = () => { currentAudio = null; resolve(); };
-                    currentAudio.onerror = () => { currentAudio = null; resolve(); };
-                    currentAudio.play().catch(() => {
-                        setStatus("Audio blocked by browser. Tap mic again to enable sound.", "idle");
-                        currentAudio = null;
-                        resolve();
-                    });
-                });
+                    if (playbackCtx.state === "suspended") await playbackCtx.resume().catch(() => { });
+                } catch (_) { }
             }
 
             function interruptPlayback() {
-                if (currentAudio) {
-                    try { currentAudio.pause(); currentAudio.currentTime = 0; } catch (_) { }
-                    currentAudio = null;
-                }
                 stopPcmPlayback();
             }
 
@@ -535,9 +489,7 @@
                 pcmPlaying = false;
                 nextPlayTime = 0;
                 if (activeSources.length) {
-                    activeSources.forEach((src) => {
-                        try { src.stop(0); } catch (_) { }
-                    });
+                    activeSources.forEach((src) => { try { src.stop(0); } catch (_) { } });
                     activeSources = [];
                 }
             }
@@ -545,24 +497,17 @@
             function pushPcm16Chunk(base64, sampleRate) {
                 if (!base64) return;
                 if (!playbackCtx) playbackCtx = new (window.AudioContext || window.webkitAudioContext)();
-                pcmSampleRate = sampleRate || 16000;
 
                 let bin;
-                try {
-                    bin = atob(base64);
-                } catch (e) {
-                    console.error("PCM chunk base64 decode failed:", e);
-                    return;
-                }
+                try { bin = atob(base64); } catch (e) { return; }
                 const bytes = new Uint8Array(bin.length);
                 for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
                 const i16 = new Int16Array(bytes.buffer, bytes.byteOffset, Math.floor(bytes.byteLength / 2));
 
-                // Convert Int16 -> Float32
                 const f32 = new Float32Array(i16.length);
                 for (let i = 0; i < i16.length; i++) f32[i] = i16[i] / 32768;
 
-                const audioBuffer = playbackCtx.createBuffer(1, f32.length, pcmSampleRate);
+                const audioBuffer = playbackCtx.createBuffer(1, f32.length, sampleRate || PCM_SAMPLE_RATE);
                 audioBuffer.copyToChannel(f32, 0, 0);
 
                 const src = playbackCtx.createBufferSource();
@@ -579,9 +524,7 @@
                 nextPlayTime += audioBuffer.duration;
 
                 activeSources.push(src);
-                src.onended = () => {
-                    activeSources = activeSources.filter((s) => s !== src);
-                };
+                src.onended = () => { activeSources = activeSources.filter((s) => s !== src); };
             }
 
             // ──────── Structured Input UI ────────
@@ -594,7 +537,6 @@
             const siHint = document.getElementById("si-hint");
 
             function showStructuredInput(field, prompt) {
-                // Configure input type and placeholder based on field
                 if (field === "email") {
                     siInput.type = "email";
                     siInput.placeholder = prompt || "Enter your email address";
@@ -624,17 +566,12 @@
                 siHint.style.color = "";
                 siContainer.dataset.field = field;
 
-                // Remove the required attribute for non-email to avoid browser validation mismatch
-                if (field === "email") {
-                    siInput.setAttribute("required", "");
-                } else {
-                    siInput.removeAttribute("required");
-                }
+                if (field === "email") siInput.setAttribute("required", "");
+                else siInput.removeAttribute("required");
 
-                // Mute mic
-                muteMicForInput();
+                micMutedForInput = true;
+                console.log("🔇 Mic muted for structured input");
 
-                // Show with animation
                 requestAnimationFrame(() => {
                     siContainer.classList.add("visible");
                     setTimeout(() => siInput.focus(), 400);
@@ -645,38 +582,10 @@
                 siContainer.classList.remove("visible");
                 siInput.value = "";
                 siContainer.dataset.field = "";
-
-                // Unmute mic
-                unmuteMicForInput();
-            }
-
-            function muteMicForInput() {
-                if (micMutedForInput) return;
-                micMutedForInput = true;
-                // Disconnect the PCM worklet so no audio is sent
-                if (pcmWorklet) {
-                    try { pcmWorklet.disconnect(); } catch (_) { }
-                }
-                if (micSource && pcmWorklet) {
-                    try { micSource.disconnect(pcmWorklet); } catch (_) { }
-                }
-                console.log("🔇 Mic muted for structured input");
-            }
-
-            function unmuteMicForInput() {
-                if (!micMutedForInput) return;
                 micMutedForInput = false;
-                // Reconnect the PCM worklet
-                if (micSource && pcmWorklet && audioCtx) {
-                    try {
-                        micSource.connect(pcmWorklet);
-                        pcmWorklet.connect(audioCtx.destination);
-                    } catch (_) { }
-                }
                 console.log("🔊 Mic unmuted after structured input");
             }
 
-            // Form submit
             siForm.addEventListener("submit", (e) => {
                 e.preventDefault();
                 const field = siContainer.dataset.field;
@@ -688,63 +597,43 @@
                     return;
                 }
 
-                // Validation per field type
                 if (field === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
                     siInput.classList.add("si-shake");
                     siHint.textContent = "Please enter a valid email address";
                     siHint.style.color = "#f87171";
-                    setTimeout(() => {
-                        siInput.classList.remove("si-shake");
-                        siHint.style.color = "";
-                    }, 1500);
+                    setTimeout(() => { siInput.classList.remove("si-shake"); siHint.style.color = ""; }, 1500);
                     return;
                 }
                 if (field === "phone" && !/^[\d\s\-\+\(\)]{6,20}$/.test(value)) {
                     siInput.classList.add("si-shake");
                     siHint.textContent = "Please enter a valid phone number";
                     siHint.style.color = "#f87171";
-                    setTimeout(() => {
-                        siInput.classList.remove("si-shake");
-                        siHint.style.color = "";
-                    }, 1500);
+                    setTimeout(() => { siInput.classList.remove("si-shake"); siHint.style.color = ""; }, 1500);
                     return;
                 }
                 if (field === "address" && value.length < 5) {
                     siInput.classList.add("si-shake");
-                    siHint.textContent = "Please enter a full address (street, suburb, state, postcode)";
+                    siHint.textContent = "Please enter a full address";
                     siHint.style.color = "#f87171";
-                    setTimeout(() => {
-                        siInput.classList.remove("si-shake");
-                        siHint.style.color = "";
-                    }, 1500);
+                    setTimeout(() => { siInput.classList.remove("si-shake"); siHint.style.color = ""; }, 1500);
                     return;
                 }
 
                 siSubmit.disabled = true;
                 siSubmit.textContent = "Sending...";
 
-                // Send via Socket.IO
                 if (socket?.connected) {
-                    socket.emit("structured_input", {
-                        type: "structured_input",
-                        field: field,
-                        value: value,
-                    });
+                    socket.emit("structured_input", { type: "structured_input", field, value });
                 }
 
-                // Hide after short delay for visual feedback
                 setTimeout(() => {
                     hideStructuredInput();
                     siSubmit.textContent = "Submit";
                 }, 500);
             });
 
-            // Allow Enter key to submit
             siInput.addEventListener("keydown", (e) => {
-                if (e.key === "Escape") {
-                    // Don't allow escape to close — user must submit
-                    e.preventDefault();
-                }
+                if (e.key === "Escape") e.preventDefault();
             });
 
             // ──────── Socket.IO ────────
@@ -764,14 +653,10 @@
                     btn.classList.remove("bg-slate-700");
                     btn.classList.add("bg-[#00bfff]");
 
-                    // Auto-start mic for hands-free experience
-                    if (!isMicOpen) {
-                        startMic();
-                    }
+                    if (!isMicOpen) startMic();
                 });
 
                 socket.on("status", (st) => {
-                    // Don't change status if structured input is showing
                     if (micMutedForInput && st === "listening") return;
                     if (st === "user_speaking") setStatus("Listening...", "listening");
                     else if (st === "processing") setStatus("Thinking...", "processing");
@@ -794,26 +679,13 @@
                     appendTranscript("assistant", text);
                 });
 
-                // ── Structured Input Request from Server ──
                 socket.on("request_structured_input", (payload) => {
                     console.log("📋 Structured input requested:", payload);
-                    const { field, prompt } = payload;
-                    showStructuredInput(field, prompt);
+                    showStructuredInput(payload.field, payload.prompt);
                 });
 
                 socket.on("structured_input_accepted", (payload) => {
                     console.log("✅ Structured input accepted:", payload);
-                    // Input already hidden via submit handler
-                });
-
-                socket.on("audio_complete", async (base64) => {
-                    console.log("🔊 Received complete audio, playing...");
-                    setStatus("AI is speaking...", "speaking");
-                    if (isReady && isMicOpen && !micMutedForInput) {
-                        setStatus("Listening... Speak now", "listening");
-                    } else if (isReady) {
-                        setStatus("Ready • Tap mic to speak", "idle");
-                    }
                 });
 
                 socket.on("audio_chunk_pcm", (payload) => {
@@ -822,7 +694,7 @@
                 });
 
                 socket.on("audio_done", () => {
-                    console.log("✅ Audio generation done");
+                    console.log("✅ Audio done");
                     if (isReady && isMicOpen && !micMutedForInput) {
                         setStatus("Listening... Speak now", "listening");
                     } else if (isReady) {
@@ -846,7 +718,6 @@
                 });
 
                 socket.on("disconnect", () => {
-                    console.log("Socket disconnected");
                     isReady = false;
                     hideStructuredInput();
                     setStatus("Reconnecting to server...", "processing");
@@ -857,7 +728,6 @@
             window.toggleMic = function () {
                 unlockAudioOnce();
                 if (!isReady && !socket) {
-                    // First tap: connect everything
                     beginSession();
                     return;
                 }
@@ -870,14 +740,11 @@
                 }
             };
 
-            // First mic tap → connect Socket.IO → server opens both WSs → 2s delay → greeting
             async function beginSession() {
                 const btn = document.getElementById("mic-button");
                 btn.disabled = true;
                 setStatus("Connecting... please wait", "processing");
-
                 await unlockAudioOnce();
-
                 connectSocket();
             }
 
@@ -910,7 +777,6 @@
                 setStatus("Tap the microphone to begin", "idle");
             };
 
-            // Page load — just show idle state, no connections yet
             window.addEventListener("load", () => {
                 setStatus("Tap the microphone to begin", "idle");
             });
