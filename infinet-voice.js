@@ -24,6 +24,11 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM";
 
+// ==================== MARS API CONFIG ====================
+const MARS_BASE_URL = "https://mars.as24516.net/api/v1";
+const MARS_CLIENT_ID = process.env.MARS_CLIENT_ID;
+const MARS_CLIENT_SECRET = process.env.MARS_CLIENT_SECRET;
+
 if (!OPENAI_API_KEY) { console.error("❌ Please set OPENAI_API_KEY in your .env file"); process.exit(1); }
 if (!ELEVENLABS_API_KEY) { console.error("❌ Please set ELEVENLABS_API_KEY in your .env file"); process.exit(1); }
 
@@ -93,6 +98,242 @@ const CONFIG = {
 
 try { dns.setDefaultResultOrder("ipv4first"); } catch (_) { }
 
+// ==================== HARDCODED OPTICOMM PLANS ====================
+const OPTICOMM_RESIDENTIAL_PLANS = [
+  {
+    title: "OptiComm 25/10Mbps Residential",
+    price: 64, download: "25 Mbps", upload: "10 Mbps",
+    intro_price: 64, ongoing_price: 69, discount: "$5 off for 3 months",
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Reliable Fast Fibre"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p", "Web browsing & Social Media"],
+  },
+  {
+    title: "OptiComm 50/20Mbps Residential",
+    price: 74, download: "50 Mbps", upload: "20 Mbps",
+    intro_price: 74, ongoing_price: 79, discount: "$5 off for 3 months",
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Reliable Fast Fibre"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p", "Web browsing & Social Media", "Some Gaming Applications"],
+  },
+  {
+    title: "OptiComm 100/20Mbps Residential",
+    price: 84, download: "100 Mbps", upload: "20 Mbps",
+    intro_price: 84, ongoing_price: 89, discount: "$5 off for 3 months",
+    note: "For communities with limited capacity of 100Mbps",
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Reliable Fast Fibre"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 4K", "Web browsing & Social Media", "Fast Downloading", "Gaming", "Low latency"],
+  },
+  {
+    title: "OptiComm 500/50Mbps Faster Residential",
+    price: 79, download: "500 Mbps", upload: "50 Mbps",
+    intro_price: 79, ongoing_price: 89, discount: "$10 off for 3 months",
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Reliable Fast Fibre"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 4K", "Web browsing & Social Media", "Super Fast Downloading", "All Gaming Applications", "Low latency"],
+  },
+  {
+    title: "OptiComm 750/50Mbps Residential",
+    price: 89, download: "750 Mbps", upload: "50 Mbps",
+    intro_price: 89, ongoing_price: 99, discount: "$10 off for 3 months",
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Reliable Fast Fibre"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 4K", "Web browsing & Social Media", "Super Fast Downloading", "All Gaming Applications", "Low latency"],
+  },
+  {
+    title: "OptiComm 1000/100Mbps Residential",
+    price: 99, download: "1000 Mbps", upload: "100 Mbps",
+    intro_price: 99, ongoing_price: 109, discount: "$10 off for 3 months",
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Reliable Fast Fibre"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 4K", "Web browsing & Social Media", "Super Fast Uploads/Downloads", "All Gaming Applications", "Low latency"],
+  },
+];
+
+const OPTICOMM_BUSINESS_PLANS = [
+  {
+    title: "OptiComm 50/20Mbps Business",
+    price: 79, download: "50 Mbps", upload: "20 Mbps",
+    intro_price: 79, ongoing_price: 89, discount: "$10 off for 3 months",
+    features: ["Unlimited Data", "No Contracts", "Month to Month", "Includes Static IP"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 4K", "Web browsing & Social Media", "Some Gaming Applications", "Low latency"],
+  },
+  {
+    title: "OptiComm 100/40Mbps Business",
+    price: 99, download: "100 Mbps", upload: "40 Mbps",
+    intro_price: 99, ongoing_price: 109, discount: "$10 off for 3 months",
+    features: ["Unlimited Data", "No Contracts", "Month to Month", "Includes Static IP"],
+    suitable_for: ["Business IP Phones (VoIP Services)", "Video Calls / Teams", "Streaming HD Video + 4K", "Web browsing & Social Media", "Moderate Uploads/Downloads", "All Gaming Applications", "Low latency"],
+  },
+  {
+    title: "OptiComm 250/100Mbps Business",
+    price: 139, download: "250 Mbps", upload: "100 Mbps",
+    intro_price: 139, ongoing_price: 149, discount: "$10 off for 3 months",
+    features: ["Unlimited Data", "No Contracts", "Month to Month", "Includes Static IP"],
+    suitable_for: ["Business IP Phones (VoIP Services)", "Video Calls / Teams", "Streaming HD Video + 4K", "Web browsing & Social Media", "Super Fast Uploads/Downloads", "All Gaming Applications", "Low latency"],
+  },
+  {
+    title: "OptiComm 500/200Mbps Business",
+    price: 169, download: "500 Mbps", upload: "200 Mbps",
+    intro_price: 169, ongoing_price: 179, discount: "$10 off for 3 months",
+    features: ["Unlimited Data", "No Contracts", "Month to Month", "Includes Static IP"],
+    suitable_for: ["Business IP Phones (VoIP Services)", "Video Calls / Teams", "Streaming HD Video + 4K", "Web browsing & Social Media", "Super Fast Uploads/Downloads", "All Gaming Applications", "Low latency"],
+  },
+  {
+    title: "OptiComm 1000/400Mbps Business",
+    price: 189, download: "1000 Mbps", upload: "400 Mbps",
+    intro_price: 189, ongoing_price: 199, discount: "$10 off for 3 months",
+    features: ["Unlimited Data", "No Contracts", "Month to Month", "Includes Static IP"],
+    suitable_for: ["Business IP Phones (VoIP Services)", "Video Calls / Teams", "Streaming HD Video + 4K", "Web browsing & Social Media", "Super Fast Uploads/Downloads", "All Gaming Applications", "Low latency"],
+  },
+];
+
+// ==================== MARS SPEED MAPPING ====================
+const MARS_SPEED_MAP = {
+  TC425D5U: { dl: 25, ul: 5 },
+  TC425D10U: { dl: 25, ul: 10 },
+  TC450D20U: { dl: 50, ul: 20 },
+  TC4100D20U: { dl: 100, ul: 20 },
+  TC4100D40U: { dl: 100, ul: 40 },
+  TC4250D25U: { dl: 250, ul: 25 },
+  TC4250D100U: { dl: 250, ul: 100 },
+  TC4500D50U: { dl: 500, ul: 50 },
+  TC4500D200U: { dl: 500, ul: 200 },
+  TC4750D50U: { dl: 750, ul: 50 },
+  TC41000D50U: { dl: 1000, ul: 50 },
+  TC41000D100U: { dl: 1000, ul: 100 },
+  TC41000D400U: { dl: 1000, ul: 400 },
+  // Fixed Wireless
+  TC4FWP: { dl: 25, ul: 5 },
+  TC4FWHF: { dl: 100, ul: 20 },
+  TC4FWSF: { dl: 200, ul: 20 },
+  TC4FWUF: { dl: 400, ul: 40 },
+};
+// Auto-populate Layer 3 variants
+Object.keys(MARS_SPEED_MAP).forEach((k) => {
+  MARS_SPEED_MAP["L3" + k] = MARS_SPEED_MAP[k];
+});
+
+// ==================== SERVICE TYPE → PLAN KEYWORD FILTER ====================
+function isPlanMatchingServiceType(planTitle, serviceType) {
+  const title = (planTitle || "").toLowerCase();
+  if (serviceType === "nsas") {
+    return title.includes("sky") || title.includes("satellite") || title.includes("muster");
+  }
+  if (serviceType === "nwas") {
+    return title.includes("wireless") || title.includes("fixed wireless") || title.includes("fw ");
+  }
+  return !title.includes("sky") && !title.includes("satellite") && !title.includes("muster") && !title.includes("wireless") && !title.includes("fw ");
+}
+
+function filterTariffsByMarsAvailability(tariffs, virtutelSpeedsAvailable, serviceType) {
+  const availableSpeeds = new Set();
+  if (Array.isArray(virtutelSpeedsAvailable) && virtutelSpeedsAvailable.length > 0) {
+    for (const code of virtutelSpeedsAvailable) {
+      const mapped = MARS_SPEED_MAP[code];
+      if (mapped) availableSpeeds.add(`${mapped.dl}/${mapped.ul}`);
+    }
+  }
+  return tariffs.filter((t) => {
+    if (serviceType && !isPlanMatchingServiceType(t.title, serviceType)) return false;
+    if (availableSpeeds.size > 0) {
+      const dl = Math.round(t.speed_download / 1000);
+      const ul = Math.round(t.speed_upload / 1000);
+      return availableSpeeds.has(`${dl}/${ul}`);
+    }
+    return true;
+  });
+}
+
+function requiresInstallVisit(serviceabilityClass) {
+  const installRequired = new Set(["1", "2", "5", "8", "21", "22", "23", "31", "32", "33", "11", "12"]);
+  return installRequired.has(String(serviceabilityClass));
+}
+
+function getServiceabilityDescription(primaryAccessTechnology, serviceabilityClass, serviceabilityStatus) {
+  const cls = String(serviceabilityClass);
+  const tech = (primaryAccessTechnology || "").toLowerCase();
+  if (serviceabilityStatus === "Rejected") return "Not currently orderable at this address.";
+  if (tech === "fibre") {
+    if (cls === "1") return "Fibre serviceable — no drop or NTD in place. Technician visit required for installation.";
+    if (cls === "2") return "Fibre drop in place — NTD not yet installed. Technician visit required to complete installation.";
+    if (cls === "3") return "Fibre fully installed (drop + NTD in place). Ready to connect — typically 1–5 business days.";
+  }
+  if (tech === "hfc") {
+    if (cls === "21") return "HFC serviceable — lead-in, PCD, and internal cabling required. Technician visit needed.";
+    if (cls === "22") return "HFC lead-in & PCD in place — internal cabling with wall plates still needed. Technician visit required.";
+    if (cls === "23") return "HFC wall plate present — NTD not yet installed. Technician visit required.";
+    if (cls === "24") return "HFC fully installed (wall plate + NTD in place). Ready to connect.";
+  }
+  if (tech === "wireless") {
+    if (cls === "5") return "Fixed Wireless serviceable — CPE (antenna/NTD) not yet installed. Technician visit required. Standard install is free.";
+    if (cls === "6") return "Fixed Wireless fully installed (CPE in place). Ready to connect. Note: Superfast tier may require WNTD upgrade appointment.";
+  }
+  if (tech === "satellite") {
+    if (cls === "8") return "Satellite serviceable — dish and NTD not yet installed. Technician visit required. Standard install is free. Typical latency: 500–600ms.";
+    if (cls === "9") return "Satellite fully installed (dish + NTD in place). Ready to connect. Typical latency: 500–600ms.";
+  }
+  if (tech === "fibre to the node") {
+    if (cls === "11") return "FTTN serviceable — active node present. Technician visit may be required for jumpering.";
+    if (cls === "12") return "FTTN serviceable — jumpering required. Technician visit needed.";
+    if (cls === "13") return "FTTN infrastructure in place. Ready to connect.";
+  }
+  if (tech === "fibre to the building") {
+    if (cls === "12") return "FTTB serviceable — jumpering required. Technician visit needed.";
+    if (cls === "13") return "FTTB infrastructure in place. Ready to connect.";
+  }
+  if (tech === "fibre to the curb") {
+    if (cls === "31") return "FTTC serviceable — no copper line available yet (NCD required). Technician visit needed.";
+    if (cls === "32") return "FTTC serviceable — cut-in required (NCD needed). Technician visit required.";
+    if (cls === "33") return "FTTC cut-in complete — NCD still required. Technician visit needed.";
+    if (cls === "34") return "FTTC infrastructure fully in place. Ready to connect.";
+  }
+  return serviceabilityStatus || "Serviceable";
+}
+
+// ==================== MARS API FUNCTIONS ====================
+let marsAccessToken = null;
+let marsAccessTokenExpiresAtMs = 0;
+
+async function getMarsAccessToken() {
+  if (marsAccessToken && marsAccessTokenExpiresAtMs && Date.now() < marsAccessTokenExpiresAtMs - 30_000) {
+    return marsAccessToken;
+  }
+  if (!MARS_CLIENT_ID || !MARS_CLIENT_SECRET) {
+    throw new Error("Mars credentials missing: set MARS_CLIENT_ID and MARS_CLIENT_SECRET in environment/.env");
+  }
+  const resp = await axios.post(`${MARS_BASE_URL}/oauth/tokens`, {
+    client_id: MARS_CLIENT_ID, client_secret: MARS_CLIENT_SECRET,
+    audience: "mars.as24516.net", grant_type: "client_credentials",
+  }, { headers: { "Content-Type": "application/json" } });
+  const data = resp?.data || {};
+  if (!data.vt_success || !data.access_token) {
+    throw new Error(`Mars token error: ${data.vt_error_desc || data.vt_short_error || "Token request failed"}`);
+  }
+  marsAccessToken = data.access_token;
+  const expiresInSec = typeof data.expires_in === "number" ? data.expires_in : 0;
+  marsAccessTokenExpiresAtMs = Date.now() + Math.max(0, expiresInSec) * 1000;
+  return marsAccessToken;
+}
+
+async function marsAddressSearch(address) {
+  const token = await getMarsAccessToken();
+  const resp = await axios.post(`${MARS_BASE_URL}/locations`, { unstructured: { address, fuzzy: false } }, {
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+  });
+  console.log("Mars locations response:", resp?.data);
+  const data = resp?.data || {};
+  if (!data.vt_success) {
+    throw new Error(`Mars locations error: ${data.vt_error_desc || data.vt_short_error || "Address search failed"}`);
+  }
+  return Array.isArray(data.responseData) ? data.responseData : [];
+}
+
+async function marsServiceQualification(locationId) {
+  const token = await getMarsAccessToken();
+  const resp = await axios.get(`${MARS_BASE_URL}/service-qualifications/${encodeURIComponent(locationId)}`, {
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+  });
+  console.log("Mars service qualification response:", resp?.data);
+  return resp?.data;
+}
+
+// ==================== SPLYNX CLIENT ====================
 class SplynxApiClient {
   constructor(config) {
     this.baseUrl = config.SPLYNX_BASE_URL; this.apiKey = config.API_KEY;
@@ -163,31 +404,48 @@ Knowledge base for InfiNET Broadband:
 - Phone: 1300 101 414
 - Residential Plans (intro discounts for new customers, unlimited data, no contract):
   NBN:
-  - 25/10 Basic: $59/m ($5 off 3m, then $64)
-  - 50/20 Standard: $74/m ($5 off 3m, then $79)
-  - 100/20 Fast: $84/m ($5 off 3m, then $89)
+  - 25/10 Basic: $59/m ($5 off 3m, then $64) – FTTC/FTTN/FTTB/FTTP/HFC
+  - 50/20 Standard: $74/m ($5 off 3m, then $79) – FTTC/FTTN/FTTB/FTTP/HFC
+  - 100/20 Fast: $84/m ($5 off 3m, then $89) – FTTC/FTTN/FTTB/FTTP/HFC
   - 500/50 Faster: $84/m ($5 off 3m, then $89) – FTTP/HFC only
-  - 750/50 Superfast: $99/m ($10 off 3m, then $109) – FTTP/HFC only
-  - 1000/100 Ultrafast: $109/m ($10 off 3m, then $119) – FTTP/HFC only
-  OptiComm:
+  - 750/50 Superfast: $89/m ($10 off 3m, then $99) – FTTP/HFC only
+  - 1000/100 Ultrafast: $99/m ($10 off 3m, then $109) – FTTP/HFC only
+  OptiComm Residential (FTTP, reliable fibre):
   - 25/10: $64/m ($5 off 3m, then $69)
   - 50/20: $74/m ($5 off 3m, then $79)
-  - 100/20: $84/m ($5 off 3m, then $89)
-  - 500/50: $79/m ($10 off 3m, then $89)
+  - 100/20: $84/m ($5 off 3m, then $89) – for communities with limited capacity of 100Mbps
+  - 500/50 Faster: $79/m ($10 off 3m, then $89)
   - 750/50: $89/m ($10 off 3m, then $99)
   - 1000/100: $99/m ($10 off 3m, then $109)
-  Hope Island Resort:
-  - 25/10: $44/m ($15 off 3m, then $59)
-  - 50/20: $49/m ($15 off 3m, then $64)
-  - 250/50: $64/m ($15 off 3m, then $79)
-  - 500/50: $64/m ($15 off 3m, then $79)
-  - 750/50: $74/m ($15 off 3m, then $89)
-  - 1000/100: $84/m ($15 off 3m, then $99)
-  Fixed Wireless: 25/10: $59/m | 75/10: $89/m | 200/20: $99/m | 400/40: $109/m
-  Sky Muster: 25/5: $59/m | 50/5: $69/m | 100/5: $99/m
+  Hope Island Resort Residential:
+  - 25/10 Basic: $44/m ($15 off 3m, then $59)
+  - 50/20 Standard: $49/m ($15 off 3m, then $64)
+  - 250/50 Fast: $64/m ($15 off 3m, then $79)
+  - 500/50 Home Fast: $64/m ($15 off 3m, then $79)
+  - 750/50 Superfast: $74/m ($15 off 3m, then $89)
+  - 1000/100 Ultrafast: $84/m ($15 off 3m, then $99)
+  NBN Fixed Wireless (no contract, month-to-month, free NBN setup):
+  - 25/5 Standard: $59/m
+  - 100/20 Plus: $89/m
+  - 200/20 HomeFast: $99/m
+  - 400/40 SuperFast: $109/m (eligible areas only)
+  NBN Sky Muster Plus Satellite (no contract, month-to-month, free NBN installation):
+  - 25/5 Basic: $59/m
+  - 50/5 Fast: $69/m
+  - 100/5 Ultra: $99/m
 - Business Plans:
-  NBN Business: 50/20: $89/m | 100/40: $109/m | 250/100: $149/m | 500/200: $189/m | 1000/400: $239/m
-  OptiComm Business: 50/20: $79/m ($10 off 3m) | 100/40: $99/m ($10 off 3m) | 250/100: $139/m ($10 off 3m) | 500/200: $169/m ($10 off 3m) | 1000/400: $189/m ($10 off 3m)
+  NBN Business (static IP, unlimited, no contract):
+  - 50/20 Basic: $89/m – FTTC/FTTN/FTTB/FTTP/HFC
+  - 100/40 Fast: $99/m – FTTC/FTTN/FTTB/FTTP/HFC
+  - 250/100 Faster: $149/m – FTTP/HFC only
+  - 500/200 Superfast: $189/m – FTTP/HFC only
+  - 1000/400 Ultrafast: $239/m – FTTP/HFC only
+  OptiComm Business (static IP included):
+  - 50/20: $79/m ($10 off 3m, then $89)
+  - 100/40: $99/m ($10 off 3m, then $109)
+  - 250/100: $139/m ($10 off 3m, then $149)
+  - 500/200: $169/m ($10 off 3m, then $179)
+  - 1000/400: $189/m ($10 off 3m, then $199)
   HIR Business: 250/100: $109/m | 500/200: $119/m | 1000/400: $139/m
   Business VoIP: VoIP 30: $30/m (PAYG) | VoIP 50: $50/m (unlimited)
 - Hardware: TP-Link VX230v: $179 | VX230v+HX510 Mesh 1-pack: $318, 2-pack: $459 | HX510 1-pack: $159, 2-pack: $299 | VX420 4G failover: $319
@@ -210,6 +468,7 @@ STRICT RULES:
 - IMPORTANT: For sales inquiries (new customers), do NOT mention any ticket number or ticket ID. Just say the inquiry was submitted.
 - For support: collect issueSummary with follow-up details.
 - Use customer_lookup for existing customers.
+- PRIVATE NETWORK / DEVELOPMENT HANDLING: If customer mentions "private network", "development", "developer", "estate", "private fibre", "bulk fibre", "developers network", immediately respond: "If you're interested in developments or private fibre networks for new estates or buildings, please visit https://www.infinetbroadband.com.au/private-fibre-networks-for-developers/. How else can I assist you today?"
 
 CONVERSATION FLOW MOMENTUM:
 - Never repeat same question. Accept partial answers. Confirm and move on.
@@ -222,56 +481,66 @@ INITIAL FLOW:
 1. Get name → ask "Are you a new or existing customer?" → extract_call_fields customerType.
 2. New → SALES FLOW. Existing → ask support/accounts/moving.
 
+**STRICT PLANS DISPLAY RULE (applies to ALL flows):**
+Before showing ANY plans, you MUST ALWAYS ask these two preferences one at a time:
+1. First ask: "Are you interested in residential or business plans?"
+   - Wait for reply → extract_call_fields residentialPreference.
+2. Then ask: "Would you like NBN or OptiComm plans?"
+   - Wait for reply → extract_call_fields networkPreference.
+ONLY AFTER BOTH preferences are collected may you ask for the address and call check_address_availability.
+
+ADDRESS AVAILABILITY & TECHNOLOGY HANDLING (CRITICAL):
+**OPTICOMM ADDRESS HANDLING:**
+- When networkPreference is "OptiComm" and check_address_availability is called, the tool returns hardcoded OptiComm plans without calling MARS.
+- For OptiComm, present plans and note: "OptiComm provides reliable fibre internet. All plans include unlimited data, no contract, and month-to-month terms."
+- For OptiComm business plans, note: "All business plans include a Static IP address."
+- Do NOT mention serviceability classes, install visits, or MARS details for OptiComm.
+
+**NBN ADDRESS HANDLING:**
+When check_address_availability returns results for NBN:
+- If orderable: false → Tell customer: "Unfortunately, [address] is not yet serviceable. Reason: [message]. Would you like to leave your details so we can follow up?"
+- If primaryAccessTechnology is "Wireless" (Fixed Wireless):
+  * Show Fixed Wireless plans only. Skip "NBN or OptiComm?" question.
+- If primaryAccessTechnology is "Satellite" (Sky Muster):
+  * Show Sky Muster plans only. Skip "NBN or OptiComm?" question.
+- If primaryAccessTechnology contains "Fibre To The Node/Building/Curb" (FTTN/FTTB/FTTC):
+  * Show FTTN/FTTB/FTTC-appropriate NBN plans (max 100/40 speeds). Do NOT show 500/50 or higher.
+- If primaryAccessTechnology is "Fibre" or "HFC" (FTTP/HFC):
+  * Full speed range available.
+- If requiresInstall: true → mention: "Please note an NBN technician visit will be required. Standard installation is free."
+- If notes are returned → relay those notes to the customer.
+
 SALES FLOW:
-1. "Is this for a residential or business connection?" → save residentialPreference.
-2. "First option is NBN. Second option is Opticomm. Which one would you prefer?" → save networkPreference.
-3. "Could you please provide the full address?" (input box appears) → save address.
-4. Say "Let me check the latest plans for you." Then IMMEDIATELY call the get_internet_plans tool to fetch live pricing from our system.
-5. After get_internet_plans returns, present the plans as a numbered list:
-   "Here are our current plans:
-   1. [Plan Title] — $[Price]/month | [Download] down / [Upload] up
-   2. ...
-   Which plan would you like? Just say the number."
-6. User selects by number → save leadInterest.
-7. "Could you please provide your email address?" (input box) → save email.
-8. "Please wait a moment..." → create_ticket with sales inquiry details (reporter_type: "api", NO customer_id).
-9. After success: "Thank you \${preferredName}! Your inquiry has been submitted. Our sales team will contact you shortly via email."
+1. Ask: "Is this for a residential or business connection?" → save residentialPreference.
+2. Ask: "Would you like NBN or OptiComm plans?" → save networkPreference.
+3. Ask: "Could you please provide the full address?" (input box appears) → save address.
+4. IMMEDIATELY call check_address_availability with the address, networkPreference, and residentialPreference.
+5. After tool result → Apply ADDRESS AVAILABILITY & TECHNOLOGY HANDLING rules. Show available plans as numbered list.
+6. User selects → save leadInterest.
+7. Ask for email (input box) → save email.
+8. "Please wait a moment..." → create_ticket.
+9. Confirm submission.
 
 SUPPORT FLOW:
-- Ask email (input box) → customer_lookup → "Found your account, describe the issue" → collect issueSummary → create_ticket.
+- Ask email → customer_lookup → "Found your account, describe the issue" → collect issueSummary → create_ticket.
 
 ACCOUNTS FLOW:
 - Ask email → customer_lookup → answer billing Qs from KB → collect issue → create_ticket.
 - For phone payments: "Please call 1300 101 414."
 
-RELOCATION FLOW (existing customers, moving/relocating):
-1. Ask: "Could you please provide your email address so I can look up your account?" (input box appears)
-2. Call customer_lookup with the email.
-3. After successful lookup, IMMEDIATELY list the customer's active services from the lookup result:
-   "Found your account, \${preferredName}. Here are your current active services:
-   1. [Service name/plan] — [speed/details]
-   2. ...
-   Which service would you like to terminate for the move?"
-   If the customer has only ONE active service, still list it and confirm: "I can see you have [service name]. We'll arrange the termination for this one. What date would you like it terminated?"
-4. After they pick the service to terminate, ask: "What date would you like to terminate this service?"
-5. Ask: "Is the new connection for residential or business?"
-6. Ask: "First option is NBN. Second option is Opticomm. Which one would you prefer?"
-7. Ask: "Could you please provide the new address?" (input box appears)
-8. Call get_internet_plans for latest plans → show matching plans as numbered list → user selects.
-9. Ask: "What date would you prefer for the new connection?"
-10. "Please wait a moment..." → create_ticket with all relocation details (customer_id, old service, termination date, new address, new plan, connection date).
-
-PLANS DISPLAY RULE:
-- Always determine residential/business THEN NBN/OptiComm.
-- ALWAYS call get_internet_plans tool to fetch latest live plans from Splynx. Never hardcode or assume prices.
-- Show plans as a numbered list. All unlimited data, no contract.
-- Mention introductory discounts from the KB where applicable.
+RELOCATION FLOW (existing customers):
+1. Ask email → customer_lookup.
+2. List active services → ask which to terminate.
+3. Ask residential/business → NBN/OptiComm → termination date → connection date → new address.
+4. Call check_address_availability with new address.
+5. Show matching plans → user selects → create_ticket with all relocation details.
 
 TOOL USAGE:
-- extract_call_fields for identification info (Name, Email, Address, Phone) or before tickets.
-- Plans: ALWAYS call get_internet_plans to fetch the latest live tariffs from Splynx before showing plans. Use the KB only for supplementary info like intro discounts and technology notes.
+- extract_call_fields for all personal info.
+- check_address_availability when address is collected (pass networkPreference and residentialPreference).
+- get_internet_plans ONLY as fallback if check_address_availability is not applicable.
 - customer_lookup for existing customers.
-- "First option NBN, Second option Opticomm" — if user says "first/1/one" → NBN, "second/2/two" → Opticomm.
+- "First option NBN, Second option Opticomm" — if user says "first/1" → NBN, "second/2" → Opticomm.
 
 Knowledge base:
 ${KB}
@@ -302,8 +571,22 @@ const extractFunction = {
 
 const getPlansTool = {
   name: "get_internet_plans",
-  description: "Fetch the latest live internet tariff plans from Splynx. Use this when the customer asks about available plans, pricing, or speeds. Returns real-time plan data including title, price, download and upload speeds.",
+  description: "Fetch the latest live internet tariff plans from Splynx. Use as fallback when check_address_availability is not applicable.",
   parameters: { type: "object", properties: {}, required: [] },
+};
+
+const checkAvailabilityTool = {
+  name: "check_address_availability",
+  description: "Check which plans are available at a customer's address. For OptiComm, returns hardcoded plans. For NBN, calls MARS API to determine serviceability and available speed-matched plans. Requires address; networkPreference and residentialPreference are optional but recommended.",
+  parameters: {
+    type: "object",
+    properties: {
+      address: { type: "string", description: "Full address including street, suburb, state and postcode" },
+      networkPreference: { type: "string", description: "Network preference: 'OptiComm' or 'NBN'" },
+      residentialPreference: { type: "string", description: "Plan type: 'residential' or 'business'" },
+    },
+    required: ["address"],
+  },
 };
 
 const customerLookupTool = { name: "customer_lookup", description: "Lookup customer by name, email, or phone.", parameters: { type: "object", properties: { name: { type: "string" }, email: { type: "string" }, phone: { type: "string" } }, required: [] } };
@@ -324,7 +607,7 @@ const getTicketTypesTool = { name: "get_ticket_types", description: "Fetch ticke
 const getTicketGroupsTool = { name: "get_ticket_groups", description: "Fetch ticket groups.", parameters: { type: "object", properties: {}, required: [] } };
 const getTicketStatusesTool = { name: "get_ticket_statuses", description: "Fetch ticket statuses.", parameters: { type: "object", properties: {}, required: [] } };
 
-const tools = [extractFunction, getPlansTool, customerLookupTool, createTicketTool, getTicketTypesTool, getTicketGroupsTool, getTicketStatusesTool];
+const tools = [extractFunction, getPlansTool, checkAvailabilityTool, customerLookupTool, createTicketTool, getTicketTypesTool, getTicketGroupsTool, getTicketStatusesTool];
 
 // ==================== HELPERS ====================
 function mkSession(sessionId) {
@@ -334,10 +617,12 @@ function mkSession(sessionId) {
 }
 function normalizeText(t) { return (t || "").toString().replace(/\u200B/g, "").replace(/\s+/g, " ").trim(); }
 function mapOrdinalNetworkChoice(text) {
-  const t = (text || "").toLowerCase();
+  const t = (text || "").toLowerCase().trim();
+  // If they explicitly said NBN or OptiComm, no mapping needed
   if (/\bnbn\b/.test(t) || /\b(opti\s*comm|opticomm)\b/.test(t)) return null;
-  if (/\b(first|1st|option\s*1|option\s*one|number\s*1)\b/.test(t)) return "NBN";
-  if (/\b(second|2nd|option\s*2|option\s*two|number\s*2)\b/.test(t)) return "Opticomm";
+  // Map ordinals/numbers to network — "first option NBN, second option OptiComm"
+  if (/\b(first|1st|one|1|option\s*1|option\s*one|number\s*1|the\s*first)\b/.test(t)) return "NBN";
+  if (/\b(second|2nd|two|2|to|option\s*2|option\s*two|number\s*2|the\s*second)\b/.test(t)) return "Opticomm";
   return null;
 }
 function safeParseJSON(s) { try { return JSON.parse(s); } catch (e) { return null; } }
@@ -385,6 +670,103 @@ async function makeTTS(text) {
   } catch (e) { console.warn("TTS failed:", e?.message); return null; }
 }
 
+// ==================== CHECK ADDRESS AVAILABILITY ====================
+async function checkAddressAvailability(args, session) {
+  const { address, networkPreference, residentialPreference } = args;
+  if (!address) return JSON.stringify({ error: "Address is required" });
+
+  const netPref = (networkPreference || session.collected?.networkPreference || "").toLowerCase();
+  const isOpticomm = netPref === "opticomm" || netPref === "opti comm";
+
+  if (isOpticomm) {
+    // ==================== OPTICOMM: USE HARDCODED PLANS ====================
+    const resPref = (residentialPreference || session.collected?.residentialPreference || "residential").toLowerCase();
+    const isBusiness = resPref === "business";
+    const plans = isBusiness ? OPTICOMM_BUSINESS_PLANS : OPTICOMM_RESIDENTIAL_PLANS;
+
+    console.log(`OptiComm address check (no MARS): ${address} | type: ${resPref} | plans: ${plans.length}`);
+
+    return JSON.stringify({
+      success: true,
+      orderable: true,
+      address,
+      network: "OptiComm",
+      primaryAccessTechnology: "OptiComm Fibre",
+      serviceType: "opticomm",
+      requiresInstall: false,
+      readinessDescription: "OptiComm Fibre is available at this address. Activation is typically within 1–2 business days for fully installed premises.",
+      notes: [],
+      availablePlans: plans.map((p) => ({
+        title: p.title,
+        price: p.intro_price,
+        ongoing_price: p.ongoing_price,
+        discount: p.discount,
+        download: p.download,
+        upload: p.upload,
+        features: p.features,
+        suitable_for: p.suitable_for,
+        ...(p.note ? { note: p.note } : {}),
+      })),
+    });
+  } else {
+    // ==================== NBN: USE MARS API ====================
+    try {
+      const marsCandidates = await marsAddressSearch(address);
+      const locId = marsCandidates?.[0]?.id || null;
+
+      let marsSq = null;
+      try {
+        if (locId) marsSq = await marsServiceQualification(locId);
+      } catch (e) {
+        console.warn("MARS service qualification failed:", e.message);
+        marsSq = null;
+      }
+
+      const serviceabilityStatus = marsSq?.siteRestriction?.serviceabilityStatus || null;
+      const serviceabilityClass = marsSq?.siteRestriction?.supportingTechnology?.serviceabilityClass || null;
+      const primaryAccessTechnology = marsSq?.siteRestriction?.supportingTechnology?.primaryAccessTechnology || null;
+      const serviceType = marsSq?.serviceType || null;
+      const virtutelSpeeds = marsSq?.virtutelSpeedsAvailable || [];
+      const marsNotes = marsSq?.siteRestriction?.notes || [];
+      const serviceabilityClassReason = marsSq?.siteRestriction?.supportingTechnology?.serviceabilityClassReason || null;
+
+      if (serviceabilityStatus === "Rejected") {
+        const reason = serviceabilityClassReason || "This address is planned to be serviced in the future but is not yet orderable.";
+        console.log(`Address NOT orderable: ${address} | class: ${serviceabilityClass} | tech: ${primaryAccessTechnology} | reason: ${reason}`);
+        return JSON.stringify({
+          success: true, orderable: false, address, locationId: locId,
+          serviceabilityStatus, serviceabilityClass, primaryAccessTechnology, serviceType,
+          message: reason, availablePlans: [],
+          mars: { candidates: marsCandidates, virtutelSpeedsAvailable: virtutelSpeeds, serviceType, supportingTechnology: marsSq?.siteRestriction?.supportingTechnology || null },
+        });
+      } else {
+        const allTariffs = await fetchTariffs();
+        const availablePlans = filterTariffsByMarsAvailability(allTariffs, virtutelSpeeds, serviceType);
+        const needsInstall = requiresInstallVisit(serviceabilityClass);
+        const readinessDescription = getServiceabilityDescription(primaryAccessTechnology, serviceabilityClass, serviceabilityStatus);
+
+        console.log(`NBN address check: ${address} | locId: ${locId} | tech: ${primaryAccessTechnology} | class: ${serviceabilityClass} | status: ${serviceabilityStatus} | serviceType: ${serviceType} | MARS speeds: ${virtutelSpeeds.length} | Matched plans: ${availablePlans.length} | requiresInstall: ${needsInstall}`);
+
+        return JSON.stringify({
+          success: true, orderable: true, address, locationId: locId,
+          serviceabilityStatus, serviceabilityClass, primaryAccessTechnology, serviceType,
+          requiresInstall: needsInstall, readinessDescription, notes: marsNotes,
+          availablePlans: availablePlans.map((p) => ({
+            title: p.title,
+            price: parseFloat(p.price),
+            download: `${Math.round(p.speed_download / 1000)} Mbps`,
+            upload: `${Math.round(p.speed_upload / 1000)} Mbps`,
+          })),
+          mars: { candidates: marsCandidates, virtutelSpeedsAvailable: virtutelSpeeds, serviceType, supportingTechnology: marsSq?.siteRestriction?.supportingTechnology || null },
+        });
+      }
+    } catch (err) {
+      console.error("check_address_availability (NBN) error:", err.message);
+      return JSON.stringify({ success: false, error: err.message, address });
+    }
+  }
+}
+
 // ==================== TOOL HANDLER ====================
 async function handleToolCall(session, funcName, args) {
   if (funcName === "extract_call_fields") { applyExtractionToSession(session, args); return JSON.stringify({ success: true }); }
@@ -405,24 +787,22 @@ async function handleToolCall(session, funcName, args) {
       return JSON.stringify({ success: false, error: err.message });
     }
   }
+  if (funcName === "check_address_availability") {
+    return await checkAddressAvailability(args, session);
+  }
   if (funcName === "create_ticket") {
     let fa = { ...args }; if (typeof fa.message === "string") fa.message = { message: fa.message };
-
     const collected = session.collected || {};
-    // Simple rule: if customer_id exists → Support. No customer_id → Sales.
     const hasCustomerId = !!(fa.customer_id || collected.customer_id);
     const isSupportTicket = hasCustomerId;
-
     try {
       if (isSupportTicket) {
-        // SUPPORT/ACCOUNTS/RELOCATION: Create Splynx ticket + send Support email
         console.log(`📝 Creating SUPPORT ticket in Splynx: subject="${fa.subject}" customer_id=${fa.customer_id}`);
         const r = await splynx.request("POST", "admin/support/tickets", objectToUrlEncoded(fa));
         console.log(`✅ Splynx ticket created: ID=${r.id}`);
         const emailResult = await sendTicketEmail(r.id, fa, collected, true);
         return JSON.stringify({ success: true, ticket_id: r.id, email_sent: emailResult.sent, email_error: emailResult.reason || null });
       } else {
-        // SALES: Email only, NO Splynx ticket
         console.log(`📧 SALES inquiry — sending email only (no Splynx ticket): subject="${fa.subject}"`);
         const emailResult = await sendTicketEmail(null, fa, collected, false);
         return JSON.stringify({ success: true, message: "Sales inquiry submitted successfully", email_sent: emailResult.sent, email_error: emailResult.reason || null });
@@ -521,10 +901,19 @@ setupRealtimeVoice(io, {
   mkSession, sessions, normalizeText, safeParseJSON,
   applyExtractionToSession, fetchTariffs, customerLookup, objectToUrlEncoded,
   splynx, sendTicketEmail,
+  // NEW: pass address availability deps to realtime handler
+  checkAddressAvailability,
+  OPTICOMM_RESIDENTIAL_PLANS, OPTICOMM_BUSINESS_PLANS,
+  MARS_SPEED_MAP, filterTariffsByMarsAvailability,
+  requiresInstallVisit, getServiceabilityDescription,
+  marsAddressSearch, marsServiceQualification,
 });
 
 httpServer.listen(PORT, () => {
   console.log(`🚀 InfiNET Broadband AI Server running on port ${PORT}`);
   console.log(`🎤 Realtime API + ElevenLabs • Ultra-low latency mode`);
   console.log(`🔌 Socket.IO ready for voice clients`);
+  console.log(` • OptiComm plans = HARDCODED (no MARS API call)`);
+  console.log(` • NBN plans filtered by MARS virtutelSpeedsAvailable + serviceType`);
+  console.log(` • check_address_availability tool available for voice + chat`);
 });

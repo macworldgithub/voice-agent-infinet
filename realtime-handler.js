@@ -7,6 +7,8 @@ export function setupRealtimeVoice(io, deps) {
     mkSession, sessions, normalizeText, safeParseJSON,
     applyExtractionToSession, fetchTariffs,
     customerLookup, objectToUrlEncoded, splynx, sendTicketEmail,
+    // NEW: address availability deps
+    checkAddressAvailability,
   } = deps;
 
   const realtimeTools = tools.map((t) => ({
@@ -22,11 +24,6 @@ export function setupRealtimeVoice(io, deps) {
 
     // ═══════════════════════════════════════════════════════════
     //  ElevenLabs State — Per-Response Connection Pattern
-    //  (Ported from voice.service.ts)
-    //
-    //  KEY BEHAVIOR: ElevenLabs stream-input WebSocket is single-use.
-    //  Once you flush (send empty text), ElevenLabs finishes and closes.
-    //  So each AI response needs its own connection.
     // ═══════════════════════════════════════════════════════════
     let elevenLabsWs = null;
     let elevenLabsReady = false;
@@ -202,6 +199,37 @@ export function setupRealtimeVoice(io, deps) {
       return null;
     }
 
+    // ═══════════════ Ordinal Network Choice Mapping ═══════════════
+    // When AI asks "First option NBN, second OptiComm", user may say
+    // "2", "second", "two", "the second one", "option 2", etc.
+    function mapOrdinalNetworkChoice(text) {
+      const t = (text || "").toLowerCase().trim();
+      // If they explicitly said NBN or OptiComm, no mapping needed
+      if (/\bnbn\b/.test(t) || /\b(opti\s*comm|opticomm)\b/.test(t)) return null;
+      // Map ordinals/numbers to network
+      if (/\b(first|1st|one|1|option\s*1|option\s*one|number\s*1|the\s*first)\b/.test(t)) return "NBN";
+      if (/\b(second|2nd|two|2|option\s*2|option\s*two|number\s*2|the\s*second|to)\b/.test(t)) return "Opticomm";
+      return null;
+    }
+
+    // Check if the AI just asked the network preference question
+    function wasLastMessageNetworkQuestion() {
+      const msgs = session.messages || [];
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        if (msgs[i].role === "assistant") {
+          const t = (msgs[i].content || "").toLowerCase();
+          return (
+            (t.includes("nbn") && t.includes("opticomm")) ||
+            (t.includes("first option") && t.includes("second option")) ||
+            t.includes("nbn or opticomm") ||
+            t.includes("which one would you prefer")
+          );
+        }
+        if (msgs[i].role === "user") break; // stop at previous user msg
+      }
+      return false;
+    }
+
     function detectBadTranscription(text) {
       if (!text) return null;
       const lower = text.toLowerCase();
@@ -214,7 +242,7 @@ export function setupRealtimeVoice(io, deps) {
     }
 
     // ═══════════════════════════════════════════════════════════
-    //  ElevenLabs Connection Management (per-response pattern)
+    //  ElevenLabs Connection Management
     // ═══════════════════════════════════════════════════════════
     function openElevenLabsStream(force = false) {
       if (
@@ -239,7 +267,6 @@ export function setupRealtimeVoice(io, deps) {
           xi_api_key: ELEVENLABS_API_KEY,
         }));
 
-        // Race condition guard: only set ready if THIS is still active
         if (elevenLabsWs === elWs) {
           elevenLabsReady = true;
           for (const text of textBuffer) {
@@ -270,7 +297,6 @@ export function setupRealtimeVoice(io, deps) {
         console.warn(`⚠️ [EL] ElevenLabs WS error: ${err.message}`);
       });
 
-      // Race condition guard from voice.service.ts
       elWs.on("close", () => {
         if (elevenLabsWs === elWs) {
           elevenLabsReady = false;
@@ -431,6 +457,34 @@ export function setupRealtimeVoice(io, deps) {
 
               console.log(`👤 User: "${cleaned}"`);
               socket.emit("user_transcript", cleaned);
+
+              // ── Ordinal network choice mapping ──
+              // If AI just asked "First option NBN, second OptiComm" and user says "2"/"second"/"two",
+              // inject a clarified message so OpenAI clearly understands the choice
+              const mappedNetwork = mapOrdinalNetworkChoice(cleaned);
+              if (mappedNetwork && wasLastMessageNetworkQuestion()) {
+                const clarified = `I want ${mappedNetwork}`;
+                console.log(`🔄 Ordinal mapped: "${cleaned}" → "${clarified}" (network: ${mappedNetwork})`);
+                session.collected.networkPreference = mappedNetwork;
+                session.messages.push({ role: "user", content: clarified });
+                sessions.set(session.id, session);
+
+                // Inject clarified text into OpenAI Realtime conversation
+                if (openaiWs?.readyState === WebSocket.OPEN) {
+                  openaiWs.send(JSON.stringify({
+                    type: "conversation.item.create",
+                    item: {
+                      type: "message",
+                      role: "user",
+                      content: [{ type: "input_text", text: clarified }],
+                    },
+                  }));
+                  throttledResponseCreate();
+                }
+                clearSilenceTimer();
+                break; // Skip normal processing — we injected the clarified version
+              }
+
               session.messages.push({ role: "user", content: cleaned });
               sessions.set(session.id, session);
               clearSilenceTimer();
@@ -606,25 +660,32 @@ export function setupRealtimeVoice(io, deps) {
         }
       }
 
+      // ==================== CHECK ADDRESS AVAILABILITY ====================
+      if (fn === "check_address_availability") {
+        try {
+          return await checkAddressAvailability(args, session);
+        } catch (err) {
+          console.error("check_address_availability error in realtime:", err.message);
+          return JSON.stringify({ success: false, error: err.message, address: args.address });
+        }
+      }
+
       if (fn === "create_ticket") {
         let fa = { ...args };
         if (typeof fa.message === "string") fa.message = { message: fa.message };
 
         const collected = session.collected || {};
-        // Simple rule: if customer_id exists → Support. No customer_id → Sales.
         const hasCustomerId = !!(fa.customer_id || collected.customer_id);
         const isSupportTicket = hasCustomerId;
 
         try {
           if (isSupportTicket) {
-            // SUPPORT/ACCOUNTS/RELOCATION: Create Splynx ticket + send Support email
             console.log(`📝 Creating SUPPORT ticket in Splynx: subject="${fa.subject}" customer_id=${fa.customer_id}`);
             const r = await splynx.request("POST", "admin/support/tickets", objectToUrlEncoded(fa));
             console.log(`✅ Splynx ticket created: ID=${r.id}`);
             const emailResult = await sendTicketEmail(r.id, fa, collected, true);
             return JSON.stringify({ success: true, ticket_id: r.id, email_sent: emailResult.sent, email_error: emailResult.reason || null });
           } else {
-            // SALES: Email only, NO Splynx ticket
             console.log(`📧 SALES inquiry — sending email only (no Splynx ticket): subject="${fa.subject}"`);
             const emailResult = await sendTicketEmail(null, fa, collected, false);
             return JSON.stringify({ success: true, message: "Sales inquiry submitted successfully", email_sent: emailResult.sent, email_error: emailResult.reason || null });
