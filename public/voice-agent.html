@@ -275,7 +275,7 @@
         </button>
     </div>
 
-    <!-- Structured Input Overlay -->
+    <!-- Structured Input Overlay (EMAIL & PHONE ONLY — no address) -->
     <div id="structured-input-container">
         <div class="si-backdrop px-6 py-6">
             <div class="max-w-md mx-auto">
@@ -527,7 +527,7 @@
                 src.onended = () => { activeSources = activeSources.filter((s) => s !== src); };
             }
 
-            // ──────── Structured Input UI ────────
+            // ──────── Structured Input UI (EMAIL & PHONE ONLY) ────────
             const siContainer = document.getElementById("structured-input-container");
             const siForm = document.getElementById("si-form");
             const siInput = document.getElementById("si-input");
@@ -537,6 +537,12 @@
             const siHint = document.getElementById("si-hint");
 
             function showStructuredInput(field, prompt) {
+                // ===== FIX #1: Only handle email and phone — ignore address =====
+                if (field !== "email" && field !== "phone") {
+                    console.log(`⏭️ Ignoring structured input request for field: ${field} (voice only)`);
+                    return;
+                }
+
                 if (field === "email") {
                     siInput.type = "email";
                     siInput.placeholder = prompt || "Enter your email address";
@@ -551,13 +557,6 @@
                     siIcon.textContent = "📱";
                     siLabelText.textContent = "Enter your phone number";
                     siHint.textContent = "Type your number — voice will resume after submission";
-                } else if (field === "address") {
-                    siInput.type = "text";
-                    siInput.placeholder = prompt || "e.g. 9 George St, North Strathfield NSW 2137";
-                    siInput.inputMode = "text";
-                    siIcon.textContent = "📍";
-                    siLabelText.textContent = "Enter your full address";
-                    siHint.textContent = "Include street, suburb, state & postcode for best results";
                 }
 
                 siInput.value = "";
@@ -607,13 +606,6 @@
                 if (field === "phone" && !/^[\d\s\-\+\(\)]{6,20}$/.test(value)) {
                     siInput.classList.add("si-shake");
                     siHint.textContent = "Please enter a valid phone number";
-                    siHint.style.color = "#f87171";
-                    setTimeout(() => { siInput.classList.remove("si-shake"); siHint.style.color = ""; }, 1500);
-                    return;
-                }
-                if (field === "address" && value.length < 5) {
-                    siInput.classList.add("si-shake");
-                    siHint.textContent = "Please enter a full address";
                     siHint.style.color = "#f87171";
                     setTimeout(() => { siInput.classList.remove("si-shake"); siHint.style.color = ""; }, 1500);
                     return;

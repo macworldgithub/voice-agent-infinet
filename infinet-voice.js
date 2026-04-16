@@ -50,16 +50,32 @@ async function sendTicketEmail(ticketId, ticketArgs, collectedFields, isSupportT
   const type = isSupportTicket ? "Support" : "Sales";
   const referenceLine = ticketId ? `<p><strong>Ticket:</strong> ${ticketId}</p>` : `<p><strong>Reference:</strong> New ${type.toLowerCase()} enquiry</p>`;
   const subject = `New ${type} Enquiry ${ticketId ? `— Ticket #${ticketId}` : ""} — ${ticketArgs.subject || "Inquiry"}`;
+
+  // ===== FIX #3: Include selected package/plan in email body =====
+  const selectedPlan = collectedFields?.leadInterest || ticketArgs.leadInterest || null;
+  const selectedPlanHtml = selectedPlan
+    ? `<p><strong>Selected Plan:</strong> ${selectedPlan}</p>`
+    : "";
+
+  // ===== User's email for Reply-To so company can contact them directly =====
+  const userEmail = collectedFields?.email || null;
+
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:Arial,sans-serif;line-height:1.6;">
     <h2>New ${type} Enquiry Received</h2>
     ${referenceLine}
     <p><strong>Subject:</strong> ${ticketArgs.subject || "N/A"}</p>
     <p><strong>Priority:</strong> ${ticketArgs.priority || "medium"}</p>
     ${ticketArgs.customer_id ? `<p><strong>Customer ID:</strong> ${ticketArgs.customer_id}</p>` : `<p><strong>New Lead (no customer ID)</strong></p>`}
-    ${collectedFields?.preferredName ? `<p><strong>Name:</strong> ${collectedFields.preferredName}</p>` : ""}
-    ${collectedFields?.email ? `<p><strong>Email:</strong> ${collectedFields.email}</p>` : ""}
-    ${collectedFields?.phone ? `<p><strong>Phone:</strong> ${collectedFields.phone}</p>` : ""}
-    ${collectedFields?.address ? `<p><strong>Address:</strong> ${collectedFields.address}</p>` : ""}
+    <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:12px 16px;margin:12px 0;">
+      <h3 style="margin:0 0 8px 0;color:#0369a1;">Customer Contact Details</h3>
+      ${collectedFields?.preferredName ? `<p style="margin:4px 0;"><strong>Name:</strong> ${collectedFields.preferredName}</p>` : ""}
+      ${userEmail ? `<p style="margin:4px 0;"><strong>Email:</strong> <a href="mailto:${userEmail}">${userEmail}</a></p>` : '<p style="margin:4px 0;color:#dc2626;"><strong>Email:</strong> Not provided</p>'}
+      ${collectedFields?.phone ? `<p style="margin:4px 0;"><strong>Phone:</strong> ${collectedFields.phone}</p>` : ""}
+      ${collectedFields?.address ? `<p style="margin:4px 0;"><strong>Address:</strong> ${collectedFields.address}</p>` : ""}
+    </div>
+    ${selectedPlanHtml}
+    ${collectedFields?.networkPreference ? `<p><strong>Network:</strong> ${collectedFields.networkPreference}</p>` : ""}
+    ${collectedFields?.residentialPreference ? `<p><strong>Type:</strong> ${collectedFields.residentialPreference}</p>` : ""}
     <h3>Message Body</h3>
     <p>${(ticketArgs.message && (ticketArgs.message.message || ticketArgs.message)) || "No additional message"}</p>
     <hr>
@@ -69,8 +85,14 @@ async function sendTicketEmail(ticketId, ticketArgs, collectedFields, isSupportT
   </body></html>`;
   try {
     const recipients = ["karimjawwad09@gmail.com", recipient];
-    console.log(`📧 Attempting to send ${type} email to: ${recipients.join(", ")}`);
-    await transporter.sendMail({ from: '"InfiNET AI Assistant" <noreply@infinetbroadband.com.au>', to: recipients, subject, html });
+    console.log(`📧 Attempting to send ${type} email to: ${recipients.join(", ")}${userEmail ? ` (Reply-To: ${userEmail})` : ""}`);
+    await transporter.sendMail({
+      from: '"InfiNET AI Assistant" <noreply@infinetbroadband.com.au>',
+      to: recipients,
+      ...(userEmail ? { replyTo: userEmail } : {}),
+      subject,
+      html
+    });
     console.log(`✅ 📧 Email SENT for ${type.toLowerCase()} enquiry${ticketId ? ` #${ticketId}` : ""}`);
     return { sent: true };
   } catch (err) {
@@ -502,8 +524,15 @@ CONVERSATION FLOW:
   Example: User says "I need fast internet for gaming" → "Oh you're a gamer — nice! Well you've come to the right place because we've got some seriously fast plans that are perfect for gaming. Low latency, high speeds, the whole deal. Let me find out what's available at your address and I'll point you to the best options."
 - Accept partial answers. If someone says "yeah residential NBN" — take BOTH pieces of info: "Oh perfect, residential NBN — got it! That narrows things down nicely."
 - On [SILENCE_NUDGE]: be gentle and conversational: "Hey, no rush at all — take your time! I'll go ahead and assume [reasonable default] for now, and we can always change it later if you'd like. So moving on..."
-- When the UI shows an input box: let them know warmly: "I've popped up a little text box for you to type that in — it's usually much easier than trying to spell things out, especially email addresses! Take your time."
+- When the UI shows an input box for email or phone: let them know warmly: "I've popped up a little text box for you to type that in — it's usually much easier than trying to spell things out, especially email addresses! Take your time."
 - After EVERY user answer, say something before the next question. Never go question → question.
+
+CRITICAL PLAN SELECTION RULE:
+- After presenting available plans to the customer, you MUST STOP and WAIT for the customer to explicitly choose a plan.
+- Do NOT select or assume a plan on behalf of the customer.
+- Do NOT proceed to ask for email or create a ticket until the customer has clearly stated which plan they want.
+- If the customer is silent after you present plans, gently ask: "So which of those plans catches your eye?" or "Take your time — which one sounds like the best fit for you?"
+- Only after the customer explicitly names or describes a plan should you save it as leadInterest and continue.
  
 INITIAL FLOW:
 1. Greet warmly → get their name.
@@ -543,18 +572,20 @@ When check_address_availability returns results for NBN:
   * "Oh brilliant — you've got access to the full speed range! That means you can go all the way up to 1000Mbps if you want, which is as fast as it gets. Here's what's available:"
 - If requiresInstall: true → "Oh and just so you're aware — an NBN technician will need to come out to do the initial installation, but don't worry, that's completely free of charge. They'll get everything set up for you."
 - If notes are returned → share them conversationally.
-- After listing plans, ALWAYS add a recommendation: "If you want my honest opinion, based on what you've told me, I'd probably go with the [plan] — it gives you [reason] and it's great value at [price]."
+- After listing plans, ALWAYS ask: "So which of those plans catches your eye? Take your time — there's no rush!"
+- WAIT for the customer to tell you which plan they want. Do NOT pick one for them.
  
 SALES FLOW:
 1. "Is this going to be for your home or for a business?" → save residentialPreference.
 2. "And do you have a preference between NBN or OptiComm? Happy to explain the difference if you'd like!" → save networkPreference.
-3. "Awesome! Now I just need your full address so I can check exactly what's available in your area. Could you pop that in for me?" → save address.
+3. "Awesome! Now I just need your full address so I can check exactly what's available in your area. Just tell me your street address, suburb, state and postcode and I'll look it up for you!" → save address.
 4. IMMEDIATELY call check_address_availability.
 5. After tool result → Apply ADDRESS AVAILABILITY rules. Present plans with enthusiasm and recommendations.
-6. User selects → save leadInterest. React warmly: "Oh great choice! That's actually one of our most popular plans — I think you're going to be really happy with it. The speeds are fantastic and at that price point it's honestly hard to beat."
-7. "Brilliant! Now the last thing I need is your email address so our sales team can get in touch and get everything finalised for you. Could you type that in for me?" → save email.
-8. "Perfect, I've got everything I need! Just bear with me for a moment while I submit this for you..." → create_ticket.
-9. Confirm warmly and ask if there's anything else.
+6. WAIT for the customer to explicitly choose a plan. Do NOT auto-select. Ask "Which plan sounds good to you?" if needed.
+7. User selects → save leadInterest (save the FULL plan name and price). React warmly: "Oh great choice! That's actually one of our most popular plans — I think you're going to be really happy with it. The speeds are fantastic and at that price point it's honestly hard to beat."
+8. "Brilliant! Now the last thing I need is your email address so our sales team can get in touch and get everything finalised for you. Could you type that in for me?" → save email.
+9. "Perfect, I've got everything I need! Just bear with me for a moment while I submit this for you..." → create_ticket (include the selected plan in the message body).
+10. Confirm warmly and ask if there's anything else.
  
 SUPPORT FLOW:
 - "Let me pull up your account so I can help you out — what's the email address on your InfiNET account?" → customer_lookup.
@@ -574,7 +605,7 @@ RELOCATION FLOW:
 3. "Is the new place going to be residential or business?" → "And would you prefer NBN or OptiComm?"
 4. "When are you looking to disconnect the old place? And when do you need the new connection up and running?"
 5. "And what's the address of the new place?" → call check_address_availability.
-6. Show matching plans with recommendations → user selects → "Awesome, let me put all of this together for you..." → create_ticket with all relocation details.
+6. Show matching plans with recommendations → WAIT for user to choose → user selects → "Awesome, let me put all of this together for you..." → create_ticket with all relocation details.
  
 TOOL USAGE:
 - extract_call_fields for all personal info.
@@ -582,6 +613,7 @@ TOOL USAGE:
 - get_internet_plans ONLY as fallback if check_address_availability is not applicable.
 - customer_lookup for existing customers.
 - "First option NBN, Second option Opticomm" — if user says "first/1" → NBN, "second/2" → Opticomm.
+- IMPORTANT: When calling create_ticket, ALWAYS include the selected plan (leadInterest) in the message body so it appears in the email.
  
 HANDLING EDGE CASES:
 - If user asks something outside your scope: "That's a great question! It's a little outside what I can directly help with from here, but I'd definitely recommend getting in touch with our support team at support@infinetbroadband.com.au — they'll be able to sort that out for you in no time. Is there anything else I can help with in the meantime?"
@@ -666,9 +698,7 @@ function mkSession(sessionId) {
 function normalizeText(t) { return (t || "").toString().replace(/\u200B/g, "").replace(/\s+/g, " ").trim(); }
 function mapOrdinalNetworkChoice(text) {
   const t = (text || "").toLowerCase().trim();
-  // If they explicitly said NBN or OptiComm, no mapping needed
   if (/\bnbn\b/.test(t) || /\b(opti\s*comm|opticomm)\b/.test(t)) return null;
-  // Map ordinals/numbers to network — "first option NBN, second option OptiComm"
   if (/\b(first|1st|one|1|option\s*1|option\s*one|number\s*1|the\s*first)\b/.test(t)) return "NBN";
   if (/\b(second|2nd|two|2|to|option\s*2|option\s*two|number\s*2|the\s*second)\b/.test(t)) return "Opticomm";
   return null;
@@ -727,7 +757,6 @@ async function checkAddressAvailability(args, session) {
   const isOpticomm = netPref === "opticomm" || netPref === "opti comm";
 
   if (isOpticomm) {
-    // ==================== OPTICOMM: USE HARDCODED PLANS ====================
     const resPref = (residentialPreference || session.collected?.residentialPreference || "residential").toLowerCase();
     const isBusiness = resPref === "business";
     const plans = isBusiness ? OPTICOMM_BUSINESS_PLANS : OPTICOMM_RESIDENTIAL_PLANS;
@@ -757,7 +786,6 @@ async function checkAddressAvailability(args, session) {
       })),
     });
   } else {
-    // ==================== NBN: USE MARS API ====================
     try {
       const marsCandidates = await marsAddressSearch(address);
       const locId = marsCandidates?.[0]?.id || null;
@@ -843,6 +871,27 @@ async function handleToolCall(session, funcName, args) {
     const collected = session.collected || {};
     const hasCustomerId = !!(fa.customer_id || collected.customer_id);
     const isSupportTicket = hasCustomerId;
+
+    // ===== Build full customer details block and append to message body =====
+    const detailLines = [];
+    if (collected.preferredName) detailLines.push(`Name: ${collected.preferredName}`);
+    if (collected.email) detailLines.push(`Customer Email: ${collected.email}`);
+    if (collected.phone) detailLines.push(`Phone: ${collected.phone}`);
+    if (collected.address) detailLines.push(`Address: ${collected.address}`);
+    if (collected.networkPreference) detailLines.push(`Network: ${collected.networkPreference}`);
+    if (collected.residentialPreference) detailLines.push(`Type: ${collected.residentialPreference}`);
+    if (collected.leadInterest || fa.leadInterest) detailLines.push(`Selected Plan: ${collected.leadInterest || fa.leadInterest}`);
+
+    const detailsBlock = detailLines.length > 0
+      ? `\n\n--- Customer Details ---\n${detailLines.join("\n")}`
+      : "";
+
+    if (fa.message?.message) {
+      fa.message.message += detailsBlock;
+    } else if (detailsBlock) {
+      fa.message = { message: detailsBlock.trim() };
+    }
+
     try {
       if (isSupportTicket) {
         console.log(`📝 Creating SUPPORT ticket in Splynx: subject="${fa.subject}" customer_id=${fa.customer_id}`);
@@ -924,11 +973,12 @@ app.post("/api/voice/structured-input", async (req, res) => {
   try {
     const { sessionId, field, value } = req.body || {};
     if (!sessionId || !field || !value) return res.status(400).json({ error: "Missing params" });
-    if (!["email", "phone", "address"].includes(field)) return res.status(400).json({ error: "Invalid field" });
+    // ===== FIX #1: Removed "address" — only email and phone use structured input =====
+    if (!["email", "phone"].includes(field)) return res.status(400).json({ error: "Invalid field" });
     const session = sessions.get(sessionId);
     if (!session) return res.status(404).json({ error: "Session not found" });
     session.collected[field] = value;
-    const userMsg = field === "email" ? `My email is ${value}` : field === "phone" ? `My phone number is ${value}` : `My address is ${value}`;
+    const userMsg = field === "email" ? `My email is ${value}` : `My phone number is ${value}`;
     session.messages.push({ role: "user", content: userMsg });
     const assistantText = await processWithTools(session);
     const ttsBuf = await makeTTS(assistantText);
@@ -949,7 +999,6 @@ setupRealtimeVoice(io, {
   mkSession, sessions, normalizeText, safeParseJSON,
   applyExtractionToSession, fetchTariffs, customerLookup, objectToUrlEncoded,
   splynx, sendTicketEmail,
-  // NEW: pass address availability deps to realtime handler
   checkAddressAvailability,
   OPTICOMM_RESIDENTIAL_PLANS, OPTICOMM_BUSINESS_PLANS,
   MARS_SPEED_MAP, filterTariffsByMarsAvailability,

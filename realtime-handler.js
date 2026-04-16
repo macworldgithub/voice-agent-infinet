@@ -7,7 +7,6 @@ export function setupRealtimeVoice(io, deps) {
     mkSession, sessions, normalizeText, safeParseJSON,
     applyExtractionToSession, fetchTariffs,
     customerLookup, objectToUrlEncoded, splynx, sendTicketEmail,
-    // NEW: address availability deps
     checkAddressAvailability,
   } = deps;
 
@@ -44,6 +43,10 @@ export function setupRealtimeVoice(io, deps) {
     let lastResponseCreateTime = 0;
     const RESPONSE_CREATE_MIN_GAP_MS = 1500;
 
+    // ===== FIX #2: Plans-presented cooldown to prevent silence nudge auto-selecting =====
+    let plansPresentedAt = 0;
+    const PLANS_PRESENTED_COOLDOWN_MS = 60000; // 60s cooldown after plans shown
+
     let responseCreateTimeout = null;
     function throttledResponseCreate() {
       if (responseCreateTimeout) return;
@@ -72,6 +75,11 @@ export function setupRealtimeVoice(io, deps) {
       if (pendingFunctionCalls > 0) return;
       if (assistantSpeaking) return;
 
+      // ===== FIX #2: If plans were just presented, use longer timeout and different nudge =====
+      const now = Date.now();
+      const inPlansCooldown = (now - plansPresentedAt) < PLANS_PRESENTED_COOLDOWN_MS;
+      const timeoutMs = inPlansCooldown ? 45000 : SILENCE_TIMEOUT_MS; // 45s after plans, 25s otherwise
+
       silenceTimer = setTimeout(() => {
         silenceTimer = null;
         if (awaitingStructuredInput) return;
@@ -79,19 +87,25 @@ export function setupRealtimeVoice(io, deps) {
         if (pendingFunctionCalls > 0) return;
         if (assistantSpeaking) return;
 
-        console.log(`⏰ User silent for ${SILENCE_TIMEOUT_MS / 1000}s — nudging AI`);
+        // ===== FIX #2: Different nudge when waiting for plan selection =====
+        const stillInPlansCooldown = (Date.now() - plansPresentedAt) < PLANS_PRESENTED_COOLDOWN_MS;
+        const nudgeText = stillInPlansCooldown
+          ? "[SILENCE_NUDGE] The user has not responded after you presented plans. Do NOT select a plan for them. Do NOT assume which plan they want. Simply ask them gently which plan they'd like to go with. Say something like: 'No rush at all — take your time! Which of those plans sounds like the best fit for you?'"
+          : "[SILENCE_NUDGE] The user has not responded. Do NOT repeat your last question. Instead, assume a reasonable default for whatever you last asked, confirm it briefly in one sentence, and move to the NEXT step immediately.";
+
+        console.log(`⏰ User silent for ${timeoutMs / 1000}s — nudging AI ${stillInPlansCooldown ? '(plans cooldown)' : ''}`);
         if (openaiWs?.readyState === WebSocket.OPEN) {
           openaiWs.send(JSON.stringify({
             type: "conversation.item.create",
             item: {
               type: "message",
               role: "user",
-              content: [{ type: "input_text", text: "[SILENCE_NUDGE] The user has not responded. Do NOT repeat your last question. Instead, assume a reasonable default for whatever you last asked, confirm it briefly in one sentence, and move to the NEXT step immediately." }],
+              content: [{ type: "input_text", text: nudgeText }],
             },
           }));
           throttledResponseCreate();
         }
-      }, SILENCE_TIMEOUT_MS);
+      }, timeoutMs);
     }
 
     function clearSilenceTimer() {
@@ -123,7 +137,7 @@ export function setupRealtimeVoice(io, deps) {
       console.log("🔓 Final message lock released");
     }
 
-    // Structured Input Detection
+    // Structured Input Detection — ===== FIX #1 & #4: REMOVED ADDRESS =====
     let lastStructuredInputField = null;
     let lastStructuredInputTime = 0;
     const STRUCTURED_INPUT_COOLDOWN_MS = 30000;
@@ -134,7 +148,6 @@ export function setupRealtimeVoice(io, deps) {
       const now = Date.now();
 
       const DET = `(?:(?:your|the|an?|me)\\s+){0,2}`;
-      const DETF = `(?:(?:your|the|an?|me)\\s+){0,2}(?:full\\s+)?`;
 
       const emailPatterns = [
         new RegExp(`(?:provide|share|enter|type|give)\\s+${DET}email`, "i"),
@@ -143,6 +156,18 @@ export function setupRealtimeVoice(io, deps) {
         new RegExp(`(?:please|kindly)\\s+(?:provide|share|enter|type)\\s+${DET}email`, "i"),
         /(?:need|like)\s+your\s+email/i,
         /email\s+(?:address\s+)?(?:please|to\s+proceed)/i,
+        // Broader patterns to catch natural AI phrasing
+        /grab\s+your\s+email/i,
+        /(?:could|can)\s+I\s+(?:get|grab|have|take)\s+your\s+email/i,
+        /(?:need|like)\s+(?:is\s+)?your\s+email/i,
+        /(?:last\s+thing|next\s+thing|also)\s+.*\s+email/i,
+        /pop\s+(?:in|up)?\s+.*email/i,
+        /type\s+(?:in|that)\s+.*email|email\s+.*type\s+(?:in|that)/i,
+        /(?:send|get)\s+.*\s+email\s+address/i,
+        /email\s+address\s+(?:so|for|and)/i,
+        /your\s+email\s+(?:address|for\s+me|please)/i,
+        /(?:I'll\s+need|I\s+need|we\s+need|gonna\s+need)\s+.*email/i,
+        /(?:could\s+you|can\s+you)\s+.*email/i,
       ];
 
       const phonePatterns = [
@@ -153,14 +178,8 @@ export function setupRealtimeVoice(io, deps) {
         /(?:need|like)\s+your\s+(?:phone|mobile|contact)/i,
       ];
 
-      const addressPatterns = [
-        new RegExp(`(?:provide|share|enter|type|give)\\s+${DETF}address`, "i"),
-        /what(?:'?s|\s+is)\s+(?:your|the)\s+(?:full\s+)?address/i,
-        new RegExp(`could you\\s+(?:please\\s+)?(?:provide|share|give|type|enter)\\s+${DETF}address`, "i"),
-        new RegExp(`(?:please|kindly)\\s+(?:provide|share|enter|type)\\s+${DETF}address`, "i"),
-        /(?:need|like)\s+(?:your|the)\s+(?:full\s+)?address/i,
-        /where\s+(?:do\s+you\s+)?need\s+the\s+connection/i,
-      ];
+      // ===== FIX #1: ADDRESS PATTERNS COMPLETELY REMOVED =====
+      // Address is now handled entirely via voice — no structured input box
 
       if (!collected.email) {
         for (const p of emailPatterns) {
@@ -184,35 +203,18 @@ export function setupRealtimeVoice(io, deps) {
         }
       }
 
-      if (!collected.address) {
-        for (const p of addressPatterns) {
-          if (p.test(text)) {
-            if (/(?:at|for|to)\s+(?:your\s+)?address/i.test(text) && !/(?:provide|enter|type|share|give)\s+/.test(text.toLowerCase())) return null;
-            if (lastStructuredInputField === "address" && (now - lastStructuredInputTime) < STRUCTURED_INPUT_COOLDOWN_MS) return null;
-            lastStructuredInputField = "address";
-            lastStructuredInputTime = now;
-            return "address";
-          }
-        }
-      }
-
       return null;
     }
 
     // ═══════════════ Ordinal Network Choice Mapping ═══════════════
-    // When AI asks "First option NBN, second OptiComm", user may say
-    // "2", "second", "two", "the second one", "option 2", etc.
     function mapOrdinalNetworkChoice(text) {
       const t = (text || "").toLowerCase().trim();
-      // If they explicitly said NBN or OptiComm, no mapping needed
       if (/\bnbn\b/.test(t) || /\b(opti\s*comm|opticomm)\b/.test(t)) return null;
-      // Map ordinals/numbers to network
       if (/\b(first|1st|one|1|option\s*1|option\s*one|number\s*1|the\s*first)\b/.test(t)) return "NBN";
       if (/\b(second|2nd|two|2|option\s*2|option\s*two|number\s*2|the\s*second|to)\b/.test(t)) return "Opticomm";
       return null;
     }
 
-    // Check if the AI just asked the network preference question
     function wasLastMessageNetworkQuestion() {
       const msgs = session.messages || [];
       for (let i = msgs.length - 1; i >= 0; i--) {
@@ -225,7 +227,7 @@ export function setupRealtimeVoice(io, deps) {
             t.includes("which one would you prefer")
           );
         }
-        if (msgs[i].role === "user") break; // stop at previous user msg
+        if (msgs[i].role === "user") break;
       }
       return false;
     }
@@ -239,6 +241,21 @@ export function setupRealtimeVoice(io, deps) {
       const digitWords = (spelledDigits.match(/\b(zero|one|two|three|four|five|six|seven|eight|nine|oh)\b/g) || []);
       if (digitWords.length >= 6) return "phone";
       return null;
+    }
+
+    // ===== FIX #2: Detect when plans are being presented =====
+    function detectPlanPresentation(text) {
+      if (!text) return false;
+      const lower = text.toLowerCase();
+      // Detect when AI is listing plans
+      return (
+        (lower.includes("mbps") && (lower.includes("$") || lower.includes("per month") || lower.includes("/m"))) ||
+        (lower.includes("plan") && lower.includes("available")) ||
+        lower.includes("here are the plans") ||
+        lower.includes("here's what's available") ||
+        lower.includes("which of those plans") ||
+        lower.includes("catches your eye")
+      );
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -459,8 +476,6 @@ export function setupRealtimeVoice(io, deps) {
               socket.emit("user_transcript", cleaned);
 
               // ── Ordinal network choice mapping ──
-              // If AI just asked "First option NBN, second OptiComm" and user says "2"/"second"/"two",
-              // inject a clarified message so OpenAI clearly understands the choice
               const mappedNetwork = mapOrdinalNetworkChoice(cleaned);
               if (mappedNetwork && wasLastMessageNetworkQuestion()) {
                 const clarified = `I want ${mappedNetwork}`;
@@ -469,7 +484,6 @@ export function setupRealtimeVoice(io, deps) {
                 session.messages.push({ role: "user", content: clarified });
                 sessions.set(session.id, session);
 
-                // Inject clarified text into OpenAI Realtime conversation
                 if (openaiWs?.readyState === WebSocket.OPEN) {
                   openaiWs.send(JSON.stringify({
                     type: "conversation.item.create",
@@ -482,7 +496,7 @@ export function setupRealtimeVoice(io, deps) {
                   throttledResponseCreate();
                 }
                 clearSilenceTimer();
-                break; // Skip normal processing — we injected the clarified version
+                break;
               }
 
               session.messages.push({ role: "user", content: cleaned });
@@ -532,6 +546,13 @@ export function setupRealtimeVoice(io, deps) {
 
             flushElevenLabsStream();
 
+            // ===== FIX #2: Detect plans presentation and set cooldown =====
+            if (detectPlanPresentation(event.text)) {
+              plansPresentedAt = Date.now();
+              console.log(`📋 Plans presented — silence nudge cooldown activated (${PLANS_PRESENTED_COOLDOWN_MS / 1000}s)`);
+            }
+
+            // ===== FIX #1: Only detect email and phone for structured input (no address) =====
             const detectedField = detectStructuredInputRequest(event.text);
             if (detectedField) {
               awaitingStructuredInput = true;
@@ -540,7 +561,6 @@ export function setupRealtimeVoice(io, deps) {
               let placeholder;
               if (detectedField === "email") placeholder = "Enter your email address";
               else if (detectedField === "phone") placeholder = "Enter your phone number";
-              else if (detectedField === "address") placeholder = "Enter your full address (e.g. 9 George St, North Strathfield NSW 2137)";
 
               console.log(`📋 Structured input requested: ${detectedField}`);
               clearSilenceTimer();
@@ -600,6 +620,15 @@ export function setupRealtimeVoice(io, deps) {
         case "error":
           console.error("[WS-1] OpenAI error:", JSON.stringify(event.error));
           socket.emit("error_msg", event.error?.message || "AI error");
+
+          // ===== FIX #4: If error occurs during processing, unstick the UI =====
+          if (isResponseActive) {
+            isResponseActive = false;
+          }
+          if (pendingFunctionCalls > 0) {
+            pendingFunctionCalls = 0;
+          }
+          socket.emit("status", "listening");
           break;
       }
     }
@@ -616,8 +645,23 @@ export function setupRealtimeVoice(io, deps) {
       if (openaiWs?.readyState === WebSocket.OPEN) {
         openaiWs.send(JSON.stringify({ type: "input_audio_buffer.clear" }));
       }
-      try { result = await execTool(fn, args); }
-      catch (err) { result = JSON.stringify({ success: false, error: err.message }); }
+
+      // ===== FIX #4: Add timeout to prevent stuck-on-thinking =====
+      const toolTimeout = setTimeout(() => {
+        console.warn(`⚠️ Tool ${fn} timed out after 30s`);
+        pendingFunctionCalls = Math.max(0, pendingFunctionCalls - 1);
+        if (pendingFunctionCalls === 0) {
+          socket.emit("status", "listening");
+        }
+      }, 30000);
+
+      try {
+        result = await execTool(fn, args);
+      } catch (err) {
+        result = JSON.stringify({ success: false, error: err.message });
+      }
+
+      clearTimeout(toolTimeout);
 
       if (openaiWs?.readyState === WebSocket.OPEN) {
         openaiWs.send(JSON.stringify({
@@ -660,7 +704,6 @@ export function setupRealtimeVoice(io, deps) {
         }
       }
 
-      // ==================== CHECK ADDRESS AVAILABILITY ====================
       if (fn === "check_address_availability") {
         try {
           return await checkAddressAvailability(args, session);
@@ -677,6 +720,26 @@ export function setupRealtimeVoice(io, deps) {
         const collected = session.collected || {};
         const hasCustomerId = !!(fa.customer_id || collected.customer_id);
         const isSupportTicket = hasCustomerId;
+
+        // ===== Build full customer details block and append to message body =====
+        const detailLines = [];
+        if (collected.preferredName) detailLines.push(`Name: ${collected.preferredName}`);
+        if (collected.email) detailLines.push(`Customer Email: ${collected.email}`);
+        if (collected.phone) detailLines.push(`Phone: ${collected.phone}`);
+        if (collected.address) detailLines.push(`Address: ${collected.address}`);
+        if (collected.networkPreference) detailLines.push(`Network: ${collected.networkPreference}`);
+        if (collected.residentialPreference) detailLines.push(`Type: ${collected.residentialPreference}`);
+        if (collected.leadInterest || fa.leadInterest) detailLines.push(`Selected Plan: ${collected.leadInterest || fa.leadInterest}`);
+
+        const detailsBlock = detailLines.length > 0
+          ? `\n\n--- Customer Details ---\n${detailLines.join("\n")}`
+          : "";
+
+        if (fa.message?.message) {
+          fa.message.message += detailsBlock;
+        } else if (detailsBlock) {
+          fa.message = { message: detailsBlock.trim() };
+        }
 
         try {
           if (isSupportTicket) {
@@ -735,13 +798,12 @@ export function setupRealtimeVoice(io, deps) {
 
       if (field === "email") session.collected.email = value;
       else if (field === "phone") session.collected.phone = value;
-      else if (field === "address") session.collected.address = value;
       sessions.set(session.id, session);
 
       let userMessage;
       if (field === "email") userMessage = `My email is ${value}`;
       else if (field === "phone") userMessage = `My phone number is ${value}`;
-      else if (field === "address") userMessage = `My address is ${value}`;
+      else userMessage = value;
 
       session.messages.push({ role: "user", content: userMessage });
       sessions.set(session.id, session);
