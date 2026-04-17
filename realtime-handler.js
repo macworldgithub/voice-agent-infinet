@@ -2,17 +2,30 @@ import WebSocket from "ws";
 
 export function setupRealtimeVoice(io, deps) {
   const {
-    OPENAI_API_KEY, ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID,
-    SYSTEM_PROMPT, LOCATIONS, tools,
-    mkSession, sessions, normalizeText, safeParseJSON,
-    applyExtractionToSession, fetchTariffs,
-    customerLookup, objectToUrlEncoded, splynx, sendTicketEmail,
+    OPENAI_API_KEY,
+    ELEVENLABS_API_KEY,
+    ELEVENLABS_VOICE_ID,
+    SYSTEM_PROMPT,
+    LOCATIONS,
+    tools,
+    mkSession,
+    sessions,
+    normalizeText,
+    safeParseJSON,
+    applyExtractionToSession,
+    fetchTariffs,
+    customerLookup,
+    objectToUrlEncoded,
+    splynx,
+    sendTicketEmail,
     checkAddressAvailability,
   } = deps;
 
   const realtimeTools = tools.map((t) => ({
-    type: "function", name: t.name,
-    description: t.description, parameters: t.parameters,
+    type: "function",
+    name: t.name,
+    description: t.description,
+    parameters: t.parameters,
   }));
 
   io.on("connection", (socket) => {
@@ -77,7 +90,8 @@ export function setupRealtimeVoice(io, deps) {
 
       // ===== FIX #2: If plans were just presented, use longer timeout and different nudge =====
       const now = Date.now();
-      const inPlansCooldown = (now - plansPresentedAt) < PLANS_PRESENTED_COOLDOWN_MS;
+      const inPlansCooldown =
+        now - plansPresentedAt < PLANS_PRESENTED_COOLDOWN_MS;
       const timeoutMs = inPlansCooldown ? 45000 : SILENCE_TIMEOUT_MS; // 45s after plans, 25s otherwise
 
       silenceTimer = setTimeout(() => {
@@ -88,28 +102,36 @@ export function setupRealtimeVoice(io, deps) {
         if (assistantSpeaking) return;
 
         // ===== FIX #2: Different nudge when waiting for plan selection =====
-        const stillInPlansCooldown = (Date.now() - plansPresentedAt) < PLANS_PRESENTED_COOLDOWN_MS;
+        const stillInPlansCooldown =
+          Date.now() - plansPresentedAt < PLANS_PRESENTED_COOLDOWN_MS;
         const nudgeText = stillInPlansCooldown
           ? "[SILENCE_NUDGE] The user has not responded after you presented plans. Do NOT select a plan for them. Do NOT assume which plan they want. Simply ask them gently which plan they'd like to go with. Say something like: 'No rush at all — take your time! Which of those plans sounds like the best fit for you?'"
           : "[SILENCE_NUDGE] The user has not responded. Do NOT repeat your last question. Instead, assume a reasonable default for whatever you last asked, confirm it briefly in one sentence, and move to the NEXT step immediately.";
 
-        console.log(`⏰ User silent for ${timeoutMs / 1000}s — nudging AI ${stillInPlansCooldown ? '(plans cooldown)' : ''}`);
+        console.log(
+          `⏰ User silent for ${timeoutMs / 1000}s — nudging AI ${stillInPlansCooldown ? "(plans cooldown)" : ""}`,
+        );
         if (openaiWs?.readyState === WebSocket.OPEN) {
-          openaiWs.send(JSON.stringify({
-            type: "conversation.item.create",
-            item: {
-              type: "message",
-              role: "user",
-              content: [{ type: "input_text", text: nudgeText }],
-            },
-          }));
+          openaiWs.send(
+            JSON.stringify({
+              type: "conversation.item.create",
+              item: {
+                type: "message",
+                role: "user",
+                content: [{ type: "input_text", text: nudgeText }],
+              },
+            }),
+          );
           throttledResponseCreate();
         }
       }, timeoutMs);
     }
 
     function clearSilenceTimer() {
-      if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
+      if (silenceTimer) {
+        clearTimeout(silenceTimer);
+        silenceTimer = null;
+      }
     }
 
     // Final message lock
@@ -133,7 +155,10 @@ export function setupRealtimeVoice(io, deps) {
     function unlockFinalMessage() {
       finalMessageLock = false;
       session.finalLock = false;
-      if (finalMessageTimer) { clearTimeout(finalMessageTimer); finalMessageTimer = null; }
+      if (finalMessageTimer) {
+        clearTimeout(finalMessageTimer);
+        finalMessageTimer = null;
+      }
       console.log("🔓 Final message lock released");
     }
 
@@ -152,8 +177,14 @@ export function setupRealtimeVoice(io, deps) {
       const emailPatterns = [
         new RegExp(`(?:provide|share|enter|type|give)\\s+${DET}email`, "i"),
         /what(?:'?s|\s+is)\s+your\s+email/i,
-        new RegExp(`could you\\s+(?:please\\s+)?(?:provide|share|give|send|type)\\s+${DET}email`, "i"),
-        new RegExp(`(?:please|kindly)\\s+(?:provide|share|enter|type)\\s+${DET}email`, "i"),
+        new RegExp(
+          `could you\\s+(?:please\\s+)?(?:provide|share|give|send|type)\\s+${DET}email`,
+          "i",
+        ),
+        new RegExp(
+          `(?:please|kindly)\\s+(?:provide|share|enter|type)\\s+${DET}email`,
+          "i",
+        ),
         /(?:need|like)\s+your\s+email/i,
         /email\s+(?:address\s+)?(?:please|to\s+proceed)/i,
         // Broader patterns to catch natural AI phrasing
@@ -171,10 +202,19 @@ export function setupRealtimeVoice(io, deps) {
       ];
 
       const phonePatterns = [
-        new RegExp(`(?:provide|share|enter|type|give)\\s+${DET}(?:phone|mobile|contact)`, "i"),
+        new RegExp(
+          `(?:provide|share|enter|type|give)\\s+${DET}(?:phone|mobile|contact)`,
+          "i",
+        ),
         /what(?:'?s|\s+is)\s+your\s+(?:phone|mobile|contact)/i,
-        new RegExp(`could you\\s+(?:please\\s+)?(?:provide|share|give)\\s+${DET}(?:phone|mobile|contact)`, "i"),
-        new RegExp(`(?:please|kindly)\\s+(?:provide|share|enter)\\s+${DET}(?:phone|mobile|contact)`, "i"),
+        new RegExp(
+          `could you\\s+(?:please\\s+)?(?:provide|share|give)\\s+${DET}(?:phone|mobile|contact)`,
+          "i",
+        ),
+        new RegExp(
+          `(?:please|kindly)\\s+(?:provide|share|enter)\\s+${DET}(?:phone|mobile|contact)`,
+          "i",
+        ),
         /(?:need|like)\s+your\s+(?:phone|mobile|contact)/i,
       ];
 
@@ -184,7 +224,11 @@ export function setupRealtimeVoice(io, deps) {
       if (!collected.email) {
         for (const p of emailPatterns) {
           if (p.test(text)) {
-            if (lastStructuredInputField === "email" && (now - lastStructuredInputTime) < STRUCTURED_INPUT_COOLDOWN_MS) return null;
+            if (
+              lastStructuredInputField === "email" &&
+              now - lastStructuredInputTime < STRUCTURED_INPUT_COOLDOWN_MS
+            )
+              return null;
             lastStructuredInputField = "email";
             lastStructuredInputTime = now;
             return "email";
@@ -195,7 +239,11 @@ export function setupRealtimeVoice(io, deps) {
       if (!collected.phone) {
         for (const p of phonePatterns) {
           if (p.test(text)) {
-            if (lastStructuredInputField === "phone" && (now - lastStructuredInputTime) < STRUCTURED_INPUT_COOLDOWN_MS) return null;
+            if (
+              lastStructuredInputField === "phone" &&
+              now - lastStructuredInputTime < STRUCTURED_INPUT_COOLDOWN_MS
+            )
+              return null;
             lastStructuredInputField = "phone";
             lastStructuredInputTime = now;
             return "phone";
@@ -209,9 +257,20 @@ export function setupRealtimeVoice(io, deps) {
     // ═══════════════ Ordinal Network Choice Mapping ═══════════════
     function mapOrdinalNetworkChoice(text) {
       const t = (text || "").toLowerCase().trim();
-      if (/\bnbn\b/.test(t) || /\b(opti\s*comm|opticomm)\b/.test(t)) return null;
-      if (/\b(first|1st|one|1|option\s*1|option\s*one|number\s*1|the\s*first)\b/.test(t)) return "NBN";
-      if (/\b(second|2nd|two|2|option\s*2|option\s*two|number\s*2|the\s*second|to)\b/.test(t)) return "Opticomm";
+      if (/\bnbn\b/.test(t) || /\b(opti\s*comm|opticomm)\b/.test(t))
+        return null;
+      if (
+        /\b(first|1st|one|1|option\s*1|option\s*one|number\s*1|the\s*first)\b/.test(
+          t,
+        )
+      )
+        return "NBN";
+      if (
+        /\b(second|2nd|two|2|option\s*2|option\s*two|number\s*2|the\s*second|to)\b/.test(
+          t,
+        )
+      )
+        return "Opticomm";
       return null;
     }
 
@@ -235,10 +294,14 @@ export function setupRealtimeVoice(io, deps) {
     function detectBadTranscription(text) {
       if (!text) return null;
       const lower = text.toLowerCase();
-      const emailVoicePatterns = /\b(at\s+(gmail|yahoo|hotmail|outlook|icloud)|dot\s+(com|net|org|au|co)|at\s+\w+\s+dot)\b/i;
+      const emailVoicePatterns =
+        /\b(at\s+(gmail|yahoo|hotmail|outlook|icloud)|dot\s+(com|net|org|au|co)|at\s+\w+\s+dot)\b/i;
       if (emailVoicePatterns.test(lower)) return "email";
       const spelledDigits = lower.replace(/[^a-z0-9\s]/g, "");
-      const digitWords = (spelledDigits.match(/\b(zero|one|two|three|four|five|six|seven|eight|nine|oh)\b/g) || []);
+      const digitWords =
+        spelledDigits.match(
+          /\b(zero|one|two|three|four|five|six|seven|eight|nine|oh)\b/g,
+        ) || [];
       if (digitWords.length >= 6) return "phone";
       return null;
     }
@@ -249,7 +312,10 @@ export function setupRealtimeVoice(io, deps) {
       const lower = text.toLowerCase();
       // Detect when AI is listing plans
       return (
-        (lower.includes("mbps") && (lower.includes("$") || lower.includes("per month") || lower.includes("/m"))) ||
+        (lower.includes("mbps") &&
+          (lower.includes("$") ||
+            lower.includes("per month") ||
+            lower.includes("/m"))) ||
         (lower.includes("plan") && lower.includes("available")) ||
         lower.includes("here are the plans") ||
         lower.includes("here's what's available") ||
@@ -278,11 +344,17 @@ export function setupRealtimeVoice(io, deps) {
 
       elWs.on("open", () => {
         console.log(`✅ [EL] ElevenLabs WebSocket connected`);
-        elWs.send(JSON.stringify({
-          text: " ",
-          voice_settings: { stability: 0.4, similarity_boost: 0.75, speed: 1.0 },
-          xi_api_key: ELEVENLABS_API_KEY,
-        }));
+        elWs.send(
+          JSON.stringify({
+            text: " ",
+            voice_settings: {
+              stability: 0.4,
+              similarity_boost: 0.75,
+              speed: 1.1,
+            },
+            xi_api_key: ELEVENLABS_API_KEY,
+          }),
+        );
 
         if (elevenLabsWs === elWs) {
           elevenLabsReady = true;
@@ -297,17 +369,26 @@ export function setupRealtimeVoice(io, deps) {
         try {
           const msg = JSON.parse(data.toString());
           if (msg.audio) {
-            socket.emit("audio_chunk_pcm", { sampleRate: PCM_SAMPLE_RATE, audio: msg.audio });
+            socket.emit("audio_chunk_pcm", {
+              sampleRate: PCM_SAMPLE_RATE,
+              audio: msg.audio,
+            });
           }
-          const isFinal = msg.isFinal === true || msg.is_final === true || msg.final === true;
+          const isFinal =
+            msg.isFinal === true || msg.is_final === true || msg.final === true;
           if (isFinal) {
             socket.emit("audio_done");
             assistantSpeaking = false;
-            if (!pendingFunctionCalls && !awaitingStructuredInput && !finalMessageLock && !session.finalLock) {
+            if (
+              !pendingFunctionCalls &&
+              !awaitingStructuredInput &&
+              !finalMessageLock &&
+              !session.finalLock
+            ) {
               startSilenceTimer();
             }
           }
-        } catch (err) { }
+        } catch (err) {}
       });
 
       elWs.on("error", (err) => {
@@ -325,7 +406,9 @@ export function setupRealtimeVoice(io, deps) {
 
     function sendTextToElevenLabs(text) {
       if (elevenLabsWs?.readyState === WebSocket.OPEN) {
-        elevenLabsWs.send(JSON.stringify({ text, try_trigger_generation: true }));
+        elevenLabsWs.send(
+          JSON.stringify({ text, try_trigger_generation: true }),
+        );
       }
     }
 
@@ -357,30 +440,39 @@ export function setupRealtimeVoice(io, deps) {
       return new Promise((resolve, reject) => {
         openaiWs = new WebSocket(
           "wss://api.openai.com/v1/realtime?model=gpt-4o-mini-realtime-preview",
-          { headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "OpenAI-Beta": "realtime=v1" } }
+          {
+            headers: {
+              Authorization: `Bearer ${OPENAI_API_KEY}`,
+              "OpenAI-Beta": "realtime=v1",
+            },
+          },
         );
 
         openaiWs.on("open", () => {
           console.log("✅ [WS-1] OpenAI Realtime connected");
-          const instructions = SYSTEM_PROMPT + "\n\nCRITICAL: You MUST ALWAYS respond in English only. Never respond in any other language.";
+          const instructions =
+            SYSTEM_PROMPT +
+            "\n\nCRITICAL: You MUST ALWAYS respond in English only. Never respond in any other language.";
 
-          openaiWs.send(JSON.stringify({
-            type: "session.update",
-            session: {
-              instructions,
-              modalities: ["text"],
-              input_audio_format: "pcm16",
-              turn_detection: {
-                type: "server_vad",
-                threshold: 0.8,
-                prefix_padding_ms: 300,
-                silence_duration_ms: 2000,
+          openaiWs.send(
+            JSON.stringify({
+              type: "session.update",
+              session: {
+                instructions,
+                modalities: ["text"],
+                input_audio_format: "pcm16",
+                turn_detection: {
+                  type: "server_vad",
+                  threshold: 0.8,
+                  prefix_padding_ms: 300,
+                  silence_duration_ms: 2000,
+                },
+                tools: realtimeTools,
+                tool_choice: "auto",
+                input_audio_transcription: { model: "whisper-1" },
               },
-              tools: realtimeTools,
-              tool_choice: "auto",
-              input_audio_transcription: { model: "whisper-1" },
-            },
-          }));
+            }),
+          );
 
           openElevenLabsStream();
         });
@@ -388,13 +480,20 @@ export function setupRealtimeVoice(io, deps) {
         openaiWs.on("message", (raw) => {
           try {
             const data = JSON.parse(raw.toString());
-            if (resolve) { resolve(); resolve = null; }
+            if (resolve) {
+              resolve();
+              resolve = null;
+            }
             handleOpenAIEvent(data);
+          } catch (e) {
+            console.error("[WS-1] parse error:", e.message);
           }
-          catch (e) { console.error("[WS-1] parse error:", e.message); }
         });
 
-        openaiWs.on("error", (err) => { console.error("[WS-1] error:", err.message); reject(err); });
+        openaiWs.on("error", (err) => {
+          console.error("[WS-1] error:", err.message);
+          reject(err);
+        });
         openaiWs.on("close", (code) => {
           console.log(`[WS-1] closed (${code})`);
           closeElevenLabsWs();
@@ -411,16 +510,24 @@ export function setupRealtimeVoice(io, deps) {
       }
 
       switch (event.type) {
-        case "session.created": break;
+        case "session.created":
+          break;
         case "session.updated":
           console.log("✅ [WS-1] Session configured");
           break;
 
         case "input_audio_buffer.speech_started":
-          if (awaitingStructuredInput || pendingFunctionCalls > 0 || session.finalLock || finalMessageLock) {
+          if (
+            awaitingStructuredInput ||
+            pendingFunctionCalls > 0 ||
+            session.finalLock ||
+            finalMessageLock
+          ) {
             console.log(`🔇 Speech ignored (locked)`);
             if (openaiWs?.readyState === WebSocket.OPEN) {
-              openaiWs.send(JSON.stringify({ type: "input_audio_buffer.clear" }));
+              openaiWs.send(
+                JSON.stringify({ type: "input_audio_buffer.clear" }),
+              );
             }
             break;
           }
@@ -452,7 +559,9 @@ export function setupRealtimeVoice(io, deps) {
           if (event.transcript) {
             const cleaned = normalizeText(event.transcript);
             if (cleaned) {
-              const looksLikeEmail = /\b[^\s@]+@[^\s@]+\.[^\s@]+\b/i.test(cleaned);
+              const looksLikeEmail = /\b[^\s@]+@[^\s@]+\.[^\s@]+\b/i.test(
+                cleaned,
+              );
               const digitCount = (cleaned.match(/\d/g) || []).length;
               const looksLikePhone = digitCount >= 6;
 
@@ -466,8 +575,14 @@ export function setupRealtimeVoice(io, deps) {
                 if (badTranscript) {
                   awaitingStructuredInput = true;
                   structuredInputField = badTranscript;
-                  const placeholder = badTranscript === "email" ? "Enter your email address" : "Enter your phone number";
-                  socket.emit("request_structured_input", { field: badTranscript, prompt: placeholder });
+                  const placeholder =
+                    badTranscript === "email"
+                      ? "Enter your email address"
+                      : "Enter your phone number";
+                  socket.emit("request_structured_input", {
+                    field: badTranscript,
+                    prompt: placeholder,
+                  });
                   break;
                 }
               }
@@ -479,20 +594,24 @@ export function setupRealtimeVoice(io, deps) {
               const mappedNetwork = mapOrdinalNetworkChoice(cleaned);
               if (mappedNetwork && wasLastMessageNetworkQuestion()) {
                 const clarified = `I want ${mappedNetwork}`;
-                console.log(`🔄 Ordinal mapped: "${cleaned}" → "${clarified}" (network: ${mappedNetwork})`);
+                console.log(
+                  `🔄 Ordinal mapped: "${cleaned}" → "${clarified}" (network: ${mappedNetwork})`,
+                );
                 session.collected.networkPreference = mappedNetwork;
                 session.messages.push({ role: "user", content: clarified });
                 sessions.set(session.id, session);
 
                 if (openaiWs?.readyState === WebSocket.OPEN) {
-                  openaiWs.send(JSON.stringify({
-                    type: "conversation.item.create",
-                    item: {
-                      type: "message",
-                      role: "user",
-                      content: [{ type: "input_text", text: clarified }],
-                    },
-                  }));
+                  openaiWs.send(
+                    JSON.stringify({
+                      type: "conversation.item.create",
+                      item: {
+                        type: "message",
+                        role: "user",
+                        content: [{ type: "input_text", text: clarified }],
+                      },
+                    }),
+                  );
                   throttledResponseCreate();
                 }
                 clearSilenceTimer();
@@ -527,10 +646,20 @@ export function setupRealtimeVoice(io, deps) {
 
         case "response.text.done":
           if (event.text) {
-            const newTextNorm = event.text.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
-            const lastTextNorm = lastAssistantText.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
-            const isDuplicate = newTextNorm.length > 20 && lastTextNorm.length > 20 &&
-              (newTextNorm === lastTextNorm || newTextNorm.includes(lastTextNorm) || lastTextNorm.includes(newTextNorm));
+            const newTextNorm = event.text
+              .toLowerCase()
+              .replace(/[^a-z0-9\s]/g, "")
+              .trim();
+            const lastTextNorm = lastAssistantText
+              .toLowerCase()
+              .replace(/[^a-z0-9\s]/g, "")
+              .trim();
+            const isDuplicate =
+              newTextNorm.length > 20 &&
+              lastTextNorm.length > 20 &&
+              (newTextNorm === lastTextNorm ||
+                newTextNorm.includes(lastTextNorm) ||
+                lastTextNorm.includes(newTextNorm));
 
             if (isDuplicate) {
               console.log(`🔁 DUPLICATE response detected — skipping`);
@@ -549,7 +678,9 @@ export function setupRealtimeVoice(io, deps) {
             // ===== FIX #2: Detect plans presentation and set cooldown =====
             if (detectPlanPresentation(event.text)) {
               plansPresentedAt = Date.now();
-              console.log(`📋 Plans presented — silence nudge cooldown activated (${PLANS_PRESENTED_COOLDOWN_MS / 1000}s)`);
+              console.log(
+                `📋 Plans presented — silence nudge cooldown activated (${PLANS_PRESENTED_COOLDOWN_MS / 1000}s)`,
+              );
             }
 
             // ===== FIX #1: Only detect email and phone for structured input (no address) =====
@@ -559,17 +690,24 @@ export function setupRealtimeVoice(io, deps) {
               structuredInputField = detectedField;
 
               let placeholder;
-              if (detectedField === "email") placeholder = "Enter your email address";
-              else if (detectedField === "phone") placeholder = "Enter your phone number";
+              if (detectedField === "email")
+                placeholder = "Enter your email address";
+              else if (detectedField === "phone")
+                placeholder = "Enter your phone number";
 
               console.log(`📋 Structured input requested: ${detectedField}`);
               clearSilenceTimer();
 
               if (openaiWs?.readyState === WebSocket.OPEN) {
-                openaiWs.send(JSON.stringify({ type: "input_audio_buffer.clear" }));
+                openaiWs.send(
+                  JSON.stringify({ type: "input_audio_buffer.clear" }),
+                );
               }
 
-              socket.emit("request_structured_input", { field: detectedField, prompt: placeholder });
+              socket.emit("request_structured_input", {
+                field: detectedField,
+                prompt: placeholder,
+              });
             }
           }
           break;
@@ -579,8 +717,15 @@ export function setupRealtimeVoice(io, deps) {
 
           if (assistantTextBuffer.trim()) {
             const t = assistantTextBuffer.toLowerCase();
-            const confirms = ["raised", "ticket details", "details via email", "agent will contact", "raised a ticket", "raised sales inquiry"];
-            const isConfirmation = confirms.some(c => t.includes(c));
+            const confirms = [
+              "raised",
+              "ticket details",
+              "details via email",
+              "agent will contact",
+              "raised a ticket",
+              "raised sales inquiry",
+            ];
+            const isConfirmation = confirms.some((c) => t.includes(c));
             if (isConfirmation) {
               console.log("🔒 Final confirmation detected.");
               setTimeout(() => {
@@ -604,7 +749,9 @@ export function setupRealtimeVoice(io, deps) {
             if (fnName === "create_ticket") {
               lockFinalMessage(15000);
               if (openaiWs?.readyState === WebSocket.OPEN) {
-                openaiWs.send(JSON.stringify({ type: "input_audio_buffer.clear" }));
+                openaiWs.send(
+                  JSON.stringify({ type: "input_audio_buffer.clear" }),
+                );
               }
             }
           }
@@ -664,16 +811,20 @@ export function setupRealtimeVoice(io, deps) {
       clearTimeout(toolTimeout);
 
       if (openaiWs?.readyState === WebSocket.OPEN) {
-        openaiWs.send(JSON.stringify({
-          type: "conversation.item.create",
-          item: { type: "function_call_output", call_id, output: result }
-        }));
+        openaiWs.send(
+          JSON.stringify({
+            type: "conversation.item.create",
+            item: { type: "function_call_output", call_id, output: result },
+          }),
+        );
       }
 
       pendingFunctionCalls = Math.max(0, pendingFunctionCalls - 1);
       if (pendingFunctionCalls === 0) {
         socket.emit("status", "processing");
-        setTimeout(() => { throttledResponseCreate(); }, 100);
+        setTimeout(() => {
+          throttledResponseCreate();
+        }, 100);
       }
     }
 
@@ -693,7 +844,9 @@ export function setupRealtimeVoice(io, deps) {
           return JSON.stringify({
             success: true,
             plans: tariffs.map((t) => ({
-              id: t.id, title: t.title, price: parseFloat(t.price),
+              id: t.id,
+              title: t.title,
+              price: parseFloat(t.price),
               download: `${t.speed_download / 1000} Mbps`,
               upload: `${t.speed_upload / 1000} Mbps`,
               available_for_locations: t.available_for_locations || [],
@@ -709,14 +862,22 @@ export function setupRealtimeVoice(io, deps) {
           if (args.address) session.collected.address = args.address; // AUTO-SAVE address to session
           return await checkAddressAvailability(args, session);
         } catch (err) {
-          console.error("check_address_availability error in realtime:", err.message);
-          return JSON.stringify({ success: false, error: err.message, address: args.address });
+          console.error(
+            "check_address_availability error in realtime:",
+            err.message,
+          );
+          return JSON.stringify({
+            success: false,
+            error: err.message,
+            address: args.address,
+          });
         }
       }
 
       if (fn === "create_ticket") {
         let fa = { ...args };
-        if (typeof fa.message === "string") fa.message = { message: fa.message };
+        if (typeof fa.message === "string")
+          fa.message = { message: fa.message };
 
         const collected = session.collected || {};
         const hasCustomerId = !!(fa.customer_id || collected.customer_id);
@@ -724,17 +885,27 @@ export function setupRealtimeVoice(io, deps) {
 
         // ===== Build full customer details block and append to message body =====
         const detailLines = [];
-        if (collected.preferredName || collected.name) detailLines.push(`Name: ${collected.preferredName || collected.name}`);
+        if (collected.preferredName || collected.name)
+          detailLines.push(
+            `Name: ${collected.preferredName || collected.name}`,
+          );
         if (collected.email) detailLines.push(`Email: ${collected.email}`);
         if (collected.phone) detailLines.push(`Phone: ${collected.phone}`);
-        if (collected.address) detailLines.push(`Address: ${collected.address}`);
-        if (collected.networkPreference) detailLines.push(`Network: ${collected.networkPreference}`);
-        if (collected.residentialPreference) detailLines.push(`Type: ${collected.residentialPreference}`);
-        if (collected.leadInterest || fa.leadInterest) detailLines.push(`Selected Plan: ${collected.leadInterest || fa.leadInterest}`);
+        if (collected.address)
+          detailLines.push(`Address: ${collected.address}`);
+        if (collected.networkPreference)
+          detailLines.push(`Network: ${collected.networkPreference}`);
+        if (collected.residentialPreference)
+          detailLines.push(`Type: ${collected.residentialPreference}`);
+        if (collected.leadInterest || fa.leadInterest)
+          detailLines.push(
+            `Selected Plan: ${collected.leadInterest || fa.leadInterest}`,
+          );
 
-        const detailsBlock = detailLines.length > 0
-          ? `\n\n--- Customer Details ---\n${detailLines.join("\n")}`
-          : "";
+        const detailsBlock =
+          detailLines.length > 0
+            ? `\n\n--- Customer Details ---\n${detailLines.join("\n")}`
+            : "";
 
         if (fa.message?.message) {
           fa.message.message += detailsBlock;
@@ -744,32 +915,79 @@ export function setupRealtimeVoice(io, deps) {
 
         try {
           if (isSupportTicket) {
-            console.log(`📝 Creating SUPPORT ticket in Splynx: subject="${fa.subject}" customer_id=${fa.customer_id}`);
-            const r = await splynx.request("POST", "admin/support/tickets", objectToUrlEncoded(fa));
+            console.log(
+              `📝 Creating SUPPORT ticket in Splynx: subject="${fa.subject}" customer_id=${fa.customer_id}`,
+            );
+            const r = await splynx.request(
+              "POST",
+              "admin/support/tickets",
+              objectToUrlEncoded(fa),
+            );
             console.log(`✅ Splynx ticket created: ID=${r.id}`);
-            const emailResult = await sendTicketEmail(r.id, fa, collected, true);
-            return JSON.stringify({ success: true, ticket_id: r.id, email_sent: emailResult.sent, email_error: emailResult.reason || null });
+            const emailResult = await sendTicketEmail(
+              r.id,
+              fa,
+              collected,
+              true,
+            );
+            return JSON.stringify({
+              success: true,
+              ticket_id: r.id,
+              email_sent: emailResult.sent,
+              email_error: emailResult.reason || null,
+            });
           } else {
-            console.log(`📧 SALES inquiry — sending email only (no Splynx ticket): subject="${fa.subject}"`);
-            const emailResult = await sendTicketEmail(null, fa, collected, false);
-            return JSON.stringify({ success: true, message: "Sales inquiry submitted successfully", email_sent: emailResult.sent, email_error: emailResult.reason || null });
+            console.log(
+              `📧 SALES inquiry — sending email only (no Splynx ticket): subject="${fa.subject}"`,
+            );
+            const emailResult = await sendTicketEmail(
+              null,
+              fa,
+              collected,
+              false,
+            );
+            return JSON.stringify({
+              success: true,
+              message: "Sales inquiry submitted successfully",
+              email_sent: emailResult.sent,
+              email_error: emailResult.reason || null,
+            });
           }
         } catch (err) {
           console.error("❌ Create ticket/email failed:", err.message || err);
-          return JSON.stringify({ success: false, error: err.message || "Failed to process request" });
+          return JSON.stringify({
+            success: false,
+            error: err.message || "Failed to process request",
+          });
         }
       }
 
-      if (fn === "get_ticket_types") return JSON.stringify({ success: true, types: await splynx.request("GET", "admin/support/tickets-types") });
-      if (fn === "get_ticket_groups") return JSON.stringify({ success: true, groups: await splynx.request("GET", "admin/support/tickets-groups") });
-      if (fn === "get_ticket_statuses") return JSON.stringify({ success: true, statuses: await splynx.request("GET", "admin/support/tickets-statuses") });
+      if (fn === "get_ticket_types")
+        return JSON.stringify({
+          success: true,
+          types: await splynx.request("GET", "admin/support/tickets-types"),
+        });
+      if (fn === "get_ticket_groups")
+        return JSON.stringify({
+          success: true,
+          groups: await splynx.request("GET", "admin/support/tickets-groups"),
+        });
+      if (fn === "get_ticket_statuses")
+        return JSON.stringify({
+          success: true,
+          statuses: await splynx.request(
+            "GET",
+            "admin/support/tickets-statuses",
+          ),
+        });
       return JSON.stringify({ error: `Unknown tool: ${fn}` });
     }
 
     // ═══════════════ Client Audio → OpenAI ═══════════════
     let lastAudioLog = 0;
     socket.on("audio_chunk", (b64) => {
-      const shouldSuppress = awaitingStructuredInput ||
+      const shouldSuppress =
+        awaitingStructuredInput ||
         pendingFunctionCalls > 0 ||
         session.finalLock ||
         finalMessageLock;
@@ -778,12 +996,16 @@ export function setupRealtimeVoice(io, deps) {
 
       const now = Date.now();
       if (now - lastAudioLog > 2000) {
-        const state = ["CONNECTING", "OPEN", "CLOSING", "CLOSED"][openaiWs?.readyState] || "UNKNOWN";
+        const state =
+          ["CONNECTING", "OPEN", "CLOSING", "CLOSED"][openaiWs?.readyState] ||
+          "UNKNOWN";
         console.log(`🎤 [${socket.id}] [OpenAI: ${state}]`);
         lastAudioLog = now;
       }
       if (openaiWs?.readyState === WebSocket.OPEN) {
-        openaiWs.send(JSON.stringify({ type: "input_audio_buffer.append", audio: b64 }));
+        openaiWs.send(
+          JSON.stringify({ type: "input_audio_buffer.append", audio: b64 }),
+        );
       }
     });
 
@@ -812,14 +1034,16 @@ export function setupRealtimeVoice(io, deps) {
       socket.emit("user_transcript", userMessage);
 
       if (openaiWs?.readyState === WebSocket.OPEN) {
-        openaiWs.send(JSON.stringify({
-          type: "conversation.item.create",
-          item: {
-            type: "message",
-            role: "user",
-            content: [{ type: "input_text", text: userMessage }],
-          },
-        }));
+        openaiWs.send(
+          JSON.stringify({
+            type: "conversation.item.create",
+            item: {
+              type: "message",
+              role: "user",
+              content: [{ type: "input_text", text: userMessage }],
+            },
+          }),
+        );
         throttledResponseCreate();
       }
 
@@ -831,10 +1055,19 @@ export function setupRealtimeVoice(io, deps) {
     socket.on("disconnect", () => {
       console.log(`🔌 Disconnected: ${socket.id}`);
       clearSilenceTimer();
-      if (finalMessageTimer) { clearTimeout(finalMessageTimer); finalMessageTimer = null; }
-      if (responseCreateTimeout) { clearTimeout(responseCreateTimeout); responseCreateTimeout = null; }
+      if (finalMessageTimer) {
+        clearTimeout(finalMessageTimer);
+        finalMessageTimer = null;
+      }
+      if (responseCreateTimeout) {
+        clearTimeout(responseCreateTimeout);
+        responseCreateTimeout = null;
+      }
       closeElevenLabsWs();
-      if (openaiWs) try { openaiWs.close(); } catch (_) { }
+      if (openaiWs)
+        try {
+          openaiWs.close();
+        } catch (_) {}
       sessions.delete(session.id);
     });
 
@@ -843,9 +1076,11 @@ export function setupRealtimeVoice(io, deps) {
       try {
         console.log("⏳ Connecting OpenAI Realtime...");
         await connectOpenAI();
-        console.log("✅ OpenAI connected! ElevenLabs pre-warmed. Waiting 2s...");
+        console.log(
+          "✅ OpenAI connected! ElevenLabs pre-warmed. Waiting 2s...",
+        );
         socket.emit("connections_ready");
-        await new Promise(r => setTimeout(r, 2000));
+        await new Promise((r) => setTimeout(r, 2000));
 
         if (!session.hasGreeted) {
           session.hasGreeted = true;
