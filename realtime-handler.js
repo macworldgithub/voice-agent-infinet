@@ -280,7 +280,7 @@ export function setupRealtimeVoice(io, deps) {
         console.log(`✅ [EL] ElevenLabs WebSocket connected`);
         elWs.send(JSON.stringify({
           text: " ",
-          voice_settings: { stability: 0.4, similarity_boost: 0.75, speed: 1.15 },
+          voice_settings: { stability: 0.4, similarity_boost: 0.75, speed: 1.0 },
           xi_api_key: ELEVENLABS_API_KEY,
         }));
 
@@ -706,6 +706,7 @@ export function setupRealtimeVoice(io, deps) {
 
       if (fn === "check_address_availability") {
         try {
+          if (args.address) session.collected.address = args.address; // AUTO-SAVE address to session
           return await checkAddressAvailability(args, session);
         } catch (err) {
           console.error("check_address_availability error in realtime:", err.message);
@@ -723,8 +724,8 @@ export function setupRealtimeVoice(io, deps) {
 
         // ===== Build full customer details block and append to message body =====
         const detailLines = [];
-        if (collected.preferredName) detailLines.push(`Name: ${collected.preferredName}`);
-        if (collected.email) detailLines.push(`Customer Email: ${collected.email}`);
+        if (collected.preferredName || collected.name) detailLines.push(`Name: ${collected.preferredName || collected.name}`);
+        if (collected.email) detailLines.push(`Email: ${collected.email}`);
         if (collected.phone) detailLines.push(`Phone: ${collected.phone}`);
         if (collected.address) detailLines.push(`Address: ${collected.address}`);
         if (collected.networkPreference) detailLines.push(`Network: ${collected.networkPreference}`);

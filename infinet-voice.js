@@ -58,7 +58,9 @@ async function sendTicketEmail(ticketId, ticketArgs, collectedFields, isSupportT
     : "";
 
   // ===== User's email for Reply-To so company can contact them directly =====
+  // ===== FIX: Ensure address is pulled from either collected fields or ticket args =====
   const userEmail = collectedFields?.email || null;
+  const address = collectedFields?.address || ticketArgs.address || null;
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:Arial,sans-serif;line-height:1.6;">
     <h2>New ${type} Enquiry Received</h2>
@@ -68,10 +70,10 @@ async function sendTicketEmail(ticketId, ticketArgs, collectedFields, isSupportT
     ${ticketArgs.customer_id ? `<p><strong>Customer ID:</strong> ${ticketArgs.customer_id}</p>` : `<p><strong>New Lead (no customer ID)</strong></p>`}
     <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:12px 16px;margin:12px 0;">
       <h3 style="margin:0 0 8px 0;color:#0369a1;">Customer Contact Details</h3>
-      ${collectedFields?.preferredName ? `<p style="margin:4px 0;"><strong>Name:</strong> ${collectedFields.preferredName}</p>` : ""}
+      ${(collectedFields?.preferredName || collectedFields?.name) ? `<p style="margin:4px 0;"><strong>Name:</strong> ${collectedFields.preferredName || collectedFields.name}</p>` : ""}
       ${userEmail ? `<p style="margin:4px 0;"><strong>Email:</strong> <a href="mailto:${userEmail}">${userEmail}</a></p>` : '<p style="margin:4px 0;color:#dc2626;"><strong>Email:</strong> Not provided</p>'}
       ${collectedFields?.phone ? `<p style="margin:4px 0;"><strong>Phone:</strong> ${collectedFields.phone}</p>` : ""}
-      ${collectedFields?.address ? `<p style="margin:4px 0;"><strong>Address:</strong> ${collectedFields.address}</p>` : ""}
+      ${address ? `<p style="margin:4px 0;"><strong>Address:</strong> ${address}</p>` : ""}
     </div>
     ${selectedPlanHtml}
     ${collectedFields?.networkPreference ? `<p><strong>Network:</strong> ${collectedFields.networkPreference}</p>` : ""}
@@ -864,6 +866,7 @@ async function handleToolCall(session, funcName, args) {
     }
   }
   if (funcName === "check_address_availability") {
+    if (args.address) session.collected.address = args.address; // AUTO-SAVE address to session
     return await checkAddressAvailability(args, session);
   }
   if (funcName === "create_ticket") {
@@ -874,8 +877,8 @@ async function handleToolCall(session, funcName, args) {
 
     // ===== Build full customer details block and append to message body =====
     const detailLines = [];
-    if (collected.preferredName) detailLines.push(`Name: ${collected.preferredName}`);
-    if (collected.email) detailLines.push(`Customer Email: ${collected.email}`);
+    if (collected.preferredName || collected.name) detailLines.push(`Name: ${collected.preferredName || collected.name}`);
+    if (collected.email) detailLines.push(`Email: ${collected.email}`);
     if (collected.phone) detailLines.push(`Phone: ${collected.phone}`);
     if (collected.address) detailLines.push(`Address: ${collected.address}`);
     if (collected.networkPreference) detailLines.push(`Network: ${collected.networkPreference}`);
