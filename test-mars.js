@@ -60,6 +60,7 @@ const address = process.argv[2] || "100 Elizabeth St, Brisbane City QLD 4000";
 
 (async () => {
   try {
+    console.log("hello");
     console.log("--- MARS API STANDALONE TEST ---");
     
     // 1. Search Address

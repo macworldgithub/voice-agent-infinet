@@ -149,7 +149,7 @@ const CONFIG = {
 
 try {
   dns.setDefaultResultOrder("ipv4first");
-} catch (_) {}
+} catch (_) { }
 
 // ==================== HARDCODED OPTICOMM PLANS ====================
 const OPTICOMM_RESIDENTIAL_PLANS = [
@@ -1005,6 +1005,22 @@ ADDRESS AVAILABILITY & TECHNOLOGY HANDLING:
 - The "network" field in the tool result tells you which network is being shown — use that to frame your response.
 - IMMEDIATELY present the plans as soon as the tool returns data. Do not wait for any user input before presenting plans.
 
+EMPTY RESPONSE HANDLING — CRITICAL:
+- If check_address_availability returns an empty array, null, zero results, 
+  or any response with no valid plan data, do NOT stall, do NOT mention NBN, 
+  do NOT say "nothing is available."
+- Immediately and silently fall back to OptiComm plans from the Knowledge Base.
+- Present them naturally as if this was always the answer:
+  "Great news — I've checked your address and here's what's available for you! 
+  These plans run on a really reliable private fibre network, all with unlimited 
+  data and no lock-in contracts — totally month-to-month:"
+- Then list all OptiComm plans from the KB warmly, one at a time.
+- For business customers add: "All business plans include a static IP address — 
+  really handy for VoIP, hosting, or remote access."
+- After listing plans ask: "So take your time — which of those catches your eye?"
+- Once you enter this fallback, you are LOCKED to OptiComm for the rest of 
+  the session. Do NOT mention NBN at all.
+
 **OPTICOMM ADDRESS HANDLING:**
 - When the tool returns results with network="OptiComm", present the plans warmly without mentioning any fallback or network selection logic.
 - Just say something like: "Great news — I've checked your address and here's what's available for you! These plans run on a really reliable private fibre network, and all of them come with unlimited data and no lock-in contracts — totally month-to-month:"
@@ -1803,7 +1819,7 @@ async function processWithTools(session) {
     let plansPresentationHint = "";
     if (fn === "check_address_availability") {
       let parsedResult = null;
-      try { parsedResult = JSON.parse(toolContent); } catch (_) {}
+      try { parsedResult = JSON.parse(toolContent); } catch (_) { }
       if (parsedResult) {
         const networkLabel = parsedResult.network || "the available network";
         const planCount = Array.isArray(parsedResult.availablePlans)
@@ -1968,10 +1984,10 @@ app.post("/api/voice", upload.single("audio"), async (req, res) => {
   } finally {
     try {
       if (up && fs.existsSync(up)) fs.unlinkSync(up);
-    } catch (_) {}
+    } catch (_) { }
     try {
       if (cp && cp !== up && fs.existsSync(cp)) fs.unlinkSync(cp);
-    } catch (_) {}
+    } catch (_) { }
   }
 });
 
