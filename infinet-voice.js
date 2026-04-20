@@ -1039,7 +1039,7 @@ import { setupRealtimeVoice } from "./realtime-handler.js";
 dotenv.config();
 if (ffmpegStatic) ffmpeg.setFfmpegPath(ffmpegStatic);
 
-const PORT = process.env.PORT || 3005;
+const PORT = process.env.PORT || 3004;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const ELEVENLABS_VOICE_ID =
@@ -2931,47 +2931,57 @@ async function processWithTools(session) {
     functions: tools,
     function_call: "auto",
     temperature: 0.0,
-    max_tokens: 600,
+    max_tokens: 800,
   });
+
   const msg = comp.choices?.[0]?.message;
+
   if (msg?.function_call) {
     const fn = msg.function_call.name;
     const args = safeParseJSON(msg.function_call.arguments) || {};
     session.messages.push(msg);
+
     let toolContent;
     try {
       toolContent = await handleToolCall(session, fn, args);
     } catch (e) {
       toolContent = JSON.stringify({ success: false, error: e.message });
     }
+
     session.messages.push({ role: "function", name: fn, content: toolContent });
-    const finalMessages = [
-      {
-        role: "system",
-        content:
-          "You are a concise assistant for ISP CRM. Use collected fields and KB. Ask for remaining info concisely.",
-      },
+
+    //  FIX: Use the FULL SYSTEM_PROMPT, not a stripped-down one.
+    // Also inject collected fields as a reminder so the model knows what it has.
+    // Do NOT add a second system message that overrides the first.
+    const messagesForFinalCall = [
       ...session.messages,
       {
         role: "system",
-        content: `CollectedFields: ${JSON.stringify(session.collected || {})}.`,
+        content: `REMINDER — Collected fields so far: ${JSON.stringify(session.collected || {})}. 
+Now respond immediately and warmly based on the tool result above. 
+Do NOT stay silent. Do NOT wait. Speak your next line right now as per your instructions.`,
       },
     ];
+
     const finalResp = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      messages: finalMessages,
-      temperature: 0.0,
-      max_tokens: 700,
+      messages: messagesForFinalCall,
+      temperature: 0.4,   // slight creativity so it doesn't go flat
+      max_tokens: 900,    // enough room for full plan listings
     });
+
     const text =
       finalResp.choices?.[0]?.message?.content?.trim() ||
-      "Thanks — I have your details.";
+      "Alright, I've had a look — let me walk you through what's available for you!";
+
     session.messages.push({ role: "assistant", content: text });
     return text;
+
   } else if (msg?.content) {
     session.messages.push({ role: "assistant", content: msg.content });
     return msg.content;
   }
+
   return "I'm here to help. Could you repeat that?";
 }
 
