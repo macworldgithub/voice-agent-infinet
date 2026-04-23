@@ -388,8 +388,11 @@ const splynx = new SplynxApiClient(CONFIG);
 })();
 app.use(async (req, res, next) => {
   try {
-    if (CONFIG.USE_ACCESS_TOKEN && !splynx.accessToken)
-      await splynx.generateAccessToken();
+    if (CONFIG.USE_ACCESS_TOKEN) {
+      if (!splynx.accessToken || splynx.isTokenExpired()) {
+        await splynx.generateAccessToken();
+      }
+    }
     next();
   } catch (err) {
     console.error("Splynx middleware error:", err.message);

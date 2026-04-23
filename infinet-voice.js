@@ -608,6 +608,9 @@ async function getMarsAccessToken() {
   const expiresInSec =
     typeof data.expires_in === "number" ? data.expires_in : 0;
   marsAccessTokenExpiresAtMs = Date.now() + Math.max(0, expiresInSec) * 1000;
+  console.log(
+    `🔑 Mars token generated. Expires in: ${expiresInSec} seconds (${Math.round(expiresInSec / 60)} minutes)`,
+  );
   return marsAccessToken;
 }
 
