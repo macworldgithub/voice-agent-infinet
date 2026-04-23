@@ -149,7 +149,7 @@ const CONFIG = {
 
 try {
   dns.setDefaultResultOrder("ipv4first");
-} catch (_) { }
+} catch (_) {}
 
 // ==================== HARDCODED OPTICOMM PLANS ====================
 const OPTICOMM_RESIDENTIAL_PLANS = [
@@ -895,6 +895,14 @@ PACING & DELIVERY — CRITICAL:
 - Use natural spoken rhythm — short sentences, pauses implied by punctuation, easy-to-listen-to language.
 - Never present more than 3-4 plans in one go without a natural break like "So those are the first few — want me to keep going or does one of those already sound interesting?"
 
+PACKAGE PRESENTATION STYLE — CRITICAL:
+- When speaking packages or plans, use a calm step-by-step flow: network first, then plan name, then price, then the main benefit.
+- Keep each plan separate. Read one plan, pause, then move to the next one.
+- Slow down extra when saying prices, download speeds, and upload speeds so the customer can catch every detail.
+- Prefer simple spoken phrasing like "This one is great if..." or "That plan suits..." instead of technical wording.
+- If one plan is the best fit, recommend it first and explain why before mentioning the others.
+- End every package overview with a soft handoff like "Take your time — which one sounds like the best fit for you?"
+
 INTERRUPTION & NOISE HANDLING — CRITICAL:
 - If you get interrupted mid-sentence and the interruption seems like background noise, a barge-in, or something unclear/unintelligible, do NOT treat it as a valid customer response.
 - Instead, gently acknowledge it and repeat your previous point: "Oh sorry, I think there might have been a little hiccup there — let me just repeat that for you." Then re-say what you were saying.
@@ -947,7 +955,8 @@ ONE-NETWORK-PER-SESSION RULE — ABSOLUTE:
 IMMEDIATE PLAN PRESENTATION — CRITICAL:
 - The moment check_address_availability returns results, you MUST immediately present the plans to the customer WITHOUT waiting for them to prompt you.
 - Do NOT pause and say "let me know when you're ready" or wait silently. The tool result is your cue to speak.
-- Present the plans right away, warmly and conversationally, then end with "Which of these catches your eye?"
+- Present the plans right away, warmly and conversationally, speak them slowly, and give each plan its own beat before moving on.
+- End with "Which of these catches your eye?"
 - There should be ZERO delay between the tool returning data and you presenting the plans.
 
 CONVERSATION FLOW:
@@ -1055,6 +1064,8 @@ SALES FLOW:
 3. "Awesome! Now I just need your full address so I can check exactly what's available in your area. Just tell me your street address, suburb, state and postcode and I'll look it up for you!" → save address.
 4. IMMEDIATELY call check_address_availability. Do NOT pass networkPreference unless user explicitly stated one. Let the tool auto-detect.
 5. After tool result → IMMEDIATELY present ONLY the plans in availablePlans from the tool result. Do NOT wait for user input before presenting. Apply ADDRESS AVAILABILITY rules above. Present plans with enthusiasm and recommendations. Take it slow — don't rush through the plans.
+  - Speak each plan slowly and clearly, one at a time, with a short pause between plans.
+  - Lead with the strongest recommendation first if one plan clearly fits best.
 6. WAIT for the customer to explicitly choose a plan. Do NOT auto-select. Ask "Which plan sounds good to you?" if needed.
 7. User selects → save leadInterest (save the FULL plan name and price). React warmly: "Oh great choice! That's actually one of our most popular plans — I think you're going to be really happy with it. The speeds are fantastic and at that price point it's honestly hard to beat."
 8. "Brilliant! Now the last thing I need is your email address so our sales team can get in touch and get everything finalised for you. Could you type that in for me?" → save email.
@@ -1666,7 +1677,10 @@ async function checkAddressAvailability(args, session) {
       );
       return JSON.stringify(getOpticommResult());
     }
-    console.error("check_address_availability (NBN explicit) error:", err.message);
+    console.error(
+      "check_address_availability (NBN explicit) error:",
+      err.message,
+    );
     return JSON.stringify({ success: false, error: err.message, address });
   }
 }
@@ -1822,7 +1836,9 @@ async function processWithTools(session) {
     let plansPresentationHint = "";
     if (fn === "check_address_availability") {
       let parsedResult = null;
-      try { parsedResult = JSON.parse(toolContent); } catch (_) { }
+      try {
+        parsedResult = JSON.parse(toolContent);
+      } catch (_) {}
       if (parsedResult) {
         const networkLabel = parsedResult.network || "the available network";
         const planCount = Array.isArray(parsedResult.availablePlans)
@@ -1838,7 +1854,7 @@ Do NOT present any OptiComm or NBN plans from your knowledge base.`;
           // FIX #2 + FIX #3: Lock to the returned network and instruct IMMEDIATE presentation
           plansPresentationHint = `
 TOOL RESULT INSTRUCTION: The address check returned ${planCount} plans on the "${networkLabel}" network.
-CRITICAL — IMMEDIATE PRESENTATION REQUIRED: Present these plans RIGHT NOW without waiting for any user input. Do not ask "are you ready?" or pause. Speak immediately.
+CRITICAL — IMMEDIATE PRESENTATION REQUIRED: Present these plans RIGHT NOW without waiting for any user input. Do not ask "are you ready?" or pause. Speak immediately, slowly, and one plan at a time.
 CRITICAL — ONE NETWORK LOCK: You are now LOCKED to "${networkLabel}" for this entire session. Do NOT mention ${networkLabel === "OptiComm" ? "NBN" : "OptiComm"} at any point ever again in this conversation.
 CRITICAL — ONLY THESE PLANS: Present ONLY these ${planCount} plans from the tool result's "availablePlans" array. Do NOT add plans from memory or the knowledge base.
 Present the plans warmly and conversationally as per the system prompt, then wait for the customer to choose.`;
@@ -1987,10 +2003,10 @@ app.post("/api/voice", upload.single("audio"), async (req, res) => {
   } finally {
     try {
       if (up && fs.existsSync(up)) fs.unlinkSync(up);
-    } catch (_) { }
+    } catch (_) {}
     try {
       if (cp && cp !== up && fs.existsSync(cp)) fs.unlinkSync(cp);
-    } catch (_) { }
+    } catch (_) {}
   }
 });
 

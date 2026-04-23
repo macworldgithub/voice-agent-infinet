@@ -61,18 +61,20 @@ async function sendTicketEmail(
   ${referenceLine}
   <p><strong>Subject:</strong> ${ticketArgs.subject || "N/A"}</p>
   <p><strong>Priority:</strong> ${ticketArgs.priority || "medium"}</p>
-  ${ticketArgs.customer_id
+  ${
+    ticketArgs.customer_id
       ? `<p><strong>Customer ID:</strong> ${ticketArgs.customer_id}</p>`
       : `<p><strong>New Lead (no customer ID)</strong></p>`
-    }
+  }
   <h3>Message Body</h3>
   <p>${(ticketArgs.message && (ticketArgs.message.message || ticketArgs.message)) || "No additional message provided"}</p>
   <hr>
   <p><small>This is an automated email from the InfiNET Broadband AI Assistant.<br>
-  ${isSupportTicket && ticketId
+  ${
+    isSupportTicket && ticketId
       ? `View ticket: https://infinetbroadband-portal.com.au/admin/support/tickets/${ticketId}`
       : `This is a ${type.toLowerCase()} enquiry — to be followed up manually.`
-    }
+  }
   </small></p>
 </body>
 </html>`;
@@ -115,8 +117,17 @@ const OPTICOMM_RESIDENTIAL_PLANS = [
     intro_price: 64,
     ongoing_price: 69,
     discount: "$5 off for 3 months",
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Reliable Fast Fibre"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p", "Web browsing & Social Media"],
+    features: [
+      "Unlimited Data",
+      "No Contract",
+      "Month to Month",
+      "Reliable Fast Fibre",
+    ],
+    suitable_for: [
+      "Video Calls / Teams",
+      "Streaming HD Video + 1080p",
+      "Web browsing & Social Media",
+    ],
   },
   {
     title: "OptiComm 50/20Mbps Residential",
@@ -126,8 +137,18 @@ const OPTICOMM_RESIDENTIAL_PLANS = [
     intro_price: 74,
     ongoing_price: 79,
     discount: "$5 off for 3 months",
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Reliable Fast Fibre"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p", "Web browsing & Social Media", "Some Gaming Applications"],
+    features: [
+      "Unlimited Data",
+      "No Contract",
+      "Month to Month",
+      "Reliable Fast Fibre",
+    ],
+    suitable_for: [
+      "Video Calls / Teams",
+      "Streaming HD Video + 1080p",
+      "Web browsing & Social Media",
+      "Some Gaming Applications",
+    ],
   },
   {
     title: "OptiComm 100/20Mbps Residential",
@@ -138,8 +159,20 @@ const OPTICOMM_RESIDENTIAL_PLANS = [
     ongoing_price: 89,
     discount: "$5 off for 3 months",
     note: "For communities with limited capacity of 100Mbps",
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Reliable Fast Fibre"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 4K", "Web browsing & Social Media", "Fast Downloading", "Gaming", "Low latency"],
+    features: [
+      "Unlimited Data",
+      "No Contract",
+      "Month to Month",
+      "Reliable Fast Fibre",
+    ],
+    suitable_for: [
+      "Video Calls / Teams",
+      "Streaming HD Video + 4K",
+      "Web browsing & Social Media",
+      "Fast Downloading",
+      "Gaming",
+      "Low latency",
+    ],
   },
   {
     title: "OptiComm 500/50Mbps Faster Residential",
@@ -149,8 +182,20 @@ const OPTICOMM_RESIDENTIAL_PLANS = [
     intro_price: 79,
     ongoing_price: 89,
     discount: "$10 off for 3 months",
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Reliable Fast Fibre"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 4K", "Web browsing & Social Media", "Super Fast Downloading", "All Gaming Applications", "Low latency"],
+    features: [
+      "Unlimited Data",
+      "No Contract",
+      "Month to Month",
+      "Reliable Fast Fibre",
+    ],
+    suitable_for: [
+      "Video Calls / Teams",
+      "Streaming HD Video + 4K",
+      "Web browsing & Social Media",
+      "Super Fast Downloading",
+      "All Gaming Applications",
+      "Low latency",
+    ],
   },
   {
     title: "OptiComm 750/50Mbps Residential",
@@ -160,8 +205,20 @@ const OPTICOMM_RESIDENTIAL_PLANS = [
     intro_price: 89,
     ongoing_price: 99,
     discount: "$10 off for 3 months",
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Reliable Fast Fibre"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 4K", "Web browsing & Social Media", "Super Fast Downloading", "All Gaming Applications", "Low latency"],
+    features: [
+      "Unlimited Data",
+      "No Contract",
+      "Month to Month",
+      "Reliable Fast Fibre",
+    ],
+    suitable_for: [
+      "Video Calls / Teams",
+      "Streaming HD Video + 4K",
+      "Web browsing & Social Media",
+      "Super Fast Downloading",
+      "All Gaming Applications",
+      "Low latency",
+    ],
   },
   {
     title: "OptiComm 1000/100Mbps Residential",
@@ -171,8 +228,20 @@ const OPTICOMM_RESIDENTIAL_PLANS = [
     intro_price: 99,
     ongoing_price: 109,
     discount: "$10 off for 3 months",
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Reliable Fast Fibre"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 4K", "Web browsing & Social Media", "Super Fast Uploads/Downloads", "All Gaming Applications", "Low latency"],
+    features: [
+      "Unlimited Data",
+      "No Contract",
+      "Month to Month",
+      "Reliable Fast Fibre",
+    ],
+    suitable_for: [
+      "Video Calls / Teams",
+      "Streaming HD Video + 4K",
+      "Web browsing & Social Media",
+      "Super Fast Uploads/Downloads",
+      "All Gaming Applications",
+      "Low latency",
+    ],
   },
 ];
 const OPTICOMM_BUSINESS_PLANS = [
@@ -184,8 +253,19 @@ const OPTICOMM_BUSINESS_PLANS = [
     intro_price: 79,
     ongoing_price: 89,
     discount: "$10 off for 3 months",
-    features: ["Unlimited Data", "No Contracts", "Month to Month", "Includes Static IP"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 4K", "Web browsing & Social Media", "Some Gaming Applications", "Low latency"],
+    features: [
+      "Unlimited Data",
+      "No Contracts",
+      "Month to Month",
+      "Includes Static IP",
+    ],
+    suitable_for: [
+      "Video Calls / Teams",
+      "Streaming HD Video + 4K",
+      "Web browsing & Social Media",
+      "Some Gaming Applications",
+      "Low latency",
+    ],
   },
   {
     title: "OptiComm 100/40Mbps Business",
@@ -195,8 +275,21 @@ const OPTICOMM_BUSINESS_PLANS = [
     intro_price: 99,
     ongoing_price: 109,
     discount: "$10 off for 3 months",
-    features: ["Unlimited Data", "No Contracts", "Month to Month", "Includes Static IP"],
-    suitable_for: ["Business IP Phones (VoIP Services)", "Video Calls / Teams", "Streaming HD Video + 4K", "Web browsing & Social Media", "Moderate Uploads/Downloads", "All Gaming Applications", "Low latency"],
+    features: [
+      "Unlimited Data",
+      "No Contracts",
+      "Month to Month",
+      "Includes Static IP",
+    ],
+    suitable_for: [
+      "Business IP Phones (VoIP Services)",
+      "Video Calls / Teams",
+      "Streaming HD Video + 4K",
+      "Web browsing & Social Media",
+      "Moderate Uploads/Downloads",
+      "All Gaming Applications",
+      "Low latency",
+    ],
   },
   {
     title: "OptiComm 250/100Mbps Business",
@@ -206,8 +299,21 @@ const OPTICOMM_BUSINESS_PLANS = [
     intro_price: 139,
     ongoing_price: 149,
     discount: "$10 off for 3 months",
-    features: ["Unlimited Data", "No Contracts", "Month to Month", "Includes Static IP"],
-    suitable_for: ["Business IP Phones (VoIP Services)", "Video Calls / Teams", "Streaming HD Video + 4K", "Web browsing & Social Media", "Super Fast Uploads/Downloads", "All Gaming Applications", "Low latency"],
+    features: [
+      "Unlimited Data",
+      "No Contracts",
+      "Month to Month",
+      "Includes Static IP",
+    ],
+    suitable_for: [
+      "Business IP Phones (VoIP Services)",
+      "Video Calls / Teams",
+      "Streaming HD Video + 4K",
+      "Web browsing & Social Media",
+      "Super Fast Uploads/Downloads",
+      "All Gaming Applications",
+      "Low latency",
+    ],
   },
   {
     title: "OptiComm 500/200Mbps Business",
@@ -217,8 +323,21 @@ const OPTICOMM_BUSINESS_PLANS = [
     intro_price: 169,
     ongoing_price: 179,
     discount: "$10 off for 3 months",
-    features: ["Unlimited Data", "No Contracts", "Month to Month", "Includes Static IP"],
-    suitable_for: ["Business IP Phones (VoIP Services)", "Video Calls / Teams", "Streaming HD Video + 4K", "Web browsing & Social Media", "Super Fast Uploads/Downloads", "All Gaming Applications", "Low latency"],
+    features: [
+      "Unlimited Data",
+      "No Contracts",
+      "Month to Month",
+      "Includes Static IP",
+    ],
+    suitable_for: [
+      "Business IP Phones (VoIP Services)",
+      "Video Calls / Teams",
+      "Streaming HD Video + 4K",
+      "Web browsing & Social Media",
+      "Super Fast Uploads/Downloads",
+      "All Gaming Applications",
+      "Low latency",
+    ],
   },
   {
     title: "OptiComm 1000/400Mbps Business",
@@ -228,8 +347,21 @@ const OPTICOMM_BUSINESS_PLANS = [
     intro_price: 189,
     ongoing_price: 199,
     discount: "$10 off for 3 months",
-    features: ["Unlimited Data", "No Contracts", "Month to Month", "Includes Static IP"],
-    suitable_for: ["Business IP Phones (VoIP Services)", "Video Calls / Teams", "Streaming HD Video + 4K", "Web browsing & Social Media", "Super Fast Uploads/Downloads", "All Gaming Applications", "Low latency"],
+    features: [
+      "Unlimited Data",
+      "No Contracts",
+      "Month to Month",
+      "Includes Static IP",
+    ],
+    suitable_for: [
+      "Business IP Phones (VoIP Services)",
+      "Video Calls / Teams",
+      "Streaming HD Video + 4K",
+      "Web browsing & Social Media",
+      "Super Fast Uploads/Downloads",
+      "All Gaming Applications",
+      "Low latency",
+    ],
   },
 ];
 class SplynxApiClient {
@@ -869,7 +1001,18 @@ function filterTariffsByMarsAvailability(
  */
 function requiresInstallVisit(serviceabilityClass) {
   const installRequired = new Set([
-    "1", "2", "5", "8", "21", "22", "23", "31", "32", "33", "11", "12",
+    "1",
+    "2",
+    "5",
+    "8",
+    "21",
+    "22",
+    "23",
+    "31",
+    "32",
+    "33",
+    "11",
+    "12",
   ]);
   return installRequired.has(String(serviceabilityClass));
 }
@@ -888,38 +1031,56 @@ function getServiceabilityDescription(
     return "Not currently orderable at this address.";
   }
   if (tech === "fibre") {
-    if (cls === "1") return "Fibre serviceable — no drop or NTD in place. Technician visit required for installation.";
-    if (cls === "2") return "Fibre drop in place — NTD not yet installed. Technician visit required to complete installation.";
-    if (cls === "3") return "Fibre fully installed (drop + NTD in place). Ready to connect — typically 1–5 business days.";
+    if (cls === "1")
+      return "Fibre serviceable — no drop or NTD in place. Technician visit required for installation.";
+    if (cls === "2")
+      return "Fibre drop in place — NTD not yet installed. Technician visit required to complete installation.";
+    if (cls === "3")
+      return "Fibre fully installed (drop + NTD in place). Ready to connect — typically 1–5 business days.";
   }
   if (tech === "hfc") {
-    if (cls === "21") return "HFC serviceable — lead-in, PCD, and internal cabling required. Technician visit needed.";
-    if (cls === "22") return "HFC lead-in & PCD in place — internal cabling with wall plates still needed. Technician visit required.";
-    if (cls === "23") return "HFC wall plate present — NTD not yet installed. Technician visit required.";
-    if (cls === "24") return "HFC fully installed (wall plate + NTD in place). Ready to connect.";
+    if (cls === "21")
+      return "HFC serviceable — lead-in, PCD, and internal cabling required. Technician visit needed.";
+    if (cls === "22")
+      return "HFC lead-in & PCD in place — internal cabling with wall plates still needed. Technician visit required.";
+    if (cls === "23")
+      return "HFC wall plate present — NTD not yet installed. Technician visit required.";
+    if (cls === "24")
+      return "HFC fully installed (wall plate + NTD in place). Ready to connect.";
   }
   if (tech === "wireless") {
-    if (cls === "5") return "Fixed Wireless serviceable — CPE (antenna/NTD) not yet installed. Technician visit required. Standard install is free.";
-    if (cls === "6") return "Fixed Wireless fully installed (CPE in place). Ready to connect. Note: Superfast tier may require WNTD upgrade appointment.";
+    if (cls === "5")
+      return "Fixed Wireless serviceable — CPE (antenna/NTD) not yet installed. Technician visit required. Standard install is free.";
+    if (cls === "6")
+      return "Fixed Wireless fully installed (CPE in place). Ready to connect. Note: Superfast tier may require WNTD upgrade appointment.";
   }
   if (tech === "satellite") {
-    if (cls === "8") return "Satellite serviceable — dish and NTD not yet installed. Technician visit required. Standard install is free. Typical latency: 500–600ms.";
-    if (cls === "9") return "Satellite fully installed (dish + NTD in place). Ready to connect. Typical latency: 500–600ms.";
+    if (cls === "8")
+      return "Satellite serviceable — dish and NTD not yet installed. Technician visit required. Standard install is free. Typical latency: 500–600ms.";
+    if (cls === "9")
+      return "Satellite fully installed (dish + NTD in place). Ready to connect. Typical latency: 500–600ms.";
   }
   if (tech === "fibre to the node") {
-    if (cls === "11") return "FTTN serviceable — active node present. Technician visit may be required for jumpering.";
-    if (cls === "12") return "FTTN serviceable — jumpering required. Technician visit needed.";
+    if (cls === "11")
+      return "FTTN serviceable — active node present. Technician visit may be required for jumpering.";
+    if (cls === "12")
+      return "FTTN serviceable — jumpering required. Technician visit needed.";
     if (cls === "13") return "FTTN infrastructure in place. Ready to connect.";
   }
   if (tech === "fibre to the building") {
-    if (cls === "12") return "FTTB serviceable — jumpering required. Technician visit needed.";
+    if (cls === "12")
+      return "FTTB serviceable — jumpering required. Technician visit needed.";
     if (cls === "13") return "FTTB infrastructure in place. Ready to connect.";
   }
   if (tech === "fibre to the curb") {
-    if (cls === "31") return "FTTC serviceable — no copper line available yet (NCD required). Technician visit needed.";
-    if (cls === "32") return "FTTC serviceable — cut-in required (NCD needed). Technician visit required.";
-    if (cls === "33") return "FTTC cut-in complete — NCD still required. Technician visit needed.";
-    if (cls === "34") return "FTTC infrastructure fully in place. Ready to connect.";
+    if (cls === "31")
+      return "FTTC serviceable — no copper line available yet (NCD required). Technician visit needed.";
+    if (cls === "32")
+      return "FTTC serviceable — cut-in required (NCD needed). Technician visit required.";
+    if (cls === "33")
+      return "FTTC cut-in complete — NCD still required. Technician visit needed.";
+    if (cls === "34")
+      return "FTTC infrastructure fully in place. Ready to connect.";
   }
   return serviceabilityStatus || "Serviceable";
 }
@@ -972,11 +1133,13 @@ const checkAvailabilityTool = {
       },
       networkPreference: {
         type: "string",
-        description: "The network preference collected from the customer: 'OptiComm' or 'NBN'",
+        description:
+          "The network preference collected from the customer: 'OptiComm' or 'NBN'",
       },
       residentialPreference: {
         type: "string",
-        description: "The plan type preference collected from the customer: 'residential' or 'business'",
+        description:
+          "The plan type preference collected from the customer: 'residential' or 'business'",
       },
     },
     required: ["address"],
@@ -1697,7 +1860,7 @@ app.post("/api/voice", upload.single("audio"), async (req, res) => {
     try {
       if (uploadedPath && fs.existsSync(uploadedPath))
         fs.unlinkSync(uploadedPath);
-    } catch (_) { }
+    } catch (_) {}
     try {
       if (
         convertedPath &&
@@ -1705,7 +1868,7 @@ app.post("/api/voice", upload.single("audio"), async (req, res) => {
         fs.existsSync(convertedPath)
       )
         fs.unlinkSync(convertedPath);
-    } catch (_) { }
+    } catch (_) {}
   }
 });
 app.post("/api/chat/message", async (req, res) => {
@@ -3077,11 +3240,17 @@ app.listen(PORT, () => {
   );
   console.log(` • Services shown = ACTIVE ONLY`);
   console.log(` • OptiComm plans = HARDCODED (no MARS API call)`);
-  console.log(` • NBN plans filtered by MARS virtutelSpeedsAvailable + serviceType`);
+  console.log(
+    ` • NBN plans filtered by MARS virtutelSpeedsAvailable + serviceType`,
+  );
   console.log(` • Non-orderable addresses (Rejected) blocked with reason`);
-  console.log(` • Fixed Wireless speed codes updated: TC4FWP=25/5, TC4FWHF=100/20, TC4FWSF=200/20, TC4FWUF=400/40`);
+  console.log(
+    ` • Fixed Wireless speed codes updated: TC4FWP=25/5, TC4FWHF=100/20, TC4FWSF=200/20, TC4FWUF=400/40`,
+  );
   console.log(` • Satellite/Wireless plans keyword-filtered`);
   console.log(` • Install requirements surfaced per service class`);
   console.log(` • Human-readable readiness descriptions per class`);
-  console.log(` • KB updated: NBN 750/50=$89→$99, 1000/100=$99→$109 ongoing; FW speeds corrected; HIR plans updated`);
+  console.log(
+    ` • KB updated: NBN 750/50=$89→$99, 1000/100=$99→$109 ongoing; FW speeds corrected; HIR plans updated`,
+  );
 });
