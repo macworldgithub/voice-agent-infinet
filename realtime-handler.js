@@ -461,9 +461,9 @@ export function setupRealtimeVoice(io, deps) {
                 input_audio_format: "pcm16",
                 turn_detection: {
                   type: "server_vad",
-                  threshold: 0.8,
+                  threshold: 0.5,
                   prefix_padding_ms: 300,
-                  silence_duration_ms: 2000,
+                  silence_duration_ms: 700,
                 },
                 tools: realtimeTools,
                 tool_choice: "auto",
@@ -551,6 +551,13 @@ export function setupRealtimeVoice(io, deps) {
 
         case "input_audio_buffer.speech_stopped":
           socket.emit("status", "processing");
+          // Backup: ensure response is triggered even if VAD doesn't fire
+          setTimeout(() => {
+            if (!isResponseActive && openaiWs?.readyState === WebSocket.OPEN) {
+              console.log("🎙️ Speech stopped - triggering response.create backup");
+              throttledResponseCreate();
+            }
+          }, 800);
           break;
 
         case "conversation.item.input_audio_transcription.completed":
@@ -597,6 +604,7 @@ export function setupRealtimeVoice(io, deps) {
                 );
                 session.collected.networkPreference = mappedNetwork;
                 session.messages.push({ role: "user", content: clarified });
+                if (session.messages.length > 40) session.messages = session.messages.slice(-40);
                 sessions.set(session.id, session);
 
                 if (openaiWs?.readyState === WebSocket.OPEN) {
@@ -617,8 +625,24 @@ export function setupRealtimeVoice(io, deps) {
               }
 
               session.messages.push({ role: "user", content: cleaned });
+
+              // Keep conversation history limited to prevent context overflow
+              if (session.messages.length > 40) {
+                session.messages = session.messages.slice(-40);
+              }
+
               sessions.set(session.id, session);
               clearSilenceTimer();
+
+              // Ensure OpenAI gets the message and triggers response
+              if (!isResponseActive && openaiWs?.readyState === WebSocket.OPEN) {
+                setTimeout(() => {
+                  if (!isResponseActive) {
+                    console.log("🎙️ Transcript completed - ensuring response.create");
+                    throttledResponseCreate();
+                  }
+                }, 500);
+              }
             }
           }
           break;
@@ -691,6 +715,7 @@ export function setupRealtimeVoice(io, deps) {
             lastAssistantText = event.text;
             console.log(`🤖 AI: "${event.text.substring(0, 100)}..."`);
             session.messages.push({ role: "assistant", content: event.text });
+            if (session.messages.length > 40) session.messages = session.messages.slice(-40);
             sessions.set(session.id, session);
             socket.emit("assistant_text_done", event.text);
 
@@ -756,6 +781,8 @@ export function setupRealtimeVoice(io, deps) {
 
           if (!pendingFunctionCalls) {
             socket.emit("status", "listening");
+            // Restart silence timer so nudge works if user doesn't respond
+            startSilenceTimer();
           }
           assistantTextBuffer = "";
           break;
@@ -842,6 +869,7 @@ export function setupRealtimeVoice(io, deps) {
         setTimeout(() => {
           throttledResponseCreate();
         }, 100);
+        // Will restart silence timer when response.done fires
       }
     }
 
@@ -1046,6 +1074,7 @@ export function setupRealtimeVoice(io, deps) {
       else userMessage = value;
 
       session.messages.push({ role: "user", content: userMessage });
+      if (session.messages.length > 40) session.messages = session.messages.slice(-40);
       sessions.set(session.id, session);
 
       socket.emit("user_transcript", userMessage);
