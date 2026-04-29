@@ -1768,7 +1768,9 @@ async function handleToolCall(session, funcName, args) {
     if (typeof fa.message === "string") fa.message = { message: fa.message };
     const collected = session.collected || {};
     const hasCustomerId = !!(fa.customer_id || collected.customer_id);
-    const isSupportTicket = hasCustomerId;
+    // Payment extension requests always go to Support (not Sales)
+    const hasPaymentExtension = !!(collected.paymentDate || fa.paymentDate || (fa.subject && fa.subject.toLowerCase().includes("payment extension")));
+    const isSupportTicket = hasCustomerId || hasPaymentExtension;
 
     const detailLines = [];
     if (collected.preferredName || collected.name)
