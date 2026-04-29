@@ -527,7 +527,7 @@
                 src.onended = () => { activeSources = activeSources.filter((s) => s !== src); };
             }
 
-            // ──────── Structured Input UI (EMAIL & PHONE ONLY) ────────
+            // ──────── Structured Input UI (EMAIL ONLY) ────────
             const siContainer = document.getElementById("structured-input-container");
             const siForm = document.getElementById("si-form");
             const siInput = document.getElementById("si-input");
@@ -537,8 +537,8 @@
             const siHint = document.getElementById("si-hint");
 
             function showStructuredInput(field, prompt) {
-                // ===== FIX #1: Only handle email and phone — ignore address =====
-                if (field !== "email" && field !== "phone") {
+                // ===== FIX #1: Only handle email — phone is voice-only, address is voice-only =====
+                if (field !== "email") {
                     console.log(`⏭️ Ignoring structured input request for field: ${field} (voice only)`);
                     return;
                 }
@@ -550,13 +550,6 @@
                     siIcon.textContent = "📧";
                     siLabelText.textContent = "Enter your email";
                     siHint.textContent = "Type accurately — voice will resume after submission";
-                } else if (field === "phone") {
-                    siInput.type = "tel";
-                    siInput.placeholder = prompt || "Enter your phone number";
-                    siInput.inputMode = "tel";
-                    siIcon.textContent = "📱";
-                    siLabelText.textContent = "Enter your phone number";
-                    siHint.textContent = "Type your number — voice will resume after submission";
                 }
 
                 siInput.value = "";
@@ -599,13 +592,6 @@
                 if (field === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
                     siInput.classList.add("si-shake");
                     siHint.textContent = "Please enter a valid email address";
-                    siHint.style.color = "#f87171";
-                    setTimeout(() => { siInput.classList.remove("si-shake"); siHint.style.color = ""; }, 1500);
-                    return;
-                }
-                if (field === "phone" && !/^[\d\s\-\+\(\)]{6,20}$/.test(value)) {
-                    siInput.classList.add("si-shake");
-                    siHint.textContent = "Please enter a valid phone number";
                     siHint.style.color = "#f87171";
                     setTimeout(() => { siInput.classList.remove("si-shake"); siHint.style.color = ""; }, 1500);
                     return;

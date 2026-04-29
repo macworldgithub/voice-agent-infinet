@@ -199,6 +199,9 @@ export function setupRealtimeVoice(io, deps) {
         /your\s+email\s+(?:address|for\s+me|please)/i,
         /(?:I'll\s+need|I\s+need|we\s+need|gonna\s+need)\s+.*email/i,
         /(?:could\s+you|can\s+you)\s+.*email/i,
+        /what\s+email\s+address\s+is\s+it\s+under/i,
+        /email\s+address\s+is\s+it\s+under/i,
+        /under\?.*email|email.*under/i,
       ];
 
       const phonePatterns = [
@@ -216,10 +219,17 @@ export function setupRealtimeVoice(io, deps) {
           "i",
         ),
         /(?:need|like)\s+your\s+(?:phone|mobile|contact)/i,
+        // Accounts flow patterns - "could I grab the best contact number"
+        /could\s+I\s+(?:get|grab|have)\s+(?:your|the|that)?\s*(?:best\s+)?(?:phone|mobile|contact)/i,
+        /contact\s+number\s+(?:on\s+the\s+account|as\s+well)/i,
+        /grab\s+(?:your|the|that)?\s*(?:best\s+)?(?:phone|contact|number|mobile)/i,
+        /best\s+contact\s+number/i,
+        /verify.*contact\s+number|contact\s+number.*verify/i,
+        /could\s+I\s+grab.*contact\s+number/i,
+        /contact\s+number\s+on\s+the\s+account/i,
       ];
 
-      // ===== FIX #1: ADDRESS PATTERNS COMPLETELY REMOVED =====
-      // Address is now handled entirely via voice — no structured input box
+      // ===== FIX #1: Only EMAIL gets structured input box. PHONE is voice-only. =====
 
       if (!collected.email) {
         for (const p of emailPatterns) {
@@ -236,20 +246,8 @@ export function setupRealtimeVoice(io, deps) {
         }
       }
 
-      if (!collected.phone) {
-        for (const p of phonePatterns) {
-          if (p.test(text)) {
-            if (
-              lastStructuredInputField === "phone" &&
-              now - lastStructuredInputTime < STRUCTURED_INPUT_COOLDOWN_MS
-            )
-              return null;
-            lastStructuredInputField = "phone";
-            lastStructuredInputTime = now;
-            return "phone";
-          }
-        }
-      }
+      // Phone is voice-only — no structured input box
+      // if (!collected.phone) { ... phone patterns removed ... }
 
       return null;
     }
@@ -641,6 +639,29 @@ export function setupRealtimeVoice(io, deps) {
             } else {
               textBuffer.push(event.delta);
             }
+
+            // ===== EARLY DETECTION: Only EMAIL gets structured input box =====
+            if (!awaitingStructuredInput && assistantTextBuffer.length > 20) {
+              const detectedField = detectStructuredInputRequest(assistantTextBuffer);
+              if (detectedField && detectedField === "email") {
+                awaitingStructuredInput = true;
+                structuredInputField = detectedField;
+
+                console.log(`📋 Structured input requested (early detection): email`);
+                clearSilenceTimer();
+
+                if (openaiWs?.readyState === WebSocket.OPEN) {
+                  openaiWs.send(
+                    JSON.stringify({ type: "input_audio_buffer.clear" }),
+                  );
+                }
+
+                socket.emit("request_structured_input", {
+                  field: "email",
+                  prompt: "Enter your email address",
+                });
+              }
+            }
           }
           break;
 
@@ -683,31 +704,27 @@ export function setupRealtimeVoice(io, deps) {
               );
             }
 
-            // ===== FIX #1: Only detect email and phone for structured input (no address) =====
-            const detectedField = detectStructuredInputRequest(event.text);
-            if (detectedField) {
-              awaitingStructuredInput = true;
-              structuredInputField = detectedField;
+            // ===== FALLBACK: Only trigger if early detection didn't already catch it =====
+            if (!awaitingStructuredInput) {
+              const detectedField = detectStructuredInputRequest(event.text);
+              if (detectedField && detectedField === "email") {
+                awaitingStructuredInput = true;
+                structuredInputField = detectedField;
 
-              let placeholder;
-              if (detectedField === "email")
-                placeholder = "Enter your email address";
-              else if (detectedField === "phone")
-                placeholder = "Enter your phone number";
+                console.log(`📋 Structured input requested (fallback): email`);
+                clearSilenceTimer();
 
-              console.log(`📋 Structured input requested: ${detectedField}`);
-              clearSilenceTimer();
+                if (openaiWs?.readyState === WebSocket.OPEN) {
+                  openaiWs.send(
+                    JSON.stringify({ type: "input_audio_buffer.clear" }),
+                  );
+                }
 
-              if (openaiWs?.readyState === WebSocket.OPEN) {
-                openaiWs.send(
-                  JSON.stringify({ type: "input_audio_buffer.clear" }),
-                );
+                socket.emit("request_structured_input", {
+                  field: "email",
+                  prompt: "Enter your email address",
+                });
               }
-
-              socket.emit("request_structured_input", {
-                field: detectedField,
-                prompt: placeholder,
-              });
             }
           }
           break;
