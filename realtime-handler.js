@@ -56,10 +56,12 @@ export function setupRealtimeVoice(io, deps) {
     let lastResponseCreateTime = 0;
     const RESPONSE_CREATE_MIN_GAP_MS = 1500;
 
-    // ===== FIX #2: Plans-presented cooldown to prevent silence nudge auto-selecting =====
+    // Plans-presented cooldown to prevent silence nudge auto-selecting a plan
     let plansPresentedAt = 0;
-    const PLANS_PRESENTED_COOLDOWN_MS = 60000; // 60s cooldown after plans shown
+    const PLANS_PRESENTED_COOLDOWN_MS = 60000; // 60s after plans shown
 
+    // ── Throttled response.create — used for user-speech triggers only ──
+    // Tool results MUST use forceResponseCreate() to bypass the throttle.
     let responseCreateTimeout = null;
     function throttledResponseCreate() {
       if (responseCreateTimeout) return;
@@ -77,6 +79,22 @@ export function setupRealtimeVoice(io, deps) {
       }, delay);
     }
 
+    // ── FIX: Force response.create after tool results — bypasses throttle ──
+    function forceResponseCreate(delayMs = 200) {
+      // Cancel any pending throttled create first
+      if (responseCreateTimeout) {
+        clearTimeout(responseCreateTimeout);
+        responseCreateTimeout = null;
+      }
+      setTimeout(() => {
+        if (openaiWs?.readyState === WebSocket.OPEN) {
+          lastResponseCreateTime = Date.now();
+          console.log("📤 [Tool] Forcing response.create after tool result");
+          openaiWs.send(JSON.stringify({ type: "response.create" }));
+        }
+      }, delayMs);
+    }
+
     // Silence timeout
     let silenceTimer = null;
     const SILENCE_TIMEOUT_MS = 25000;
@@ -88,11 +106,11 @@ export function setupRealtimeVoice(io, deps) {
       if (pendingFunctionCalls > 0) return;
       if (assistantSpeaking) return;
 
-      // ===== FIX #2: If plans were just presented, use longer timeout and different nudge =====
+      // If plans were just presented, use longer timeout and different nudge
       const now = Date.now();
       const inPlansCooldown =
         now - plansPresentedAt < PLANS_PRESENTED_COOLDOWN_MS;
-      const timeoutMs = inPlansCooldown ? 45000 : SILENCE_TIMEOUT_MS; // 45s after plans, 25s otherwise
+      const timeoutMs = inPlansCooldown ? 45000 : SILENCE_TIMEOUT_MS;
 
       silenceTimer = setTimeout(() => {
         silenceTimer = null;
@@ -101,9 +119,10 @@ export function setupRealtimeVoice(io, deps) {
         if (pendingFunctionCalls > 0) return;
         if (assistantSpeaking) return;
 
-        // ===== FIX #2: Different nudge when waiting for plan selection =====
         const stillInPlansCooldown =
           Date.now() - plansPresentedAt < PLANS_PRESENTED_COOLDOWN_MS;
+
+        // FIX: Different nudge depending on whether plans were shown
         const nudgeText = stillInPlansCooldown
           ? "[SILENCE_NUDGE] The user has not responded after you presented plans. Do NOT select a plan for them. Do NOT assume which plan they want. Simply ask them gently which plan they'd like to go with. Say something like: 'No rush at all — take your time! Which of those plans sounds like the best fit for you?'"
           : "[SILENCE_NUDGE] The user has not responded. Do NOT repeat your last question. Instead, assume a reasonable default for whatever you last asked, confirm it briefly in one sentence, and move to the NEXT step immediately.";
@@ -162,7 +181,7 @@ export function setupRealtimeVoice(io, deps) {
       console.log("🔓 Final message lock released");
     }
 
-    // Structured Input Detection — ===== FIX #1 & #4: REMOVED ADDRESS =====
+    // Structured Input Detection — only EMAIL gets a box, phone is voice-only
     let lastStructuredInputField = null;
     let lastStructuredInputTime = 0;
     const STRUCTURED_INPUT_COOLDOWN_MS = 30000;
@@ -187,7 +206,6 @@ export function setupRealtimeVoice(io, deps) {
         ),
         /(?:need|like)\s+your\s+email/i,
         /email\s+(?:address\s+)?(?:please|to\s+proceed)/i,
-        // Broader patterns to catch natural AI phrasing
         /grab\s+your\s+email/i,
         /(?:could|can)\s+I\s+(?:get|grab|have|take)\s+your\s+email/i,
         /(?:need|like)\s+(?:is\s+)?your\s+email/i,
@@ -204,33 +222,7 @@ export function setupRealtimeVoice(io, deps) {
         /under\?.*email|email.*under/i,
       ];
 
-      const phonePatterns = [
-        new RegExp(
-          `(?:provide|share|enter|type|give)\\s+${DET}(?:phone|mobile|contact)`,
-          "i",
-        ),
-        /what(?:'?s|\s+is)\s+your\s+(?:phone|mobile|contact)/i,
-        new RegExp(
-          `could you\\s+(?:please\\s+)?(?:provide|share|give)\\s+${DET}(?:phone|mobile|contact)`,
-          "i",
-        ),
-        new RegExp(
-          `(?:please|kindly)\\s+(?:provide|share|enter)\\s+${DET}(?:phone|mobile|contact)`,
-          "i",
-        ),
-        /(?:need|like)\s+your\s+(?:phone|mobile|contact)/i,
-        // Accounts flow patterns - "could I grab the best contact number"
-        /could\s+I\s+(?:get|grab|have)\s+(?:your|the|that)?\s*(?:best\s+)?(?:phone|mobile|contact)/i,
-        /contact\s+number\s+(?:on\s+the\s+account|as\s+well)/i,
-        /grab\s+(?:your|the|that)?\s*(?:best\s+)?(?:phone|contact|number|mobile)/i,
-        /best\s+contact\s+number/i,
-        /verify.*contact\s+number|contact\s+number.*verify/i,
-        /could\s+I\s+grab.*contact\s+number/i,
-        /contact\s+number\s+on\s+the\s+account/i,
-      ];
-
-      // ===== FIX #1: Only EMAIL gets structured input box. PHONE is voice-only. =====
-
+      // Only EMAIL gets structured input box. Phone is voice-only.
       if (!collected.email) {
         for (const p of emailPatterns) {
           if (p.test(text)) {
@@ -245,9 +237,6 @@ export function setupRealtimeVoice(io, deps) {
           }
         }
       }
-
-      // Phone is voice-only — no structured input box
-      // if (!collected.phone) { ... phone patterns removed ... }
 
       return null;
     }
@@ -304,22 +293,28 @@ export function setupRealtimeVoice(io, deps) {
       return null;
     }
 
-    // ===== FIX #2: Detect when plans are being presented =====
+    // ── Detect when AI is presenting plans (to start cooldown timer) ──
     function detectPlanPresentation(text) {
       if (!text) return false;
       const lower = text.toLowerCase();
-      // Detect when AI is listing plans
-      return (
+      // Check if the website-check question is in the text (full cycle complete)
+      const hasWebsiteCheck =
+        lower.includes("check out our website") ||
+        lower.includes("had a chance to check") ||
+        lower.includes("seen our website") ||
+        lower.includes("walk you through");
+      if (hasWebsiteCheck) return true;
+      // Plans listed but website check not yet asked — still mark as presented
+      // so we use the longer silence timeout while waiting for the question flow
+      const hasPlans =
         (lower.includes("mbps") &&
           (lower.includes("$") ||
             lower.includes("per month") ||
             lower.includes("/m"))) ||
         (lower.includes("plan") && lower.includes("available")) ||
         lower.includes("here are the plans") ||
-        lower.includes("here's what's available") ||
-        lower.includes("which of those plans") ||
-        lower.includes("catches your eye")
-      );
+        lower.includes("here's what's available");
+      return hasPlans;
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -450,7 +445,8 @@ export function setupRealtimeVoice(io, deps) {
           console.log("✅ [WS-1] OpenAI Realtime connected");
           const instructions =
             SYSTEM_PROMPT +
-            "\n\nCRITICAL: You MUST ALWAYS respond in English only. Never respond in any other language.";
+            "\n\nCRITICAL: You MUST ALWAYS respond in English only. Never respond in any other language." +
+            "\n\nCRITICAL — AFTER EVERY TOOL CALL: Once you receive a tool result, you MUST immediately produce a response. Never stay silent after a tool returns data. Always speak your next step out loud.";
 
           openaiWs.send(
             JSON.stringify({
@@ -461,7 +457,7 @@ export function setupRealtimeVoice(io, deps) {
                 input_audio_format: "pcm16",
                 turn_detection: {
                   type: "server_vad",
-                  threshold: 0.5,
+                  threshold: 0.7,
                   prefix_padding_ms: 300,
                   silence_duration_ms: 700,
                 },
@@ -626,7 +622,6 @@ export function setupRealtimeVoice(io, deps) {
 
               session.messages.push({ role: "user", content: cleaned });
 
-              // Keep conversation history limited to prevent context overflow
               if (session.messages.length > 40) {
                 session.messages = session.messages.slice(-40);
               }
@@ -634,14 +629,24 @@ export function setupRealtimeVoice(io, deps) {
               sessions.set(session.id, session);
               clearSilenceTimer();
 
-              // Ensure OpenAI gets the message and triggers response
-              if (!isResponseActive && openaiWs?.readyState === WebSocket.OPEN) {
+              if (openaiWs?.readyState === WebSocket.OPEN) {
+                openaiWs.send(
+                  JSON.stringify({
+                    type: "conversation.item.create",
+                    item: {
+                      type: "message",
+                      role: "user",
+                      content: [{ type: "input_text", text: cleaned }],
+                    },
+                  }),
+                );
+
                 setTimeout(() => {
                   if (!isResponseActive) {
-                    console.log("🎙️ Transcript completed - ensuring response.create");
+                    console.log("🎙️ Transcript sent - triggering response.create");
                     throttledResponseCreate();
                   }
-                }, 500);
+                }, 100);
               }
             }
           }
@@ -664,7 +669,7 @@ export function setupRealtimeVoice(io, deps) {
               textBuffer.push(event.delta);
             }
 
-            // ===== EARLY DETECTION: Only EMAIL gets structured input box =====
+            // EARLY DETECTION: Only EMAIL gets structured input box
             if (!awaitingStructuredInput && assistantTextBuffer.length > 20) {
               const detectedField = detectStructuredInputRequest(assistantTextBuffer);
               if (detectedField && detectedField === "email") {
@@ -721,7 +726,7 @@ export function setupRealtimeVoice(io, deps) {
 
             flushElevenLabsStream();
 
-            // ===== FIX #2: Detect plans presentation and set cooldown =====
+            // Detect plans presentation and set cooldown
             if (detectPlanPresentation(event.text)) {
               plansPresentedAt = Date.now();
               console.log(
@@ -729,7 +734,7 @@ export function setupRealtimeVoice(io, deps) {
               );
             }
 
-            // ===== FALLBACK: Only trigger if early detection didn't already catch it =====
+            // FALLBACK: Only trigger if early detection didn't already catch it
             if (!awaitingStructuredInput) {
               const detectedField = detectStructuredInputRequest(event.text);
               if (detectedField && detectedField === "email") {
@@ -781,8 +786,10 @@ export function setupRealtimeVoice(io, deps) {
 
           if (!pendingFunctionCalls) {
             socket.emit("status", "listening");
-            // Restart silence timer so nudge works if user doesn't respond
             startSilenceTimer();
+          } else {
+            // Tools still pending — forceResponseCreate will be called from handleFunctionCall
+            console.log(`⏳ response.done but ${pendingFunctionCalls} tool(s) still pending — waiting for tool completion`);
           }
           assistantTextBuffer = "";
           break;
@@ -812,7 +819,7 @@ export function setupRealtimeVoice(io, deps) {
           console.error("[WS-1] OpenAI error:", JSON.stringify(event.error));
           socket.emit("error_msg", event.error?.message || "AI error");
 
-          // ===== FIX #4: If error occurs during processing, unstick the UI =====
+          // Unstick the UI on error
           if (isResponseActive) {
             isResponseActive = false;
           }
@@ -837,7 +844,7 @@ export function setupRealtimeVoice(io, deps) {
         openaiWs.send(JSON.stringify({ type: "input_audio_buffer.clear" }));
       }
 
-      // ===== FIX #4: Add timeout to prevent stuck-on-thinking =====
+      // Timeout to prevent stuck-on-thinking
       const toolTimeout = setTimeout(() => {
         console.warn(`⚠️ Tool ${fn} timed out after 30s`);
         pendingFunctionCalls = Math.max(0, pendingFunctionCalls - 1);
@@ -854,6 +861,7 @@ export function setupRealtimeVoice(io, deps) {
 
       clearTimeout(toolTimeout);
 
+      // Submit the tool result back to OpenAI
       if (openaiWs?.readyState === WebSocket.OPEN) {
         openaiWs.send(
           JSON.stringify({
@@ -864,12 +872,12 @@ export function setupRealtimeVoice(io, deps) {
       }
 
       pendingFunctionCalls = Math.max(0, pendingFunctionCalls - 1);
+
       if (pendingFunctionCalls === 0) {
         socket.emit("status", "processing");
-        setTimeout(() => {
-          throttledResponseCreate();
-        }, 100);
-        // Will restart silence timer when response.done fires
+        // FIX: Use forceResponseCreate to bypass throttle — tool results MUST get a reply
+        forceResponseCreate(200);
+        // Silence timer will restart when response.done fires after the AI speaks
       }
     }
 
@@ -880,7 +888,18 @@ export function setupRealtimeVoice(io, deps) {
       }
 
       if (fn === "customer_lookup") {
-        return JSON.stringify(await customerLookup(args));
+        try {
+          const result = await customerLookup(args);
+          // Save customer_id to session on successful lookup
+          if (result.success && result.customer?.id) {
+            session.collected.customer_id = result.customer.id;
+            session.collected.customer_name = result.customer.name;
+            sessions.set(session.id, session);
+          }
+          return JSON.stringify(result);
+        } catch (e) {
+          return JSON.stringify({ success: false, error: e.message });
+        }
       }
 
       if (fn === "get_internet_plans") {
@@ -904,8 +923,48 @@ export function setupRealtimeVoice(io, deps) {
 
       if (fn === "check_address_availability") {
         try {
-          if (args.address) session.collected.address = args.address; // AUTO-SAVE address to session
-          return await checkAddressAvailability(args, session);
+          if (args.address) session.collected.address = args.address;
+          const rawResult = await checkAddressAvailability(args, session);
+
+          // Parse result to determine which hint to inject
+          let parsed = null;
+          try { parsed = JSON.parse(rawResult); } catch (_) {}
+
+          let hint = null;
+          if (parsed && parsed.orderable !== false && Array.isArray(parsed.availablePlans) && parsed.availablePlans.length > 0) {
+            const networkLabel = parsed.network || "the available network";
+            hint = `[SYSTEM INSTRUCTION — FOLLOW EXACTLY] Address check complete. ${parsed.availablePlans.length} plans found on ${networkLabel}. You MUST now do these steps in order WITHOUT pausing:
+
+STEP 1: Present ALL plans from the tool result, one at a time, warmly and conversationally. Read each plan's name, speed, and price clearly.
+
+STEP 2: IMMEDIATELY after finishing the plan list, ask this EXACT question word-for-word: "Just out of curiosity — have you had a chance to check out our website and see the plans we have available, or would you like me to walk you through the options?"
+
+STEP 3: Wait for their answer.
+- If YES: Ask "Great! Which plan caught your eye?" then collect their details.
+- If NO: Ask about number of people, usage, and budget one at a time. Make a recommendation. Then ask which plan they'd like.
+
+IMPORTANT: Do NOT ask "which plan would you like?" before completing Step 2.
+IMPORTANT: Do NOT ask for customer name, email, or phone until AFTER they have chosen a plan.
+IMPORTANT: You are LOCKED to ${networkLabel} — do NOT mention ${networkLabel === "OptiComm" ? "NBN" : "OptiComm"} again.
+IMPORTANT: Begin speaking NOW. Do not wait.`;
+          } else if (parsed && parsed.orderable === false) {
+            hint = `[SYSTEM INSTRUCTION] The address check returned orderable=false — this address is not currently serviceable for a new connection. Tell the customer empathetically and offer to take their details for follow-up when service becomes available. Do NOT present any plans.`;
+          }
+
+          // CRITICAL: Send hint synchronously BEFORE returning, so it's in the conversation
+          // before the function output is sent and before response.create is called
+          if (hint && openaiWs?.readyState === WebSocket.OPEN) {
+            openaiWs.send(JSON.stringify({
+              type: "conversation.item.create",
+              item: {
+                type: "message",
+                role: "user",
+                content: [{ type: "input_text", text: hint }],
+              },
+            }));
+          }
+
+          return rawResult;
         } catch (err) {
           console.error(
             "check_address_availability error in realtime:",
@@ -926,9 +985,9 @@ export function setupRealtimeVoice(io, deps) {
 
         const collected = session.collected || {};
         const hasCustomerId = !!(fa.customer_id || collected.customer_id);
-        const isSupportTicket = hasCustomerId;
+        const hasPaymentExtension = !!(collected.paymentDate || fa.paymentDate || (fa.subject && fa.subject.toLowerCase().includes("payment extension")));
+        const isSupportTicket = hasCustomerId || hasPaymentExtension;
 
-        // ===== Build full customer details block and append to message body =====
         const detailLines = [];
         if (collected.preferredName || collected.name)
           detailLines.push(
@@ -946,6 +1005,8 @@ export function setupRealtimeVoice(io, deps) {
           detailLines.push(
             `Selected Plan: ${collected.leadInterest || fa.leadInterest}`,
           );
+        if (collected.paymentDate)
+          detailLines.push(`Customer requested payment extension until: ${collected.paymentDate}`);
 
         const detailsBlock =
           detailLines.length > 0
@@ -985,12 +1046,20 @@ export function setupRealtimeVoice(io, deps) {
             console.log(
               `📧 SALES inquiry — sending email only (no Splynx ticket): subject="${fa.subject}"`,
             );
+            console.log(`📧 Email details:`, JSON.stringify({
+              to: ["karimjawwad09@gmail.com", "sales@infinetbroadband.com.au"],
+              collected_email: collected.email,
+              collected_phone: collected.phone,
+              collected_name: collected.preferredName || collected.name,
+              leadInterest: collected.leadInterest,
+            }));
             const emailResult = await sendTicketEmail(
               null,
               fa,
               collected,
               false,
             );
+            console.log(`📧 Email result:`, JSON.stringify(emailResult));
             return JSON.stringify({
               success: true,
               message: "Sales inquiry submitted successfully",
@@ -1025,6 +1094,35 @@ export function setupRealtimeVoice(io, deps) {
             "admin/support/tickets-statuses",
           ),
         });
+
+      // send_portal_login_email
+      if (fn === "send_portal_login_email") {
+        const collected = session.collected || {};
+        const detailLines = [];
+        if (collected.preferredName || collected.name)
+          detailLines.push(`Name: ${collected.preferredName || collected.name}`);
+        if (collected.email) detailLines.push(`Email: ${collected.email}`);
+        if (collected.phone) detailLines.push(`Phone: ${collected.phone}`);
+        if (collected.customer_id)
+          detailLines.push(`Customer ID: ${collected.customer_id}`);
+        detailLines.push("Issue: Customer unable to login to portal - please provide login credentials or reset access");
+
+        const detailsBlock = `\n\n--- Customer Details ---\n${detailLines.join("\n")}`;
+        const messageBody = `${args.message || "Customer requested assistance with portal login"}${detailsBlock}`;
+        const emailArgs = {
+          subject: "Support - Portal Login Assistance",
+          priority: "medium",
+          message: { message: messageBody },
+          customer_id: collected.customer_id || null,
+        };
+        try {
+          const emailResult = await sendTicketEmail(null, emailArgs, collected, true);
+          return JSON.stringify({ success: true, email_sent: emailResult.sent, email_error: emailResult.reason || null });
+        } catch (err) {
+          return JSON.stringify({ success: false, error: err.message || "Failed to send email" });
+        }
+      }
+
       return JSON.stringify({ error: `Unknown tool: ${fn}` });
     }
 

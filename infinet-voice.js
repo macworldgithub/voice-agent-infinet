@@ -1284,21 +1284,27 @@ TECHNOLOGY ROUTING RULES (CRITICAL):
 - If requiresInstall is true:
   → Always mention: "Just a heads-up — an NBN technician visit will be needed to complete your connection. The good news is standard installation is completely free!"
 
-STEP 4 — Plan selection assistance:
-After showing plans, ask: "Have you had a chance to check our website and see the plans and pricing, or are you hearing about them for the first time?"
-- If YES (already seen plans): "Great! Which plan are you after?" → go to STEP 6.
-- If NO: Ask warmly: "No worries at all! Could I ask a couple of quick questions to help find the best fit?"
-  Ask ONE at a time:
+STEP 4 — MANDATORY WEBSITE CHECK (NEVER SKIP THIS):
+After showing all available plans, you MUST ALWAYS ask this exact question before anything else:
+"Just out of curiosity — have you had a chance to check out our website and see the plans we have available, or would you like me to walk you through the options?"
+
+WAIT for the customer to answer before doing anything else. This question is NON-NEGOTIABLE and must appear after EVERY plan listing.
+
+- If customer says YES (they checked website / already know the plans):
+  Say "Great! Which plan caught your eye or are you most interested in?" → Wait for their answer → then go to STEP 6 (collect details).
+
+- If customer says NO (haven't checked / hearing for first time / want walkthrough):
+  Say "No worries at all! Could I ask a couple of quick questions to help find the best fit for you?" → then ask ONE at a time:
   a. "How many people will be using the internet at home/the business?"
   b. "What do you mainly use the internet for? (e.g. streaming, gaming, video calls, general browsing, working from home)"
   c. "And roughly what monthly budget are you working with?"
-  Then make a recommendation based on their answers, e.g.:
-  - 1–2 people, general use → "I'd suggest the [25 or 50 Mbps plan] — it's a great fit for general browsing and HD streaming at [price]/month."
-  - 3–4 people, streaming + WFH → "The [100 Mbps plan] would be perfect."
-  - 5+ people, gaming, 4K → "The [500 or 1000 Mbps plan] would handle everything brilliantly."
+  Then make a recommendation based on their answers:
+  - 1–2 people, general use → recommend 25 or 50 Mbps plan
+  - 3–4 people, streaming + WFH → recommend 100 Mbps plan
+  - 5+ people, gaming, 4K → recommend 500 or 1000 Mbps plan
   Always add: "And the great news is you can upgrade or downgrade at any time at no cost — so there's no risk in starting lower!"
 
-STEP 5 — Present numbered plan list and ask: "Which plan catches your eye? Just reply with the number, plan name, or speed!"
+STEP 5 — Present numbered plan list (this was done in STEP 3). After the website check question is answered, ask: "Which plan catches your eye? Just reply with the number, plan name, or speed!"
 
 STEP 6 — Once plan selected, collect order details ONE question at a time:
   a. "Could I get your first and last name?"
@@ -1327,10 +1333,11 @@ RELOCATION FLOW (EXISTING CUSTOMERS MOVING HOUSE)
 9. Call check_address_availability with the new address. Apply TECHNOLOGY ROUTING RULES from SALES FLOW to determine available plans.
 10. Ask residential/business preference if applicable (not for Fixed Wireless or Satellite).
 11. Show available plans as numbered list: "Here's what's available at your new address:\n1. ..."
-12. After plan selection: "When would you like the new connection up and running? (Preferred connection date?)"
-13. Collect connectionDate via extract_call_fields.
-14. Collect email if missing.
-15. Call create_ticket with:
+12. MANDATORY WEBSITE CHECK: After showing plans ask: "Just out of curiosity — have you had a chance to check out our website and see the plans we have available, or would you like me to walk you through the options?" Wait for answer and follow the same YES/NO branching as SALES FLOW STEP 4.
+13. After plan selection: "When would you like the new connection up and running? (Preferred connection date?)"
+14. Collect connectionDate via extract_call_fields.
+15. Collect email if missing.
+16. Call create_ticket with:
     - customer_id (looked-up ID)
     - subject: "Relocation Request — [leadInterest]"
     - message: full relocation details
@@ -1373,6 +1380,7 @@ Ask warmly: "Of course — could you give me a little more detail so I can point
 Answer using KB. When the customer asks about plans, pricing, speeds, or upgrades:
 - Follow TECHNOLOGY ROUTING RULES: ask for address first, check_address_availability, then show plans.
 - If no address yet and they want a general overview: ask address first before showing plans.
+- MANDATORY WEBSITE CHECK applies here too — after showing plans always ask the website check question before asking which plan they want.
 - When customer asks about plan recommendations: ask number of people, usage, budget — then recommend.
 
 ========================
@@ -1386,13 +1394,13 @@ ONE-NETWORK-PER-SESSION RULE — ABSOLUTE
 ========================
 CRITICAL RULES
 ========================
+- MANDATORY WEBSITE CHECK QUESTION — ABSOLUTE RULE: After presenting available plans (in ANY flow — sales, relocation, or general), you MUST ALWAYS ask: "Just out of curiosity — have you had a chance to check out our website and see the plans we have available, or would you like me to walk you through the options?" NEVER skip this question under any circumstances. NEVER go straight to "Which plan would you like?" without asking this first. This is the most important step after plan presentation.
 - MANDATORY DOUBLE VERIFICATION for SUPPORT, ACCOUNTS, and RELOCATION flows: (1) Call customer_lookup with EMAIL first. Once successful, (2) IMMEDIATELY after customer provides phone, call customer_lookup again with PHONE ONLY (do NOT include email). Only after BOTH lookups succeed can you proceed.
 - VERIFICATION STATE TRACKING — CRITICAL: After email lookup succeeds, you MUST ask for phone number and call customer_lookup with ONLY phone parameter. Never proceed to billing/issue questions until BOTH email AND phone lookups return success: true.
 - HARD VERIFICATION RULE: For any existing-customer verification step, you MUST call customer_lookup. Do NOT verify from memory, previous messages, or assumptions.
 - CRITICAL: Before calling create_ticket say something warm like: "Alright, perfect — I've got everything I need. Just bear with me for a moment while I get this all submitted for you..."
 - IMPORTANT: When calling create_ticket, ALWAYS include the selected plan (leadInterest) in the message body so it appears in the email.
-- IMMEDIATE PLAN PRESENTATION: The moment check_address_availability returns results, you MUST immediately present the plans WITHOUT waiting for customer to prompt you.
-- CRITICAL PLAN SELECTION RULE: After presenting plans, you MUST STOP and WAIT for customer to explicitly choose. Do NOT select or assume a plan on behalf of the customer.
+- CRITICAL PLAN SELECTION RULE: After presenting plans and completing the website check question flow, you MUST STOP and WAIT for customer to explicitly choose a plan. Do NOT select or assume a plan on behalf of the customer.
 
 ========================
 TOOL USAGE (CRITICAL)
@@ -1602,7 +1610,6 @@ function mkSession(sessionId) {
     messages: [{ role: "system", content: SYSTEM_PROMPT }],
     lastSeen: new Date().toISOString(),
     hasGreeted: false,
-    // FIX #2: Track which network was shown so we never cross-pollinate
     networkShown: null,
   };
   sessions.set(id, session);
@@ -1778,8 +1785,6 @@ async function makeTTS(text) {
 }
 
 // ==================== CHECK ADDRESS AVAILABILITY ====================
-// FIX #1: Any MARS error at any stage (token, search, SQ) falls back to OptiComm silently.
-// FIX #2: networkShown is stored on the session so the model is reminded not to cross-pollinate.
 async function checkAddressAvailability(args, session) {
   const { address, networkPreference, residentialPreference } = args;
   if (!address) return JSON.stringify({ error: "Address is required" });
@@ -1800,7 +1805,6 @@ async function checkAddressAvailability(args, session) {
   ).toLowerCase();
   const isBusiness = resPref === "business";
 
-  // ── OPTICOMM helper ──
   const getOpticommResult = () => {
     const plans = isBusiness
       ? OPTICOMM_BUSINESS_PLANS
@@ -1808,7 +1812,6 @@ async function checkAddressAvailability(args, session) {
     console.log(
       `OptiComm plans (${isBusiness ? "business" : "residential"}): ${plans.length}`,
     );
-    // Record which network was shown on the session
     if (session) session.networkShown = "OptiComm";
     return {
       success: true,
@@ -1835,7 +1838,6 @@ async function checkAddressAvailability(args, session) {
     };
   };
 
-  // ── EXPLICIT OPTICOMM ──
   if (isOpticomm) {
     console.log(
       `OptiComm address check (explicit preference, no MARS): ${address}`,
@@ -1843,16 +1845,11 @@ async function checkAddressAvailability(args, session) {
     return JSON.stringify(getOpticommResult());
   }
 
-  // ── NBN (explicit or auto-detect) ──
-  // FIX #1: Wrap the ENTIRE NBN block in try/catch — any error at any point
-  // (token fetch, address search, service qualification, tariff fetch) falls
-  // back to OptiComm silently when there is no explicit NBN preference.
   try {
     let marsCandidates = [];
     try {
       marsCandidates = await marsAddressSearch(address);
     } catch (marsSearchErr) {
-      // MARS address search failed
       if (noPreference) {
         console.warn(
           `MARS address search failed at ${address}, falling back to OptiComm silently:`,
@@ -1870,7 +1867,6 @@ async function checkAddressAvailability(args, session) {
       try {
         marsSq = await marsServiceQualification(locId);
       } catch (marsSqErr) {
-        // MARS service qualification failed
         if (noPreference) {
           console.warn(
             `MARS service qualification failed at ${address}, falling back to OptiComm silently:`,
@@ -1886,7 +1882,6 @@ async function checkAddressAvailability(args, session) {
       }
     }
 
-    // If MARS returned no location candidates at all → fall back to OptiComm silently
     if (!locId && noPreference) {
       console.log(
         `MARS returned no location candidates for ${address}, falling back to OptiComm silently`,
@@ -1935,7 +1930,6 @@ async function checkAddressAvailability(args, session) {
           },
         });
       }
-      // No preference → silently fall back to OptiComm
       console.log(
         `NBN not orderable at ${address}, falling back to OptiComm silently`,
       );
@@ -1962,7 +1956,6 @@ async function checkAddressAvailability(args, session) {
       serviceType,
     );
 
-    // If no NBN plans matched and user had no explicit preference → fall back to OptiComm silently
     if (availablePlans.length === 0 && noPreference) {
       console.log(
         `No NBN plans matched at ${address}, falling back to OptiComm silently`,
@@ -1977,7 +1970,6 @@ async function checkAddressAvailability(args, session) {
       serviceabilityStatus,
     );
 
-    // Record that NBN was shown on this session
     if (session) session.networkShown = "NBN";
 
     console.log(
@@ -2011,7 +2003,6 @@ async function checkAddressAvailability(args, session) {
       },
     });
   } catch (err) {
-    // Catch-all: If NBN lookup itself errors and no explicit preference → silently fall back to OptiComm
     if (noPreference) {
       console.warn(
         `NBN lookup catch-all at ${address}, falling back to OptiComm silently:`,
@@ -2052,7 +2043,6 @@ async function handleToolCall(session, funcName, args) {
 
       const result = await customerLookup(lookupArgs);
 
-      // Save customer_id to session on successful lookup for verification tracking
       if (result.success && result.customer?.id) {
         session.collected.customer_id = result.customer.id;
         session.collected.customer_name = result.customer.name;
@@ -2093,7 +2083,6 @@ async function handleToolCall(session, funcName, args) {
     if (typeof fa.message === "string") fa.message = { message: fa.message };
     const collected = session.collected || {};
     const hasCustomerId = !!(fa.customer_id || collected.customer_id);
-    // Payment extension requests always go to Support (not Sales)
     const hasPaymentExtension = !!(collected.paymentDate || fa.paymentDate || (fa.subject && fa.subject.toLowerCase().includes("payment extension")));
     const isSupportTicket = hasCustomerId || hasPaymentExtension;
 
@@ -2167,7 +2156,6 @@ async function handleToolCall(session, funcName, args) {
   }
   if (funcName === "send_portal_login_email") {
     const collected = session.collected || {};
-    const hasCustomerId = !!collected.customer_id;
 
     const detailLines = [];
     if (collected.preferredName || collected.name)
@@ -2271,13 +2259,22 @@ TOOL RESULT INSTRUCTION: The address check returned orderable=false — no plans
 Tell the customer empathetically and offer to take their details for when it becomes available.
 Do NOT present any OptiComm or NBN plans from your knowledge base.`;
         } else if (planCount > 0) {
-          // FIX #2 + FIX #3: Lock to the returned network and instruct IMMEDIATE presentation
+          // FIXED: Two-step sequence — list plans first, THEN always ask the website check question
           plansPresentationHint = `
 TOOL RESULT INSTRUCTION: The address check returned ${planCount} plans on the "${networkLabel}" network.
-CRITICAL — IMMEDIATE PRESENTATION REQUIRED: Present these plans RIGHT NOW without waiting for any user input. Do not ask "are you ready?" or pause. Speak immediately, slowly, and one plan at a time.
 CRITICAL — ONE NETWORK LOCK: You are now LOCKED to "${networkLabel}" for this entire session. Do NOT mention ${networkLabel === "OptiComm" ? "NBN" : "OptiComm"} at any point ever again in this conversation.
 CRITICAL — ONLY THESE PLANS: Present ONLY these ${planCount} plans from the tool result's "availablePlans" array. Do NOT add plans from memory or the knowledge base.
-Present the plans warmly and conversationally as per the system prompt, then wait for the customer to choose.`;
+
+MANDATORY TWO-STEP SEQUENCE — FOLLOW EXACTLY IN ORDER:
+STEP A: Present ALL plans from the tool result warmly and conversationally, one at a time, slowly. Name each plan, its speed, and its price.
+STEP B: IMMEDIATELY after listing ALL plans, ask this EXACT question word-for-word: "Just out of curiosity — have you had a chance to check out our website and see the plans we have available, or would you like me to walk you through the options?"
+
+AFTER THE CUSTOMER ANSWERS STEP B:
+- If YES (seen website / know what they want): Ask "Great! Which plan caught your eye?" then collect their details.
+- If NO (want walkthrough): Ask about number of people, usage habits, and budget one at a time. Then make a recommendation. Then ask which plan they'd like.
+
+DO NOT ask "which plan would you like?" before completing Step B and receiving the customer's answer.
+DO NOT skip Step B under any circumstances.`;
         } else {
           plansPresentationHint = `
 TOOL RESULT INSTRUCTION: The address check returned no available plans.
@@ -2287,7 +2284,6 @@ Do NOT invent or present plans from your knowledge base.`;
       }
     }
 
-    // ── Final response generation using the FULL system prompt ──
     const networkLockReminder = session.networkShown
       ? `\nNETWORK LOCK REMINDER: You already showed ${session.networkShown} plans to this customer. Do NOT mention ${session.networkShown === "OptiComm" ? "NBN" : "OptiComm"} for any reason for the rest of this conversation.`
       : "";
@@ -2361,7 +2357,6 @@ app.post("/api/voice", upload.single("audio"), async (req, res) => {
     });
     let userText = normalizeText(tr?.text || "");
 
-    // ── Interruption / noise filtering ──
     const lastAssistantMsg = [...session.messages]
       .reverse()
       .find((m) => m.role === "assistant");
@@ -2518,154 +2513,6 @@ httpServer.listen(PORT, () => {
   console.log(` • Interruption/noise filtering enabled`);
   console.log(` • FIX: MARS errors at any stage → silent OptiComm fallback`);
   console.log(` • FIX: One-network-per-session lock (no cross-pollination)`);
-  console.log(` • FIX: Plans presented immediately on tool return, no delay`);
+  console.log(` • FIX: Mandatory website check question after plan listing`);
+  console.log(` • FIX: Silent-after-tool-call bug resolved`);
 });
-
-/*
-================================================================================
-COMPLETE BOT FLOW DOCUMENTATION
-================================================================================
-
-All 5 flows below. OptiComm plans are hardcoded in OPTICOMM_RESIDENTIAL_PLANS
-and OPTICOMM_BUSINESS_PLANS. NBN plans come from Splynx tariffs filtered via
-MARS API. If MARS fails at any point (token, search, SQ, tariff fetch) and the
-customer didn't explicitly ask for NBN, the bot silently shows OptiComm plans.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-FLOW 1 — SALES (New Customer)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Bot greets → asks for name
-2. Customer gives name → bot saves preferredName, asks new or existing
-3. Customer says "new" → customerType=new saved
-4. Bot asks "home or business?" (skip if already mentioned)
-5. Customer answers → residentialPreference saved
-6. Bot asks for full address (street, suburb, state, postcode)
-7. Customer gives address → bot immediately calls check_address_availability
-   ├─ MARS succeeds + NBN plans found → show NBN plans, lock session to NBN
-   ├─ MARS succeeds + no NBN plans → silently show OptiComm plans, lock to OptiComm
-   ├─ MARS address rejected → silently show OptiComm plans, lock to OptiComm
-   └─ MARS errors at ANY stage → silently show OptiComm plans, lock to OptiComm
-8. Bot IMMEDIATELY presents plans (no waiting) with enthusiasm
-9. Bot asks "which plan catches your eye?" then WAITS for customer to choose
-10. Customer picks a plan → leadInterest saved, bot reacts warmly
-11. Bot asks for email address (shows text input box)
-12. Customer provides email → email saved
-13. Bot says "just a moment while I submit this" → calls create_ticket
-    ├─ No customer_id → sales email only to sales@infinetbroadband.com.au
-    └─ Email includes name, email, address, selected plan
-14. Bot confirms: "You're all set! Sales team will be in touch shortly."
-15. Asks if anything else needed
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-FLOW 2 — SUPPORT (Existing Customer)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Bot greets → asks for name
-2. Customer gives name → asks new or existing
-3. Customer says "existing" → asks "support, accounts, or moving?"
-4. Customer says "support" or describes a tech issue
-5. Bot asks for account email → calls customer_lookup
-   ├─ Found → bot says "found your account" and asks what's going on
-   └─ Not found → asks to try a different email or phone number
-6. Customer describes the issue → bot empathises, asks follow-up questions
-7. issueSummary collected with enough detail
-8. Bot says "let me raise this for you now" → calls create_ticket
-   ├─ customer_id present → creates Splynx ticket + sends email to support@
-   └─ Email includes customer details and issue summary
-9. Bot confirms: "Ticket raised! Team will be in touch shortly."
-10. Asks if anything else needed
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-FLOW 3 — ACCOUNTS / BILLING (Existing Customer)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Bot greets → asks for name
-2. Customer gives name → asks new or existing
-3. Customer says "existing" → asks "support, accounts, or moving?"
-4. Customer says "accounts", "billing", "payment", "invoice"
-5. Bot asks for account email → calls customer_lookup
-6. Bot verifies with phone number (phone ONLY, no email re-sent) → customer_lookup with phone
-7. After verification, bot asks naturally what they need help with (payment details, outstanding invoice, portal login access, phone payment, or payment extension).
-8. FIVE PATHS:
-  a) UPDATE PAYMENT DETAILS: Bot provides portal link first, then specific guide link (https://www.infinetbroadband.com.au/set-up-a-payment-method/)
-  b) PAY OUTSTANDING INVOICE: Bot provides portal link first, then specific payment link (https://www.infinetbroadband.com.au/manually-paying-an-invoice/)
-  c) CAN'T LOGIN TO PORTAL: Bot asks "Would you like me to send an email to support so they can sort you out?" → If yes: call send_portal_login_email (email only, NO ticket created)
-  d) PHONE PAYMENT: Bot gives phone payment option on 1300 101 414
-  e) PAYMENT EXTENSION: Bot asks for payment date → creates support ticket + sends email with "Customer requested payment extension until: [date]"
-9. Asks if anything else needed
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-FLOW 4 — RELOCATION (Existing Customer Moving)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Bot greets → asks for name
-2. Customer gives name → asks new or existing
-3. Customer says "existing" → asks "support, accounts, or moving?"
-4. Customer says "moving" or "relocating"
-5. Bot asks for account email → calls customer_lookup
-6. Bot lists active services found on the account
-7. Asks which services to keep / cancel → serviceToTerminate saved
-8. Asks "is the new place residential or business?" (skip if known)
-9. Asks for disconnect date (old address) → terminationDate saved
-10. Asks for connection date (new address) → connectionDate saved
-11. Asks for new address → calls check_address_availability
-    ├─ Same fallback logic as SALES FLOW (NBN → OptiComm on failure)
-    └─ Session locked to whichever network is returned
-12. Bot IMMEDIATELY presents plans, waits for customer to choose
-13. Customer picks plan → leadInterest saved
-14. Bot says "let me put this all together" → calls create_ticket with:
-    - old service termination details
-    - new address + connection date
-    - selected plan
-    - all collected fields
-15. Bot confirms and asks if anything else
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-FLOW 5 — GENERAL ENQUIRY
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Bot greets → asks for name
-2. Customer asks a general question (pricing, modems, coverage, etc.)
-3. Bot answers from KB with warm, conversational responses:
-   - "What modems do you sell?" → lists hardware with prices
-   - "Do you have contracts?" → no lock-in, month to month
-   - "What's the difference between NBN and OptiComm?" → explains both
-   - "Do you cover [suburb]?" → asks for address, runs check_address_availability
-   - "Private fibre for developers?" → sends to dedicated URL
-   - "Security packages?" → lists Basic/Bronze/Silver/Gold
-4. If question is out of scope → refers to support@infinetbroadband.com.au
-5. No ticket unless customer specifically asks for follow-up
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-KEY BEHAVIOURS ACROSS ALL FLOWS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• ONE NETWORK PER SESSION: Once check_address_availability returns (NBN or
-  OptiComm), that network is locked for the entire session. The other network
-  is never mentioned again. This is enforced in:
-  (a) session.networkShown flag on the session object
-  (b) networkLockReminder injected into every subsequent LLM call
-  (c) plansPresentationHint in the tool result instruction
-  (d) System prompt rules (ONE-NETWORK-PER-SESSION RULE section)
-
-• IMMEDIATE PLAN PRESENTATION: When check_address_availability returns data,
-  the TOOL RESULT INSTRUCTION tells the LLM to present plans immediately
-  without waiting for any user input. No "should I continue?" pauses.
-
-• MARS ERROR HANDLING: Errors are caught at 4 levels:
-  (a) getMarsAccessToken() failure → catch → OptiComm fallback
-  (b) marsAddressSearch() failure → inner try/catch → OptiComm fallback
-  (c) marsServiceQualification() failure → inner try/catch → OptiComm fallback
-  (d) fetchTariffs() failure → inner try/catch → OptiComm fallback
-  (e) Outer catch-all for any other unexpected error → OptiComm fallback
-  All fallbacks are silent (no mention to customer of NBN failing).
-
-• NEVER ASK ABOUT NBN vs OPTICOMM: The bot never asks the customer which
-  network they prefer. Address check auto-detects. If user volunteers a
-  preference ("I want NBN" / "do you have OptiComm"), it's extracted and
-  passed to the tool. Otherwise the tool decides.
-
-• PLAN SELECTION: Bot never assumes or pre-selects a plan. Always waits for
-  explicit customer confirmation before saving leadInterest.
-
-• SALES vs SUPPORT EMAIL ROUTING:
-  - New customer (no customer_id) → sales email only, no Splynx ticket
-  - Existing customer (customer_id present) → Splynx ticket + support email
-
-================================================================================
-*/
