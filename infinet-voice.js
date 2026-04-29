@@ -942,6 +942,8 @@ STRICT RULES:
 - IMPORTANT: For sales inquiries (new customers), do NOT mention any ticket number or ticket ID.
 - For support: collect issueSummary with follow-up details.
 - Use customer_lookup for existing customers.
+- HARD VERIFICATION RULE: For any existing-customer verification step, you MUST call customer_lookup. Do NOT verify from memory, previous messages, or assumptions.
+- MANDATORY DOUBLE VERIFICATION for SUPPORT and ACCOUNTS flows: (1) Call customer_lookup with EMAIL first. Once successful, (2) IMMEDIATELY after customer provides phone, call customer_lookup again with PHONE ONLY (do NOT include email). Only after BOTH lookups succeed can you proceed to issue/billing questions. If phone lookup fails, ask again and retry. DO NOT skip the second phone lookup under any circumstances.
 - PRIVATE NETWORK / DEVELOPMENT HANDLING: If customer mentions "private network", "development", "developer", "estate", "private fibre", "bulk fibre", "developers network", respond: "Oh that's exciting — private fibre networks for new developments are a great investment! We actually have a whole dedicated section for that on our website. You can check out all the details at https://www.infinetbroadband.com.au/private-fibre-networks-for-developers/ — it covers everything from the planning stage through to getting the network installed. Is there anything else I can help you with?"
 
 ONE-NETWORK-PER-SESSION RULE — ABSOLUTE:
@@ -1073,16 +1075,24 @@ SALES FLOW:
 10. Confirm warmly and ask if there's anything else.
 
 SUPPORT FLOW:
-- "Let me pull up your account so I can help you out — what's the email address on your InfiNET account?" → customer_lookup.
-- On success: "Perfect, I've found your account! So tell me, what's been going on? Take your time and give me as much detail as you can — the more I know, the better our team can help."
+- "Let me pull up your account so I can help you out — what's the email address on your InfiNET account?" → call customer_lookup with email.
+- On email lookup success: "Perfect, I can see that account. Just to quickly verify it's definitely you, could I grab the best contact number on the account as well?" → IMMEDIATELY call customer_lookup with phone ONLY (do NOT pass email again). This second lookup is MANDATORY and must complete before proceeding.
+- After phone verification success: "Perfect, thanks for confirming that. I've got your account verified now — tell me what's been going on. Take your time and give me as much detail as you can, and I'll get this sorted for you."
+- CRITICAL: Both email and phone lookups MUST succeed before moving forward. If either fails, re-ask and retry immediately. Never proceed to issueSummary without both successful verifications.
 - Empathise with their issue: "Yeah, I can totally understand how frustrating that must be. Let me get this logged for you straight away so our technical team can jump on it."
 - Collect issueSummary → "Alright, I've got a good picture of what's happening. Let me raise this for you now..." → create_ticket.
 
 ACCOUNTS FLOW:
-- "Sure thing! Let me look up your account — what email address is it under?" → customer_lookup.
-- Answer billing questions from KB with helpful context and explanations.
-- "Did you know you can actually manage a lot of your account stuff through the customer portal? It's at https://infinetbroadband-portal.com.au/ — you can update payment methods, check invoices, all that good stuff. If you haven't got login credentials, just shoot an email to support@infinetbroadband.com.au and they'll sort you out."
-- For phone payments: "For making payments over the phone, the best thing to do is give us a ring on 1300 101 414 — the team there can process it for you straight away."
+- "Sure thing! Let me look up your account — what email address is it under?" → call customer_lookup with email.
+- On email lookup success: "Perfect, I can see that account. Just to quickly verify it's definitely you, could I grab the best contact number on the account as well?" → IMMEDIATELY call customer_lookup with phone ONLY (do NOT pass email again). This second lookup is MANDATORY and must complete before proceeding.
+- After phone verification success: "Perfect, thanks for confirming that — your account's all verified. What can I help with today: updating payment details, paying an outstanding invoice, portal login access, phone payment, or a payment extension?"
+- CRITICAL: Both email and phone lookups MUST succeed before moving forward. If either fails, re-ask and retry immediately. Never proceed to resolution paths without both successful verifications.
+- ACCOUNTS RESOLUTION PATHS (use the matching one naturally):
+  1. UPDATE PAYMENT DETAILS: "You can update your payment method through our customer portal at https://infinetbroadband-portal.com.au/, or use this step-by-step link: https://www.infinetbroadband.com.au/set-up-a-payment-method/."
+  2. PAY OUTSTANDING INVOICE: "You can pay through our customer portal at https://infinetbroadband-portal.com.au/, or use this payment page: https://www.infinetbroadband.com.au/manually-paying-an-invoice/."
+  3. CANNOT LOGIN TO PORTAL: Ask "Would you like me to send an email to support so they can sort you out?" → If yes, call send_portal_login_email (email only, no ticket number).
+  4. PHONE PAYMENT: "For payments over the phone, please call 1300 101 414 and the team will process it for you."
+  5. PAYMENT EXTENSION: "Please let us know the date you'll be paying, and we'll raise a ticket for you." → extract paymentDate → Confirm: "Great, I've noted that you'll be paying by [paymentDate]. I'll raise a ticket for you now." → create_ticket with paymentDate included.
 
 RELOCATION FLOW:
 1. "Oh exciting, you're on the move! Let's make sure your internet comes with you. What's the email on your account?" → customer_lookup.
@@ -1097,7 +1107,7 @@ TOOL USAGE:
 - extract_call_fields for all personal info. If user says something like "residential" or "business", extract residentialPreference immediately.
 - check_address_availability when address is collected. ONLY pass networkPreference if user explicitly stated "NBN" or "OptiComm" at some point. Otherwise omit it — the tool auto-detects.
 - get_internet_plans ONLY as fallback if check_address_availability is not applicable.
-- customer_lookup for existing customers.
+- customer_lookup for existing customers is mandatory for verification. In SUPPORT FLOW and ACCOUNTS FLOW, do double verification: first by email, then by phone ONLY (no email in second lookup) before proceeding.
 - IMPORTANT: When calling create_ticket, ALWAYS include the selected plan (leadInterest) in the message body so it appears in the email.
 
 HANDLING EDGE CASES:
@@ -1115,7 +1125,7 @@ Locations: ${LOCATIONS.map((l) => l.id + ": " + l.name).join(", ")}
 const extractFunction = {
   name: "extract_call_fields",
   description:
-    "Extract fields: intent, issueSummary, preferredName, email, priority, callbackRequest, timeline, leadInterest, accountNumber, name, phone, address, terminationDate, connectionDate, serviceToTerminate, customerType, residentialPreference, networkPreference. Omit absent fields.",
+    "Extract fields: intent, issueSummary, preferredName, email, priority, callbackRequest, timeline, leadInterest, accountNumber, name, phone, address, terminationDate, connectionDate, serviceToTerminate, customerType, residentialPreference, networkPreference, paymentDate. Omit absent fields.",
   parameters: {
     type: "object",
     properties: {
@@ -1143,6 +1153,7 @@ const extractFunction = {
         enum: ["residential", "business"],
       },
       networkPreference: { type: "string", enum: ["NBN", "Opticomm"] },
+      paymentDate: { type: "string" },
     },
     required: [],
   },
@@ -1239,12 +1250,29 @@ const getTicketStatusesTool = {
   parameters: { type: "object", properties: {}, required: [] },
 };
 
+const sendPortalLoginEmailTool = {
+  name: "send_portal_login_email",
+  description:
+    "Send email to support for customer unable to login to portal. No ticket created.",
+  parameters: {
+    type: "object",
+    properties: {
+      message: {
+        type: "string",
+        description: "Optional additional message from customer",
+      },
+    },
+    required: [],
+  },
+};
+
 const tools = [
   extractFunction,
   getPlansTool,
   checkAvailabilityTool,
   customerLookupTool,
   createTicketTool,
+  sendPortalLoginEmailTool,
   getTicketTypesTool,
   getTicketGroupsTool,
   getTicketStatusesTool,
@@ -1693,7 +1721,22 @@ async function handleToolCall(session, funcName, args) {
   }
   if (funcName === "customer_lookup") {
     try {
-      return JSON.stringify(await customerLookup(args));
+      const lookupArgs = { ...(args || {}) };
+      const supportIntent =
+        String(session?.collected?.intent || "").toLowerCase() === "support";
+      const accountIntent =
+        String(session?.collected?.intent || "").toLowerCase() === "account";
+      const hasPhone =
+        typeof lookupArgs.phone === "string" && !!lookupArgs.phone.trim();
+      const hasEmail =
+        typeof lookupArgs.email === "string" && !!lookupArgs.email.trim();
+
+      if ((supportIntent || accountIntent) && hasPhone && hasEmail) {
+        delete lookupArgs.email;
+        console.log("🔐 Verification lookup forced to phone-only");
+      }
+
+      return JSON.stringify(await customerLookup(lookupArgs));
     } catch (e) {
       return JSON.stringify({ success: false, error: e.message });
     }
@@ -1740,6 +1783,10 @@ async function handleToolCall(session, funcName, args) {
     if (collected.leadInterest || fa.leadInterest)
       detailLines.push(
         `Selected Plan: ${collected.leadInterest || fa.leadInterest}`,
+      );
+    if (collected.paymentDate)
+      detailLines.push(
+        `Customer requested payment extension until: ${collected.paymentDate}`,
       );
 
     const detailsBlock =
@@ -1788,6 +1835,52 @@ async function handleToolCall(session, funcName, args) {
       return JSON.stringify({
         success: false,
         error: err.message || "Failed to process request",
+      });
+    }
+  }
+  if (funcName === "send_portal_login_email") {
+    const collected = session.collected || {};
+    const hasCustomerId = !!collected.customer_id;
+
+    const detailLines = [];
+    if (collected.preferredName || collected.name)
+      detailLines.push(`Name: ${collected.preferredName || collected.name}`);
+    if (collected.email) detailLines.push(`Email: ${collected.email}`);
+    if (collected.phone) detailLines.push(`Phone: ${collected.phone}`);
+    if (collected.customer_id)
+      detailLines.push(`Customer ID: ${collected.customer_id}`);
+    detailLines.push(
+      "Issue: Customer unable to login to portal - please provide login credentials or reset access",
+    );
+
+    const detailsBlock = `\n\n--- Customer Details ---\n${detailLines.join("\n")}`;
+    const messageBody = `${args.message || "Customer requested assistance with portal login"}${detailsBlock}`;
+
+    const emailArgs = {
+      subject: "Support - Portal Login Assistance",
+      priority: "medium",
+      message: { message: messageBody },
+      customer_id: collected.customer_id || null,
+    };
+
+    try {
+      console.log(`📧 Sending portal login assistance email to support@`);
+      const emailResult = await sendTicketEmail(
+        null,
+        emailArgs,
+        collected,
+        true,
+      );
+      return JSON.stringify({
+        success: true,
+        email_sent: emailResult.sent,
+        email_error: emailResult.reason || null,
+      });
+    } catch (err) {
+      console.error("❌ Portal login email failed:", err.message || err);
+      return JSON.stringify({
+        success: false,
+        error: err.message || "Failed to send email",
       });
     }
   }
@@ -2162,14 +2255,15 @@ FLOW 3 — ACCOUNTS / BILLING (Existing Customer)
 3. Customer says "existing" → asks "support, accounts, or moving?"
 4. Customer says "accounts", "billing", "payment", "invoice"
 5. Bot asks for account email → calls customer_lookup
-6. Bot answers billing questions from KB:
-   - Overdue invoice → portal or email support@
-   - Update payment method → portal: https://infinetbroadband-portal.com.au/
-   - Can't login → email support@infinetbroadband.com.au
-   - Phone payment → call 1300 101 414
-   - Portal credentials → email support@ to get login
-7. No ticket created unless specifically needed
-8. Asks if anything else needed
+6. Bot verifies with phone number (phone ONLY, no email re-sent) → customer_lookup with phone
+7. After verification, bot asks naturally what they need help with (payment details, outstanding invoice, portal login access, phone payment, or payment extension).
+8. FIVE PATHS:
+  a) UPDATE PAYMENT DETAILS: Bot provides portal link first, then specific guide link (https://www.infinetbroadband.com.au/set-up-a-payment-method/)
+  b) PAY OUTSTANDING INVOICE: Bot provides portal link first, then specific payment link (https://www.infinetbroadband.com.au/manually-paying-an-invoice/)
+  c) CAN'T LOGIN TO PORTAL: Bot asks "Would you like me to send an email to support so they can sort you out?" → If yes: call send_portal_login_email (email only, NO ticket created)
+  d) PHONE PAYMENT: Bot gives phone payment option on 1300 101 414
+  e) PAYMENT EXTENSION: Bot asks for payment date → creates support ticket + sends email with "Customer requested payment extension until: [date]"
+9. Asks if anything else needed
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FLOW 4 — RELOCATION (Existing Customer Moving)
