@@ -951,6 +951,13 @@ IMPORTANT: Begin speaking NOW. Do not wait.`;
             hint = `[SYSTEM INSTRUCTION] The address check returned orderable=false — this address is not currently serviceable for a new connection. Tell the customer empathetically and offer to take their details for follow-up when service becomes available. Do NOT present any plans.`;
           }
 
+          // Update step tracking in session
+          if (parsed && parsed.availablePlans && parsed.availablePlans.length > 0) {
+            session.currentStep = "plans_presented";
+            sessions.set(session.id, session);
+            console.log(`🔄 Step updated to: plans_presented`);
+          }
+
           // CRITICAL: Send hint synchronously BEFORE returning, so it's in the conversation
           // before the function output is sent and before response.create is called
           if (hint && openaiWs?.readyState === WebSocket.OPEN) {

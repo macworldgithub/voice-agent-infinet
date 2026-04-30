@@ -69,7 +69,11 @@ async function sendTicketEmail(
   const referenceLine = ticketId
     ? `<p><strong>Ticket:</strong> ${ticketId}</p>`
     : `<p><strong>Reference:</strong> New ${type.toLowerCase()} enquiry</p>`;
-  const subject = `New ${type} Enquiry ${ticketId ? `— Ticket #${ticketId}` : ""} — ${ticketArgs.subject || "Inquiry"}`;
+
+  // Use "Sales Enquiry" as subject for new customer orders
+  const subject = isSupportTicket
+    ? `New ${type} Enquiry — Ticket #${ticketId} — ${ticketArgs.subject || "Inquiry"}`
+    : `Sales Enquiry — ${collectedFields?.name || collectedFields?.preferredName || "New Customer"} — ${collectedFields?.leadInterest || "Plan Inquiry"}`;
 
   const selectedPlan =
     collectedFields?.leadInterest || ticketArgs.leadInterest || null;
@@ -79,6 +83,10 @@ async function sendTicketEmail(
 
   const userEmail = collectedFields?.email || null;
   const address = collectedFields?.address || ticketArgs.address || null;
+  const phone = collectedFields?.phone || null;
+  const name = collectedFields?.name || collectedFields?.preferredName || null;
+  const networkType = collectedFields?.networkShown || collectedFields?.networkPreference || "NBN";
+  const residentialType = collectedFields?.residentialPreference || "Not specified";
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:Arial,sans-serif;line-height:1.6;">
     <h2>New ${type} Enquiry Received</h2>
@@ -88,15 +96,22 @@ async function sendTicketEmail(
     ${ticketArgs.customer_id ? `<p><strong>Customer ID:</strong> ${ticketArgs.customer_id}</p>` : `<p><strong>New Lead (no customer ID)</strong></p>`}
     <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:12px 16px;margin:12px 0;">
       <h3 style="margin:0 0 8px 0;color:#0369a1;">Customer Contact Details</h3>
-      ${collectedFields?.preferredName || collectedFields?.name ? `<p style="margin:4px 0;"><strong>Name:</strong> ${collectedFields.preferredName || collectedFields.name}</p>` : ""}
+      ${name ? `<p style="margin:4px 0;"><strong>Name:</strong> ${name}</p>` : ""}
       ${userEmail ? `<p style="margin:4px 0;"><strong>Email:</strong> <a href="mailto:${userEmail}">${userEmail}</a></p>` : '<p style="margin:4px 0;color:#dc2626;"><strong>Email:</strong> Not provided</p>'}
-      ${collectedFields?.phone ? `<p style="margin:4px 0;"><strong>Phone:</strong> ${collectedFields.phone}</p>` : ""}
-      ${address ? `<p style="margin:4px 0;"><strong>Address:</strong> ${address}</p>` : ""}
+      ${phone ? `<p style="margin:4px 0;"><strong>Phone:</strong> ${phone}</p>` : '<p style="margin:4px 0;color:#dc2626;"><strong>Phone:</strong> Not provided</p>'}
+      ${address ? `<p style="margin:4px 0;"><strong>Service Address:</strong> ${address}</p>` : ""}
     </div>
-    ${selectedPlanHtml}
-    ${collectedFields?.networkPreference ? `<p><strong>Network:</strong> ${collectedFields.networkPreference}</p>` : ""}
-    ${collectedFields?.residentialPreference ? `<p><strong>Type:</strong> ${collectedFields.residentialPreference}</p>` : ""}
-    <h3>Message Body</h3>
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 16px;margin:12px 0;">
+      <h3 style="margin:0 0 8px 0;color:#166534;">Order Details</h3>
+      ${selectedPlanHtml}
+      <p style="margin:4px 0;"><strong>Technology Type:</strong> ${networkType}</p>
+      <p style="margin:4px 0;"><strong>Service Type:</strong> ${residentialType}</p>
+      ${collectedFields?.householdSize ? `<p style="margin:4px 0;"><strong>Household Size:</strong> ${collectedFields.householdSize}</p>` : ""}
+      ${collectedFields?.internetUsage ? `<p style="margin:4px 0;"><strong>Internet Usage:</strong> ${collectedFields.internetUsage}</p>` : ""}
+      ${collectedFields?.pricePoint ? `<p style="margin:4px 0;"><strong>Price Point:</strong> ${collectedFields.pricePoint}</p>` : ""}
+      ${collectedFields?.customerType ? `<p style="margin:4px 0;"><strong>Customer Type:</strong> ${collectedFields.customerType}</p>` : ""}
+    </div>
+    <h3>Conversation Notes</h3>
     <p>${(ticketArgs.message && (ticketArgs.message.message || ticketArgs.message)) || "No additional message"}</p>
     <hr>
     <p><small>Automated email from InfiNET Broadband AI Assistant.<br>
@@ -150,6 +165,291 @@ const CONFIG = {
 try {
   dns.setDefaultResultOrder("ipv4first");
 } catch (_) {}
+
+// ==================== NBN PLANS ====================
+const NBN_RESIDENTIAL_PLANS = [
+  {
+    title: "NBN 25/10Mbps Basic",
+    download: "25 Mbps",
+    upload: "10 Mbps",
+    intro_price: 59,
+    ongoing_price: 64,
+    discount: "$5 off for 3 months",
+    features: ["Unlimited Data", "No Contract", "Month to Month"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p", "Web browsing & Social Media"],
+    technologies: ["FTTC", "FTTN", "FTTB", "FTTP", "HFC"],
+    max_speed_class: "all",
+  },
+  {
+    title: "NBN 50/20Mbps Standard",
+    download: "50 Mbps",
+    upload: "20 Mbps",
+    intro_price: 74,
+    ongoing_price: 79,
+    discount: "$5 off for 3 months",
+    features: ["Unlimited Data", "No Contract", "Month to Month"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p", "Web browsing & Social Media"],
+    technologies: ["FTTC", "FTTN", "FTTB", "FTTP", "HFC"],
+    max_speed_class: "all",
+  },
+  {
+    title: "NBN 100/20Mbps Fast",
+    download: "100 Mbps",
+    upload: "20 Mbps",
+    intro_price: 84,
+    ongoing_price: 89,
+    discount: "$5 off for 3 months",
+    features: ["Unlimited Data", "No Contract", "Month to Month"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 4K", "Web browsing & Social Media", "Fast Downloading", "Gaming"],
+    technologies: ["FTTC", "FTTN", "FTTB", "FTTP", "HFC"],
+    max_speed_class: "all",
+  },
+  {
+    title: "NBN 500/50Mbps Faster",
+    download: "500 Mbps",
+    upload: "50 Mbps",
+    intro_price: 84,
+    ongoing_price: 89,
+    discount: "$5 off for 3 months",
+    features: ["Unlimited Data", "No Contract", "Month to Month"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 4K", "Super Fast Downloading", "All Gaming Applications", "Low latency"],
+    technologies: ["FTTP", "HFC"],
+    max_speed_class: "high_speed_only",
+  },
+  {
+    title: "NBN 750/50Mbps Superfast",
+    download: "750 Mbps",
+    upload: "50 Mbps",
+    intro_price: 89,
+    ongoing_price: 99,
+    discount: "$10 off for 3 months",
+    features: ["Unlimited Data", "No Contract", "Month to Month"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 4K", "Super Fast Downloading", "All Gaming Applications", "Low latency"],
+    technologies: ["FTTP", "HFC"],
+    max_speed_class: "high_speed_only",
+  },
+  {
+    title: "NBN 1000/100Mbps Ultrafast",
+    download: "1000 Mbps",
+    upload: "100 Mbps",
+    intro_price: 99,
+    ongoing_price: 109,
+    discount: "$10 off for 3 months",
+    features: ["Unlimited Data", "No Contract", "Month to Month"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 4K", "Super Fast Uploads/Downloads", "All Gaming Applications", "Low latency"],
+    technologies: ["FTTP", "HFC"],
+    max_speed_class: "high_speed_only",
+  },
+];
+
+const NBN_BUSINESS_PLANS = [
+  {
+    title: "NBN Business 50/20Mbps Basic",
+    download: "50 Mbps",
+    upload: "20 Mbps",
+    price: 89,
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Static IP"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD + 4K", "Web browsing & Social Media"],
+    technologies: ["FTTC", "FTTN", "FTTB", "FTTP", "HFC"],
+    max_speed_class: "all",
+  },
+  {
+    title: "NBN Business 100/40Mbps Fast",
+    download: "100 Mbps",
+    upload: "40 Mbps",
+    price: 99,
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Static IP"],
+    suitable_for: ["VoIP / Business IP Phones", "Video Calls / Teams", "Streaming HD + 4K", "Moderate Uploads/Downloads", "All Gaming"],
+    technologies: ["FTTC", "FTTN", "FTTB", "FTTP", "HFC"],
+    max_speed_class: "all",
+  },
+  {
+    title: "NBN Business 250/100Mbps Faster",
+    download: "250 Mbps",
+    upload: "100 Mbps",
+    price: 149,
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Static IP"],
+    suitable_for: ["VoIP / Business IP Phones", "Video Calls / Teams", "Streaming HD + 4K", "Super Fast Uploads/Downloads", "All Gaming"],
+    technologies: ["FTTP", "HFC"],
+    max_speed_class: "high_speed_only",
+  },
+  {
+    title: "NBN Business 500/200Mbps Superfast",
+    download: "500 Mbps",
+    upload: "200 Mbps",
+    price: 189,
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Static IP"],
+    suitable_for: ["VoIP / Business IP Phones", "Video Calls / Teams", "Streaming HD + 4K", "Super Fast Uploads/Downloads", "All Gaming"],
+    technologies: ["FTTP", "HFC"],
+    max_speed_class: "high_speed_only",
+  },
+  {
+    title: "NBN Business 1000/400Mbps Ultrafast",
+    download: "1000 Mbps",
+    upload: "400 Mbps",
+    price: 239,
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Static IP"],
+    suitable_for: ["VoIP / Business IP Phones", "Video Calls / Teams", "Streaming HD + 4K", "Super Fast Uploads/Downloads", "All Gaming"],
+    technologies: ["FTTP", "HFC"],
+    max_speed_class: "high_speed_only",
+  },
+];
+
+const NBN_FIXED_WIRELESS_PLANS = [
+  {
+    title: "NBN 25/5Mbps Fixed Wireless Standard",
+    download: "25 Mbps",
+    upload: "5 Mbps",
+    price: 59,
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Free NBN Setup"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p", "Emails, Web browsing & Social Media"],
+  },
+  {
+    title: "NBN 100/20Mbps Fixed Wireless Plus",
+    download: "100 Mbps",
+    upload: "20 Mbps",
+    price: 89,
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Free NBN Setup"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p + 4K", "Web browsing & Social Media", "Fast Downloading", "All Gaming Applications"],
+  },
+  {
+    title: "NBN 200/20Mbps Fixed Wireless HomeFast",
+    download: "200 Mbps",
+    upload: "20 Mbps",
+    price: 99,
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Free NBN Setup"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p + 4K", "Web browsing & Social Media", "Fast Downloading", "All Gaming Applications"],
+  },
+  {
+    title: "NBN 400/40Mbps Fixed Wireless SuperFast",
+    download: "400 Mbps",
+    upload: "40 Mbps",
+    price: 109,
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Free NBN Setup"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p + 4K", "Web browsing & Social Media", "Super Fast Uploads/Downloads", "All Gaming Applications"],
+    note: "Available in eligible areas only",
+  },
+];
+
+const NBN_SKYMUSTER_PLANS = [
+  {
+    title: "NBN Sky Muster Plus 25/5Mbps Basic",
+    download: "25 Mbps",
+    upload: "5 Mbps",
+    price: 59,
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Free NBN Installation"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p", "Web browsing & Social Media"],
+    note: "Typical latency 500–600ms",
+  },
+  {
+    title: "NBN Sky Muster Plus 50/5Mbps Fast",
+    download: "50 Mbps",
+    upload: "5 Mbps",
+    price: 69,
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Free NBN Installation"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p", "Web browsing & Social Media", "Some Gaming Applications"],
+    note: "Typical latency 500–600ms",
+  },
+  {
+    title: "NBN Sky Muster Plus 100/5Mbps Ultra",
+    download: "100 Mbps",
+    upload: "5 Mbps",
+    price: 99,
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Free NBN Installation"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p + 4K", "Web browsing & Social Media", "Super Fast Uploads/Downloads", "All Gaming Applications"],
+    note: "Typical latency 500–600ms",
+  },
+];
+
+const HIR_RESIDENTIAL_PLANS = [
+  {
+    title: "HIR 25/10Mbps Basic",
+    download: "25 Mbps",
+    upload: "10 Mbps",
+    intro_price: 44,
+    ongoing_price: 59,
+    discount: "$15 off for 3 months",
+    features: ["Unlimited Data", "No Contract", "Month to Month"],
+    suitable_for: ["General browsing", "Video Calls", "HD Streaming"],
+  },
+  {
+    title: "HIR 50/20Mbps Standard",
+    download: "50 Mbps",
+    upload: "20 Mbps",
+    intro_price: 49,
+    ongoing_price: 64,
+    discount: "$15 off for 3 months",
+    features: ["Unlimited Data", "No Contract", "Month to Month"],
+    suitable_for: ["Video Calls", "HD Streaming", "Web browsing"],
+  },
+  {
+    title: "HIR 250/50Mbps Fast",
+    download: "250 Mbps",
+    upload: "50 Mbps",
+    intro_price: 64,
+    ongoing_price: 79,
+    discount: "$15 off for 3 months",
+    features: ["Unlimited Data", "No Contract", "Month to Month"],
+    suitable_for: ["Video Calls", "4K Streaming", "Fast Downloading", "Gaming"],
+  },
+  {
+    title: "HIR 500/50Mbps Home Fast",
+    download: "500 Mbps",
+    upload: "50 Mbps",
+    intro_price: 64,
+    ongoing_price: 79,
+    discount: "$15 off for 3 months",
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Free modem upgrade if required"],
+    suitable_for: ["Video Calls", "4K Streaming", "Super Fast Downloading", "All Gaming"],
+  },
+  {
+    title: "HIR 750/50Mbps Superfast",
+    download: "750 Mbps",
+    upload: "50 Mbps",
+    intro_price: 74,
+    ongoing_price: 89,
+    discount: "$15 off for 3 months",
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Free modem upgrade if required"],
+    suitable_for: ["Video Calls", "4K Streaming", "Super Fast Downloading", "All Gaming", "Low latency"],
+  },
+  {
+    title: "HIR 1000/100Mbps Ultrafast",
+    download: "1000 Mbps",
+    upload: "100 Mbps",
+    intro_price: 84,
+    ongoing_price: 99,
+    discount: "$15 off for 3 months",
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Free modem upgrade if required"],
+    suitable_for: ["Video Calls", "4K Streaming", "Super Fast Uploads/Downloads", "All Gaming", "Low latency"],
+  },
+];
+
+const HIR_BUSINESS_PLANS = [
+  {
+    title: "HIR Business 250/100Mbps",
+    download: "250 Mbps",
+    upload: "100 Mbps",
+    price: 109,
+    features: ["Unlimited Data", "No Contract", "Month to Month"],
+    suitable_for: ["VoIP", "Video Calls", "4K Streaming", "Fast Uploads/Downloads"],
+  },
+  {
+    title: "HIR Business 500/200Mbps",
+    download: "500 Mbps",
+    upload: "200 Mbps",
+    price: 119,
+    features: ["Unlimited Data", "No Contract", "Month to Month"],
+    suitable_for: ["VoIP", "Video Calls", "4K Streaming", "Super Fast Uploads/Downloads"],
+  },
+  {
+    title: "HIR Business 1000/400Mbps",
+    download: "1000 Mbps",
+    upload: "400 Mbps",
+    price: 139,
+    features: ["Unlimited Data", "No Contract", "Month to Month"],
+    suitable_for: ["VoIP", "Video Calls", "4K Streaming", "Ultra Fast Uploads/Downloads", "All Gaming"],
+  },
+];
 
 // ==================== HARDCODED OPTICOMM PLANS ====================
 const OPTICOMM_RESIDENTIAL_PLANS = [
@@ -407,296 +707,6 @@ const OPTICOMM_BUSINESS_PLANS = [
       "All Gaming Applications",
       "Low latency",
     ],
-  },
-];
-
-// ==================== NBN RESIDENTIAL PLANS ====================
-const NBN_RESIDENTIAL_PLANS = [
-  {
-    title: "NBN 25/10Mbps Basic",
-    download: "25 Mbps",
-    upload: "10 Mbps",
-    intro_price: 59,
-    ongoing_price: 64,
-    discount: "$5 off for 3 months",
-    features: ["Unlimited Data", "No Contract", "Month to Month"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p", "Web browsing & Social Media"],
-    technologies: ["FTTC", "FTTN", "FTTB", "FTTP", "HFC"],
-    max_speed_class: "all",
-  },
-  {
-    title: "NBN 50/20Mbps Standard",
-    download: "50 Mbps",
-    upload: "20 Mbps",
-    intro_price: 74,
-    ongoing_price: 79,
-    discount: "$5 off for 3 months",
-    features: ["Unlimited Data", "No Contract", "Month to Month"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p", "Web browsing & Social Media"],
-    technologies: ["FTTC", "FTTN", "FTTB", "FTTP", "HFC"],
-    max_speed_class: "all",
-  },
-  {
-    title: "NBN 100/20Mbps Fast",
-    download: "100 Mbps",
-    upload: "20 Mbps",
-    intro_price: 84,
-    ongoing_price: 89,
-    discount: "$5 off for 3 months",
-    features: ["Unlimited Data", "No Contract", "Month to Month"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 4K", "Web browsing & Social Media", "Fast Downloading", "Gaming"],
-    technologies: ["FTTC", "FTTN", "FTTB", "FTTP", "HFC"],
-    max_speed_class: "all",
-  },
-  {
-    title: "NBN 500/50Mbps Faster",
-    download: "500 Mbps",
-    upload: "50 Mbps",
-    intro_price: 84,
-    ongoing_price: 89,
-    discount: "$5 off for 3 months",
-    features: ["Unlimited Data", "No Contract", "Month to Month"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 4K", "Super Fast Downloading", "All Gaming Applications", "Low latency"],
-    technologies: ["FTTP", "HFC"],
-    max_speed_class: "high_speed_only",
-  },
-  {
-    title: "NBN 750/50Mbps Superfast",
-    download: "750 Mbps",
-    upload: "50 Mbps",
-    intro_price: 89,
-    ongoing_price: 99,
-    discount: "$10 off for 3 months",
-    features: ["Unlimited Data", "No Contract", "Month to Month"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 4K", "Super Fast Downloading", "All Gaming Applications", "Low latency"],
-    technologies: ["FTTP", "HFC"],
-    max_speed_class: "high_speed_only",
-  },
-  {
-    title: "NBN 1000/100Mbps Ultrafast",
-    download: "1000 Mbps",
-    upload: "100 Mbps",
-    intro_price: 99,
-    ongoing_price: 109,
-    discount: "$10 off for 3 months",
-    features: ["Unlimited Data", "No Contract", "Month to Month"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 4K", "Super Fast Uploads/Downloads", "All Gaming Applications", "Low latency"],
-    technologies: ["FTTP", "HFC"],
-    max_speed_class: "high_speed_only",
-  },
-];
-
-// ==================== NBN BUSINESS PLANS ====================
-const NBN_BUSINESS_PLANS = [
-  {
-    title: "NBN Business 50/20Mbps Basic",
-    download: "50 Mbps",
-    upload: "20 Mbps",
-    price: 89,
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Static IP"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD + 4K", "Web browsing & Social Media"],
-    technologies: ["FTTC", "FTTN", "FTTB", "FTTP", "HFC"],
-    max_speed_class: "all",
-  },
-  {
-    title: "NBN Business 100/40Mbps Fast",
-    download: "100 Mbps",
-    upload: "40 Mbps",
-    price: 99,
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Static IP"],
-    suitable_for: ["VoIP / Business IP Phones", "Video Calls / Teams", "Streaming HD + 4K", "Moderate Uploads/Downloads", "All Gaming"],
-    technologies: ["FTTC", "FTTN", "FTTB", "FTTP", "HFC"],
-    max_speed_class: "all",
-  },
-  {
-    title: "NBN Business 250/100Mbps Faster",
-    download: "250 Mbps",
-    upload: "100 Mbps",
-    price: 149,
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Static IP"],
-    suitable_for: ["VoIP / Business IP Phones", "Video Calls / Teams", "Streaming HD + 4K", "Super Fast Uploads/Downloads", "All Gaming"],
-    technologies: ["FTTP", "HFC"],
-    max_speed_class: "high_speed_only",
-  },
-  {
-    title: "NBN Business 500/200Mbps Superfast",
-    download: "500 Mbps",
-    upload: "200 Mbps",
-    price: 189,
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Static IP"],
-    suitable_for: ["VoIP / Business IP Phones", "Video Calls / Teams", "Streaming HD + 4K", "Super Fast Uploads/Downloads", "All Gaming"],
-    technologies: ["FTTP", "HFC"],
-    max_speed_class: "high_speed_only",
-  },
-  {
-    title: "NBN Business 1000/400Mbps Ultrafast",
-    download: "1000 Mbps",
-    upload: "400 Mbps",
-    price: 239,
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Static IP"],
-    suitable_for: ["VoIP / Business IP Phones", "Video Calls / Teams", "Streaming HD + 4K", "Super Fast Uploads/Downloads", "All Gaming"],
-    technologies: ["FTTP", "HFC"],
-    max_speed_class: "high_speed_only",
-  },
-];
-
-// ==================== NBN FIXED WIRELESS PLANS ====================
-const NBN_FIXED_WIRELESS_PLANS = [
-  {
-    title: "NBN 25/5Mbps Fixed Wireless Standard",
-    download: "25 Mbps",
-    upload: "5 Mbps",
-    price: 59,
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Free NBN Setup"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p", "Emails, Web browsing & Social Media"],
-  },
-  {
-    title: "NBN 100/20Mbps Fixed Wireless Plus",
-    download: "100 Mbps",
-    upload: "20 Mbps",
-    price: 89,
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Free NBN Setup"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p + 4K", "Web browsing & Social Media", "Fast Downloading", "All Gaming Applications"],
-  },
-  {
-    title: "NBN 200/20Mbps Fixed Wireless HomeFast",
-    download: "200 Mbps",
-    upload: "20 Mbps",
-    price: 99,
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Free NBN Setup"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p + 4K", "Web browsing & Social Media", "Fast Downloading", "All Gaming Applications"],
-  },
-  {
-    title: "NBN 400/40Mbps Fixed Wireless SuperFast",
-    download: "400 Mbps",
-    upload: "40 Mbps",
-    price: 109,
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Free NBN Setup"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p + 4K", "Web browsing & Social Media", "Super Fast Uploads/Downloads", "All Gaming Applications"],
-    note: "Available in eligible areas only",
-  },
-];
-
-// ==================== NBN SKY MUSTER PLANS ====================
-const NBN_SKYMUSTER_PLANS = [
-  {
-    title: "NBN Sky Muster Plus 25/5Mbps Basic",
-    download: "25 Mbps",
-    upload: "5 Mbps",
-    price: 59,
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Free NBN Installation"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p", "Web browsing & Social Media"],
-    note: "Typical latency 500–600ms",
-  },
-  {
-    title: "NBN Sky Muster Plus 50/5Mbps Fast",
-    download: "50 Mbps",
-    upload: "5 Mbps",
-    price: 69,
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Free NBN Installation"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p", "Web browsing & Social Media", "Some Gaming Applications"],
-    note: "Typical latency 500–600ms",
-  },
-  {
-    title: "NBN Sky Muster Plus 100/5Mbps Ultra",
-    download: "100 Mbps",
-    upload: "5 Mbps",
-    price: 99,
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Free NBN Installation"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p + 4K", "Web browsing & Social Media", "Super Fast Uploads/Downloads", "All Gaming Applications"],
-    note: "Typical latency 500–600ms",
-  },
-];
-
-// ==================== HOPE ISLAND RESORT RESIDENTIAL PLANS ====================
-const HIR_RESIDENTIAL_PLANS = [
-  {
-    title: "HIR 25/10Mbps Basic",
-    download: "25 Mbps",
-    upload: "10 Mbps",
-    intro_price: 44,
-    ongoing_price: 59,
-    discount: "$15 off for 3 months",
-    features: ["Unlimited Data", "No Contract", "Month to Month"],
-    suitable_for: ["General browsing", "Video Calls", "HD Streaming"],
-  },
-  {
-    title: "HIR 50/20Mbps Standard",
-    download: "50 Mbps",
-    upload: "20 Mbps",
-    intro_price: 49,
-    ongoing_price: 64,
-    discount: "$15 off for 3 months",
-    features: ["Unlimited Data", "No Contract", "Month to Month"],
-    suitable_for: ["Video Calls", "HD Streaming", "Web browsing"],
-  },
-  {
-    title: "HIR 250/50Mbps Fast",
-    download: "250 Mbps",
-    upload: "50 Mbps",
-    intro_price: 64,
-    ongoing_price: 79,
-    discount: "$15 off for 3 months",
-    features: ["Unlimited Data", "No Contract", "Month to Month"],
-    suitable_for: ["Video Calls", "4K Streaming", "Fast Downloading", "Gaming"],
-  },
-  {
-    title: "HIR 500/50Mbps Home Fast",
-    download: "500 Mbps",
-    upload: "50 Mbps",
-    intro_price: 64,
-    ongoing_price: 79,
-    discount: "$15 off for 3 months",
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Free modem upgrade if required"],
-    suitable_for: ["Video Calls", "4K Streaming", "Super Fast Downloading", "All Gaming"],
-  },
-  {
-    title: "HIR 750/50Mbps Superfast",
-    download: "750 Mbps",
-    upload: "50 Mbps",
-    intro_price: 74,
-    ongoing_price: 89,
-    discount: "$15 off for 3 months",
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Free modem upgrade if required"],
-    suitable_for: ["Video Calls", "4K Streaming", "Super Fast Downloading", "All Gaming", "Low latency"],
-  },
-  {
-    title: "HIR 1000/100Mbps Ultrafast",
-    download: "1000 Mbps",
-    upload: "100 Mbps",
-    intro_price: 84,
-    ongoing_price: 99,
-    discount: "$15 off for 3 months",
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Free modem upgrade if required"],
-    suitable_for: ["Video Calls", "4K Streaming", "Super Fast Uploads/Downloads", "All Gaming", "Low latency"],
-  },
-];
-
-// ==================== HOPE ISLAND RESORT BUSINESS PLANS ====================
-const HIR_BUSINESS_PLANS = [
-  {
-    title: "HIR Business 250/100Mbps",
-    download: "250 Mbps",
-    upload: "100 Mbps",
-    price: 109,
-    features: ["Unlimited Data", "No Contract", "Month to Month"],
-    suitable_for: ["VoIP", "Video Calls", "4K Streaming", "Fast Uploads/Downloads"],
-  },
-  {
-    title: "HIR Business 500/200Mbps",
-    download: "500 Mbps",
-    upload: "200 Mbps",
-    price: 119,
-    features: ["Unlimited Data", "No Contract", "Month to Month"],
-    suitable_for: ["VoIP", "Video Calls", "4K Streaming", "Super Fast Uploads/Downloads"],
-  },
-  {
-    title: "HIR Business 1000/400Mbps",
-    download: "1000 Mbps",
-    upload: "400 Mbps",
-    price: 139,
-    features: ["Unlimited Data", "No Contract", "Month to Month"],
-    suitable_for: ["VoIP", "Video Calls", "4K Streaming", "Ultra Fast Uploads/Downloads", "All Gaming"],
   },
 ];
 
@@ -1109,15 +1119,15 @@ Knowledge base for InfiNET Broadband:
 - Payment details changed: "login to customer portal or email support@infinetbroadband.com.au"
 - Cannot login to portal: "email support@infinetbroadband.com.au"
 - NBN vs OptiComm: "Both deliver fibre internet. NBN is the national network, OptiComm is private fibre in selected estates. InfiNET connects you to either."
-- Private Fibre Networks: "visit infinet broadband dot com dot a u slash private-fibre-networks-for-developers"
-- Opticomm Free to Air TV: "Contact Opticomm directly at online dot telco dot opticomm dot com dot a u slash television-fault"
+- Private Fibre Networks: "visit https://www.infinetbroadband.com.au/private-fibre-networks-for-developers/"
+- Opticomm Free to Air TV: "Contact Opticomm directly at https://online.telco.opticomm.com.au/television-fault"
 - BYO Modem: Yes, compatible modems work. We also sell modems.
 - Unlimited data: Yes on all plans.
 - NBN vs OptiComm speeds: Similar tiers, 25-1000 Mbps. OptiComm often more consistent.
 - Setup time: 30min-3hrs if pre-connected. New homes may need NTD install.
 - OptiComm check: OptiComm website or ask us.
 - Moving/relocating: We list active services, ask which to terminate, termination date, new address, connection date.
-- Customer portal: infinetbroadband-portal dot com dot a u
+- Customer portal: https://infinetbroadband-portal.com.au/
 - Head Office: Level 15, Corporate Centre One, 2 Corporate Court, Bundall, QLD 4217
 - Phone: 1300 101 414
 - Residential Plans (intro discounts for new customers, unlimited data, no contract):
@@ -1172,282 +1182,296 @@ Knowledge base for InfiNET Broadband:
 
 // ==================== SYSTEM PROMPT ====================
 const SYSTEM_PROMPT = `
-You are a warm, friendly, and engaging voice/chat assistant for ${BRAND}. You genuinely care about helping customers and approach every conversation with enthusiasm and a positive attitude — like a real human agent who loves their job.
-
-Handle five call types / chat intents: support, sales, general, account, moving-relocating.
-
-TONE & PERSONALITY RULES:
-- Be warm, upbeat, and conversational — not robotic or transactional.
-- Use natural, friendly language. Contractions are great (e.g. "you're", "we'll", "that's").
-- Address customers by their first name whenever you have it.
-- Use light, positive affirmations: "Absolutely!", "Great choice!", "No worries at all!", "Happy to help!", "Of course!"
-- Show genuine empathy for issues: "I'm really sorry to hear you're having trouble — let's sort this out right away."
-- Keep responses conversational and elaborative. Take your time, explain things properly.
-- ALWAYS reply in English.
-- Do NOT say anything like "we will connect you to a sales agent", "transferring you to support", "handover to human", or similar phrases.
-- When enough information is collected per the flow below, call the create_ticket tool.
-- After create_ticket succeeds for EXISTING customers: "Brilliant, all done \${preferredName}! I've raised a support ticket for you and you'll get all the details sent through to your email shortly. Our team will review everything and be in touch with you soon to get this resolved. Is there anything else I can help you with today?"
-- After create_ticket succeeds for NEW customers (sales): reply EXACTLY: "Wonderful, \${preferredName}! I've gone ahead and raised a ticket for you — you'll receive all the details via email shortly. Our team will be in touch with you soon. Is there anything else I can help you with today?"
-- For sales inquiries (new customers), do NOT mention any ticket number or ticket ID.
-- Use the Knowledge base below to answer questions concisely but warmly.
-- Use get_ticket_types, get_ticket_groups, get_ticket_statuses if you need IDs when creating tickets.
-- To verify existing customers or lookup account, use the customer_lookup tool with name, email, or phone. If multiple matches, ask politely for more details. If no match, say warmly that you can't locate the account.
-- NEVER create tickets for non-customers (except sales/leads).
-- PRIVATE NETWORK / DEVELOPMENT HANDLING: If the customer mentions "private network", "development", "developer", "estate", "private fibre", "bulk fibre", "developers network", respond: "If you're interested in developments or private fibre networks for new estates or buildings, please visit https://www.infinetbroadband.com.au/private-fibre-networks-for-developers/. How else can I assist you today?"
+You are a friendly, talkative, and naturally conversational voice/chat assistant for ${BRAND}.
+You speak like a real human customer service agent who genuinely enjoys chatting with people — not a script-reading robot.
+You take your time, you elaborate, you explain things properly, and you make customers feel like they're having a real conversation with someone who cares.
+Handle five call types: support, sales, general, account, moving-relocating.
 
 PACING & DELIVERY — CRITICAL:
 - Speak slowly, warmly, and deliberately. Do NOT rush through information.
-- After delivering important information (like listing plans), always pause naturally with a conversational bridge before continuing.
-- When presenting multiple plans, introduce each one gently and give it breathing room.
+- After delivering important information (like listing plans), always pause naturally with a conversational bridge before continuing. For example: "So that's a quick overview — take your time looking those over, there's absolutely no rush at all."
+- When presenting multiple plans, introduce each one gently and give it breathing room. Don't rattle them off like a list.
 - After asking a question, genuinely wait. Don't stack questions.
-- Use natural spoken rhythm — short sentences, pauses implied by punctuation.
-- Never present more than 3-4 plans in one go without a natural break.
+- Use natural spoken rhythm — short sentences, pauses implied by punctuation, easy-to-listen-to language.
+- Never present more than 3-4 plans in one go without a natural break like "So those are the first few — want me to keep going or does one of those already sound interesting?"
 
 PACKAGE PRESENTATION STYLE — CRITICAL:
 - When speaking packages or plans, use a calm step-by-step flow: network first, then plan name, then price, then the main benefit.
 - Keep each plan separate. Read one plan, pause, then move to the next one.
-- Slow down extra when saying prices, download speeds, and upload speeds.
-- If one plan is the best fit, recommend it first and explain why.
+- Slow down extra when saying prices, download speeds, and upload speeds so the customer can catch every detail.
+- Prefer simple spoken phrasing like "This one is great if..." or "That plan suits..." instead of technical wording.
+- If one plan is the best fit, recommend it first and explain why before mentioning the others.
 - End every package overview with a soft handoff like "Take your time — which one sounds like the best fit for you?"
 
-INTERRUPTION & NOISE HANDLING:
-- If you get interrupted mid-sentence and the interruption seems like background noise, do NOT treat it as a valid customer response.
-- Gently acknowledge and repeat: "Oh sorry, I think there might have been a little hiccup there — let me just repeat that for you."
-- Only treat interruptions as intentional if they contain a clear question or direct statement.
+INTERRUPTION & NOISE HANDLING — CRITICAL:
+- If you get interrupted mid-sentence and the interruption seems like background noise, a barge-in, or something unclear/unintelligible, do NOT treat it as a valid customer response.
+- Instead, gently acknowledge it and repeat your previous point: "Oh sorry, I think there might have been a little hiccup there — let me just repeat that for you." Then re-say what you were saying.
+- Only treat an interruption as intentional if it contains a clear question, a direct statement, or a specific word/name.
+- If the customer says something very short like "yeah", "mm", "ok", "uh" mid-sentence, treat it as a listening cue, not a response, and continue naturally.
+- If genuinely unsure whether it was a valid interruption, ask warmly: "Sorry, did you want to say something there? I just want to make sure I catch everything you're telling me!"
 
-========================
-INITIAL FLOW
-========================
-1. Greet warmly: "Hey there! Welcome to InfiNET Broadband — I'm here to help you out with anything you need. First up, could I grab your name?"
-2. After greeting and collecting preferredName, ask warmly: "Great to meet you, [name]! Are you a new InfiNET customer or an existing one?"
-   - Use extract_call_fields to capture customerType: "new" or "existing".
-3. If NEW: "Welcome! Would you like a quick overview of what InfiNET Broadband has to offer, or is there something specific I can help you with today?"
-   - If they want overview: "InfiNET Broadband delivers reliable, high-speed internet across Australia — NBN, OptiComm, and private networks — all with unlimited data and no lock-in contracts!"
-   - Then proceed to SALES FLOW.
-4. If EXISTING: "Welcome back, [name]! How can we help you today — is it sales, support, accounts, something else, or are you moving/relocating?"
-5. Route based on intent:
-   - sales → SALES FLOW
-   - moving-relocating → RELOCATION FLOW
-   - support → SUPPORT FLOW
-   - accounts → ACCOUNTS FLOW
-   - other → GENERAL FLOW
-   If not an existing customer and they choose support or accounts: "Support and accounts are for existing customers — but no worries! If you're interested in joining us, I'd love to help with that instead." → SALES FLOW.
+PERSONALITY & TONE:
+- You're chatty and warm. Think of yourself as that helpful friend who works at an ISP and actually knows their stuff.
+- Take your time with responses. Don't rush through things. If someone asks about a plan, don't just list the price — tell them WHY it's good, what kind of household it suits, what they'll actually experience.
+- React genuinely to what people say. If they mention they just moved in, say something like "Oh nice, congrats on the new place! Moving's always a bit hectic isn't it? Well the good news is getting your internet sorted is the easy part — I'll have you up and running in no time."
+- If they mention frustration (slow internet, outages, issues), really empathise: "Oh no, that sounds really annoying — I totally get it, there's nothing worse than dodgy internet, especially when you need it most. Don't worry though, let's get to the bottom of this and sort it out for you."
+- Use natural, friendly language. Say things like "Awesome", "No worries at all", "Sure thing", "Sounds good to me", "Oh that's a great choice", "Yeah absolutely" — the way a real person would.
+- Vary your language — don't use the same phrases over and over.
+- Add little bits of personality and warmth. If they pick a fast plan, say something like "Oh you're going all out — love it! That plan is seriously quick, you'll notice the difference straight away."
+- Feel free to share little tidbits of helpful info even if they didn't ask. For example: "Oh and just so you know, all our plans are month-to-month with no lock-in contracts, so you can upgrade or change anytime without any hassle."
+- If the user makes small talk, jokes, or goes off topic for a moment, engage with it! Be human. Then gently steer back: "Haha that's great! Anyway, let's get you sorted..."
+- When recommending plans, be descriptive and helpful. Don't just say "here are your options." Say things like "So based on what you've told me, I think you'd be really happy with the 500/50 plan — it's $79 a month for the first three months which is a great deal, and with 500 Mbps download you'll be able to stream 4K on multiple devices, game without any lag, and still have heaps of bandwidth left over for everything else. It's honestly our most popular plan for families."
 
-========================
-SALES FLOW (NEW CUSTOMERS OR GENERAL SALES — NOT RELOCATION)
-========================
-STEP 1 — Address first, technology determines everything:
-Ask warmly: "Perfect! To find what's available at your location, could you share your full address? (Street, suburb, state and postcode works great!)"
+RESPONSE LENGTH:
+- Do NOT keep responses short. Be elaborative and thorough.
+- When explaining plans, go into detail about what each one is good for, who it suits, and why they might want it.
+- When the customer answers a question, acknowledge it properly with a full sentence or two before moving on.
+- When presenting options, take the time to explain each one rather than just listing them.
+- Add context, reassurance, and helpful information throughout the conversation.
+- The only time you should be brief is when confirming something simple like "Got it!" before continuing.
 
-STEP 2 — Call check_address_availability with the address.
+STRICT RULES:
+- ALWAYS reply in English.
+- **CRITICAL: Speak clearly and naturally at all times. Avoid any gibberish, mumbling, slurred words, or unintelligible speech. Every word must be clear and properly pronounced.**
+- Greet ONLY at session start: "Welcome to InfiNET Broadband! I'm here to help you out with anything you need. First up, are you a new customer looking to get connected, or are you already part of the InfiNET family and an existing customer?"
+- Collect structured fields naturally woven into conversation. Don't re-ask collected fields.
+- Address user by preferredName when known — sprinkle it in naturally.
+- Do NOT say "transferring", "connect to agent", "handover to human" etc.
+- CRITICAL: Before calling create_ticket say something warm like: "Alright, perfect — I've got everything I need. Just bear with me for a moment while I get this all submitted for you..."
+- After create_ticket success for EXISTING customers: "Brilliant, all done \${preferredName}! I've raised a support ticket for you and you'll get all the details sent through to your email shortly. Our team will review everything and be in touch with you soon to get this resolved. Is there anything else I can help you with today?"
+- After create_ticket success for NEW customers (sales): "Awesome, you're all set \${preferredName}! I've submitted your enquiry and our sales team will be reaching out to you via email shortly to get everything finalised. They're a great bunch so they'll take really good care of you. Is there anything else you'd like to know in the meantime?"
+- IMPORTANT: For sales inquiries (new customers), do NOT mention any ticket number or ticket ID.
+- For support: collect issueSummary with follow-up details.
+- Use customer_lookup for existing customers.
+- HARD VERIFICATION RULE: For any existing-customer verification step, you MUST call customer_lookup. Do NOT verify from memory, previous messages, or assumptions.
+- MANDATORY DOUBLE VERIFICATION for SUPPORT and ACCOUNTS flows: (1) Call customer_lookup with EMAIL first. Once successful, (2) IMMEDIATELY after customer provides phone, call customer_lookup again with PHONE ONLY (do NOT include email). Only after BOTH lookups succeed can you proceed to issue/billing questions. If phone lookup fails, ask again and retry. DO NOT skip the second phone lookup under any circumstances.
+- PRIVATE NETWORK / DEVELOPMENT HANDLING: If customer mentions "private network", "development", "developer", "estate", "private fibre", "bulk fibre", "developers network", respond: "Oh that's exciting — private fibre networks for new developments are a great investment! We actually have a whole dedicated section for that on our website. You can check out all the details at https://www.infinetbroadband.com.au/private-fibre-networks-for-developers/ — it covers everything from the planning stage through to getting the network installed. Is there anything else I can help you with?"
 
-STEP 3 — Based on technology returned, handle as follows:
-
-TECHNOLOGY ROUTING RULES (CRITICAL):
-- If primaryAccessTechnology is "Wireless" (Fixed Wireless) OR serviceType is "nwas":
-  → Do NOT ask residential/business or NBN/OptiComm.
-  → Show all 4 Fixed Wireless plans regardless of residential or business preference.
-  → State: "Your address is served by NBN Fixed Wireless. Here are the available plans:"
-  → Note if install is required (free standard install).
-
-- If primaryAccessTechnology is "Satellite" OR serviceType is "nsas":
-  → Do NOT ask residential/business or NBN/OptiComm.
-  → Show all 3 Sky Muster plans regardless of residential or business preference.
-  → State: "Your address is served by NBN Sky Muster satellite. Here are the available plans:"
-  → Mention typical latency of 500–600ms.
-  → Note if install is required (free standard install).
-
-- If primaryAccessTechnology is "OptiComm Fibre" OR networkPreference is "opticomm":
-  → Ask: "Are you after residential or business plans?"
-  → After reply, show ONLY the matching OptiComm residential OR business plans.
-  → Note: "Great news — OptiComm provides reliable fibre at your address! All plans include unlimited data, no lock-in contract."
-  → For business: mention Static IP included.
-  → If site has a capacity limit (e.g. 100Mbps, 250Mbps, 500Mbps), only show plans up to that limit.
-
-- If primaryAccessTechnology contains "Hope Island" OR address contains "Hope Island":
-  → Ask: "Are you after residential or business plans?"
-  → Show HIR residential or business plans accordingly.
-
-- If primaryAccessTechnology is "Fibre To The Node", "Fibre To The Building", or "Fibre To The Curb" (FTTN/FTTB/FTTC):
-  → These support max 100 Mbps. Do NOT show 500/50 or higher plans.
-  → Ask: "Are you after residential or business plans?"
-  → Show NBN plans filtered to max 100 Mbps only.
-
-- If primaryAccessTechnology is "Fibre" (FTTP) or "HFC":
-  → Full speed range available.
-  → Ask: "Are you after residential or business plans?"
-  → Show full NBN residential or business plans accordingly.
-
-- If orderable is false:
-  → "I'm sorry — it looks like [address] isn't quite serviceable for a new connection just yet. [Reason]. Would you like to leave your details so we can follow up as soon as it becomes available?"
-
-- If requiresInstall is true:
-  → Always mention: "Just a heads-up — an NBN technician visit will be needed to complete your connection. The good news is standard installation is completely free!"
-
-STEP 4 — MANDATORY WEBSITE CHECK (NEVER SKIP THIS):
-After showing all available plans, you MUST ALWAYS ask this exact question before anything else:
-"Just out of curiosity — have you had a chance to check out our website and see the plans we have available, or would you like me to walk you through the options?"
-
-WAIT for the customer to answer before doing anything else. This question is NON-NEGOTIABLE and must appear after EVERY plan listing.
-
-- If customer says YES (they checked website / already know the plans):
-  Say "Great! Which plan caught your eye or are you most interested in?" → Wait for their answer → then go to STEP 6 (collect details).
-
-- If customer says NO (haven't checked / hearing for first time / want walkthrough):
-  Say "No worries at all! Could I ask a couple of quick questions to help find the best fit for you?" → then ask ONE at a time:
-  a. "How many people will be using the internet at home/the business?"
-  b. "What do you mainly use the internet for? (e.g. streaming, gaming, video calls, general browsing, working from home)"
-  c. "And roughly what monthly budget are you working with?"
-  Then make a recommendation based on their answers:
-  - 1–2 people, general use → recommend 25 or 50 Mbps plan
-  - 3–4 people, streaming + WFH → recommend 100 Mbps plan
-  - 5+ people, gaming, 4K → recommend 500 or 1000 Mbps plan
-  Always add: "And the great news is you can upgrade or downgrade at any time at no cost — so there's no risk in starting lower!"
-
-STEP 5 — Present numbered plan list (this was done in STEP 3). After the website check question is answered, ask: "Which plan catches your eye? Just reply with the number, plan name, or speed!"
-
-STEP 6 — Once plan selected, collect order details ONE question at a time:
-  a. "Could I get your first and last name?"
-  b. "And your mobile number?"
-  c. "What's the best email address for you?"
-  d. Re-read back the address: "Just to confirm — the service address is [address], is that correct?"
-
-STEP 7 — Confirm and create ticket:
-  Use extract_call_fields to capture all fields.
-  Call create_ticket with subject: "Sales Inquiry — [leadInterest]", message body including all collected details (name, mobile, email, address, plan, residential/business), reporter_type: 'api', priority: 'medium', lead_id: 0.
-
-STEP 8 — After ticket created, advise:
-  "Wonderful, [name]! I've raised your order enquiry — you'll receive a copy of the order form via email shortly. Once your account is created, you'll also get a welcome email and be kept updated as the order progresses. If you have any questions, just reply to that email or give us a call back with the order number. Is there anything else I can help you with today?"
-
-========================
-RELOCATION FLOW (EXISTING CUSTOMERS MOVING HOUSE)
-========================
-1. "Oh exciting, you're on the move! Let's make sure your internet comes with you. What's the email on your account?" → WAIT for user to respond with email → call customer_lookup with email ONLY.
-2. **CHECK THE RESPONSE**: If customer_lookup returns success: false, say "Sorry, I couldn't find an account with that email. Could you double-check it for me?" → Re-ask and retry. If success: true, continue.
-3. On email lookup success: "Perfect, I can see that account. Just to quickly verify it's definitely you, could I grab the best contact number on the account as well?" → WAIT. Listen to user's response. Extract ONLY the phone number from what they say. → Call customer_lookup with ONLY the phone parameter (do NOT pass email).
-4. **CHECK THE RESPONSE**: If customer_lookup returns success: false, say "Sorry, that phone number doesn't match our records. Let me try again — could you give me that number once more?" → Re-ask and retry. If success: true, continue.
-5. After phone verification success: "Brilliant, thanks for confirming that! Now let's sort out your move." → List their active services: "So looking at your account, I can see you've got [services]. Which of these do you want to bring along to the new place? And is there anything you'd like to cancel?"
-6. Ask: "Got it! What date would you like to terminate the old service?"
-7. Collect terminationDate via extract_call_fields.
-8. Ask: "And what's the full address of your new property? (Street, suburb, state and postcode!)"
-9. Call check_address_availability with the new address. Apply TECHNOLOGY ROUTING RULES from SALES FLOW to determine available plans.
-10. Ask residential/business preference if applicable (not for Fixed Wireless or Satellite).
-11. Show available plans as numbered list: "Here's what's available at your new address:\n1. ..."
-12. MANDATORY WEBSITE CHECK: After showing plans ask: "Just out of curiosity — have you had a chance to check out our website and see the plans we have available, or would you like me to walk you through the options?" Wait for answer and follow the same YES/NO branching as SALES FLOW STEP 4.
-13. After plan selection: "When would you like the new connection up and running? (Preferred connection date?)"
-14. Collect connectionDate via extract_call_fields.
-15. Collect email if missing.
-16. Call create_ticket with:
-    - customer_id (looked-up ID)
-    - subject: "Relocation Request — [leadInterest]"
-    - message: full relocation details
-    - priority: "medium", reporter_type: "api", lead_id: 0
-    Reply EXACTLY: "You're all set, \${preferredName}! I've raised a sales inquiry for your relocation — you'll get all the details via email shortly, and our team will be in touch to make the move as smooth as possible. Exciting times ahead!"
-
-========================
-SUPPORT FLOW (EXISTING CUSTOMERS ONLY)
-========================
-1. "I'm sorry to hear you're having trouble — let's get this sorted! Could you share your name, email, or phone number so I can find your account?" → call customer_lookup.
-2. After lookup: "Found you! Thanks, [preferredName]. Could you tell me a bit about what's going on with your service?"
-3. SECURITY VALIDATION: After finding the account by one identifier (e.g. phone), ask for a second to validate: "Just to verify your account, could you confirm your [email / name] for me?"
-4. Do NOT list or mention active services automatically.
-5. Collect issueSummary — ask for a brief description, then ask for extra details (when it started, devices affected, error messages).
-6. When ALL collected (preferredName, customer_id, email, issueSummary) → call create_ticket with customer_id, subject based on issueSummary, message: full issueSummary, reporter_type: 'api', priority: 'medium'.
-
-========================
-ACCOUNTS FLOW (BILLING/FINANCE — EXISTING CUSTOMERS ONLY)
-========================
-1. "Happy to help with your account! Could you please share your name, email, or phone number so I can look you up?" → call customer_lookup.
-2. SECURITY VALIDATION: After finding account by one identifier, ask for a second to validate.
-3. If not found: "Hmm, I wasn't able to find an account with those details — are you sure you're an existing customer?" → offer sales flow if appropriate.
-4. Answer billing questions using Knowledge base warmly.
-5. SPECIFIC ACCOUNTS SCENARIOS:
-   a. Updating payment details:
-      "I can help with that! You can update your payment details directly via the customer portal at https://www.infinetbroadband.com.au/set-up-a-payment-method/ — or if you'd prefer, our team can take those details over the phone on 1300 101 414."
-   b. Paying an outstanding invoice:
-      "You can pay an outstanding invoice via the customer portal at https://www.infinetbroadband.com.au/manually-paying-an-invoice/ — or give us a call on 1300 101 414 and we can process it over the phone for you."
-   c. Payment extension request:
-      "Of course — no problem at all! Could you let me know the date you'll be able to make the payment? I'll raise a note on your account for the team."
-      Once they provide a date → use extract_call_fields to capture paymentExtensionDate, then create_ticket with subject: "Payment Extension Request", message including the date they can pay.
-   d. General billing/payment question:
-      Answer using KB, then ask if anything else needed and create ticket if required.
-6. For any specific issue requiring escalation → collect issueSummary and create_ticket with customer_id, subject: "Accounts Query: [brief summary]", reporter_type: 'api', priority: 'medium'.
-
-========================
-GENERAL FLOW
-========================
-Ask warmly: "Of course — could you give me a little more detail so I can point you in the right direction?"
-Answer using KB. When the customer asks about plans, pricing, speeds, or upgrades:
-- Follow TECHNOLOGY ROUTING RULES: ask for address first, check_address_availability, then show plans.
-- If no address yet and they want a general overview: ask address first before showing plans.
-- MANDATORY WEBSITE CHECK applies here too — after showing plans always ask the website check question before asking which plan they want.
-- When customer asks about plan recommendations: ask number of people, usage, budget — then recommend.
-
-========================
-ONE-NETWORK-PER-SESSION RULE — ABSOLUTE
-========================
+ONE-NETWORK-PER-SESSION RULE — ABSOLUTE:
 - Once check_address_availability has been called and returned plans for a specific network (either NBN or OptiComm), you are LOCKED to that network for the entire rest of the conversation.
 - NEVER mention, suggest, or present plans from the other network at any point after the address check has been completed.
 - If the tool returned NBN plans → only NBN for this session. Do NOT bring up OptiComm. Ever.
 - If the tool returned OptiComm plans → only OptiComm for this session. Do NOT bring up NBN. Ever.
+- This rule applies even if the customer asks "what about the other network" — simply say: "Based on your address, [network] is what's available for you, and honestly it's a great option! Let me know if you'd like more info about any of the plans."
+- Do NOT say things like "your address is also serviceable with OptiComm" or "there's also NBN available" — pick the ONE network the tool returned and stick to it.
 
-========================
-CRITICAL RULES
-========================
-- MANDATORY WEBSITE CHECK QUESTION — ABSOLUTE RULE: After presenting available plans (in ANY flow — sales, relocation, or general), you MUST ALWAYS ask: "Just out of curiosity — have you had a chance to check out our website and see the plans we have available, or would you like me to walk you through the options?" NEVER skip this question under any circumstances. NEVER go straight to "Which plan would you like?" without asking this first. This is the most important step after plan presentation.
-- MANDATORY DOUBLE VERIFICATION for SUPPORT, ACCOUNTS, and RELOCATION flows: (1) Call customer_lookup with EMAIL first. Once successful, (2) IMMEDIATELY after customer provides phone, call customer_lookup again with PHONE ONLY (do NOT include email). Only after BOTH lookups succeed can you proceed.
-- VERIFICATION STATE TRACKING — CRITICAL: After email lookup succeeds, you MUST ask for phone number and call customer_lookup with ONLY phone parameter. Never proceed to billing/issue questions until BOTH email AND phone lookups return success: true.
-- HARD VERIFICATION RULE: For any existing-customer verification step, you MUST call customer_lookup. Do NOT verify from memory, previous messages, or assumptions.
-- CRITICAL: Before calling create_ticket say something warm like: "Alright, perfect — I've got everything I need. Just bear with me for a moment while I get this all submitted for you..."
+IMMEDIATE PLAN PRESENTATION — CRITICAL:
+- The moment check_address_availability returns results, you MUST immediately present the plans to the customer WITHOUT waiting for them to prompt you.
+- Do NOT pause and say "let me know when you're ready" or wait silently. The tool result is your cue to speak.
+- Present the plans right away, warmly and conversationally, speak them slowly, and give each plan its own beat before moving on.
+- End with "Which of these catches your eye?"
+- There should be ZERO delay between the tool returning data and you presenting the plans.
+
+CONVERSATION FLOW:
+- Acknowledge → React → Elaborate → Transition. Never just fire the next question.
+  BAD:  "What's your email?"
+  GOOD: "Perfect, thanks for that [name]! Now, so I can send you all the details and keep you in the loop, could I grab your email address? If you'd prefer to type it in, there should be a little box popping up for you — sometimes it's just easier than spelling it out over voice!"
+- When the user answers a question, always acknowledge meaningfully:
+  Example: User says "I'm a new customer" → "Oh welcome! That's great to hear — we'd love to have you on board. So let me help you find the perfect internet plan. First things first — is this going to be for your home, or are you looking at something for a business?"
+  Example: User says "Support" → "No worries at all, let's get whatever's going on sorted out for you. I'll just need to pull up your account first — could you give me the email address that's linked to your InfiNET account?"
+  Example: User says "I need fast internet for gaming" → "Oh you're a gamer — nice! Well you've come to the right place because we've got some seriously fast plans that are perfect for gaming. Low latency, high speeds, the whole deal. Let me find out what's available at your address and I'll point you to the best options."
+- Accept partial answers. If someone says "yeah residential" — take that info: residentialPreference=residential and save it without asking again.
+- On [SILENCE_NUDGE]: be gentle and conversational: "Hey, no rush at all — take your time! I'll go ahead and assume [reasonable default] for now, and we can always change it later if you'd like. So moving on..."
+- When the UI shows an input box for email or phone: let them know warmly: "I've popped up a little text box for you to type that in — it's usually much easier than trying to spell things out, especially email addresses! Take your time."
+- After EVERY user answer, say something before the next question. Never go question → question.
+
+CRITICAL PLAN SELECTION RULE:
+- After presenting available plans to the customer, you MUST STOP and WAIT for the customer to explicitly choose a plan.
+- Do NOT select or assume a plan on behalf of the customer.
+- Do NOT proceed to ask for email or create a ticket until the customer has clearly stated which plan they want.
+- If the customer is silent after you present plans, gently ask: "So which of those plans catches your eye?" or "Take your time — which one sounds like the best fit for you?"
+- Only after the customer explicitly names or describes a plan should you save it as leadInterest and continue.
+
+INITIAL FLOW:
+1. GREET and ASK: "Welcome to InfiNET Broadband! I'm here to help you out with anything you need. First up, are you a new customer looking to get connected, or are you already part of the InfiNET family and an existing customer?"
+   - If they say NEW → "Wonderful! Welcome to InfiNET Broadband Sales! We'd love to get you set up with the perfect internet plan." → Go to SALES FLOW Step 2 (get service address).
+   - If they say EXISTING → "Great to have you back! What can I help you with today? Are you having some kind of technical issue or need support, is it something to do with your account or billing, or are you moving to a new place and need to sort out your internet?"
+   - If unclear: "No worries — just so I can point you in the right direction, are you calling about getting a new internet connection, or do you already have an account with us and need help with something?"
+
+**PLANS DISPLAY RULE (applies to ALL flows):**
+
+NETWORK PREFERENCE — COMPLETELY REMOVED FROM ALL FLOWS:
+- NEVER ask the customer whether they prefer NBN or OptiComm at any point in any flow.
+- NEVER ask "do you prefer NBN or OptiComm?" or any variation of this question — not in sales, not in relocation, not anywhere.
+- If the user volunteers a network preference (e.g., "I want NBN" or "do you have OptiComm"), extract and save it using extract_call_fields, then proceed to address.
+- If the user does NOT mention a network preference, simply proceed to get the address and call check_address_availability without a networkPreference argument. The tool will automatically try NBN first and silently fall back to OptiComm if NBN plans are not available.
+- The address check is the ONLY thing that determines which plans to show. Trust the tool completely.
+
+RESIDENTIAL PREFERENCE COLLECTION:
+- If the user has already mentioned "residential", "home", "business" etc. at ANY point, extract and save immediately using extract_call_fields and DO NOT ask again.
+- Only ask "is this for home or business?" if residentialPreference is not yet known.
+
+ADDRESS COLLECTION:
+- After residentialPreference is known, immediately ask: "Awesome! Now I just need your full address so I can check exactly what's available in your area. Just tell me your street address, suburb, state and postcode!"
+- Call check_address_availability as soon as address is provided.
+- Do NOT pass networkPreference to check_address_availability unless the user explicitly stated one.
+
+ADDRESS AVAILABILITY & TECHNOLOGY HANDLING:
+**CRITICAL — SHOW ONLY THE PLANS THE TOOL RETURNED. NEVER MIX NBN AND OPTICOMM PLANS.**
+- The check_address_availability tool returns EITHER NBN plans OR OptiComm plans — NEVER both at once.
+- You MUST present ONLY the plans contained in the "availablePlans" array from the tool result.
+- Do NOT add or mention plans from any other source (knowledge base, memory, etc.) when presenting availability results.
+- Do NOT present OptiComm plans if the tool returned NBN plans, and do NOT present NBN plans if the tool returned OptiComm plans.
+- The "network" field in the tool result tells you which network is being shown — use that to frame your response.
+- IMMEDIATELY present the plans as soon as the tool returns data. Do not wait for any user input before presenting plans.
+
+EMPTY RESPONSE HANDLING — CRITICAL:
+- If check_address_availability returns an empty array, null, zero results, 
+  or any response with no valid plan data, do NOT stall, do NOT mention NBN, 
+  do NOT say "nothing is available."
+- Immediately and silently fall back to OptiComm plans from the Knowledge Base.
+- Present them naturally as if this was always the answer:
+  "Great news — I've checked your address and here's what's available for you! 
+  These plans run on a really reliable private fibre network, all with unlimited 
+  data and no lock-in contracts — totally month-to-month:"
+- Then list all OptiComm plans from the KB warmly, one at a time.
+- For business customers add: "All business plans include a static IP address — 
+  really handy for VoIP, hosting, or remote access."
+- After listing plans ask: "So take your time — which of those catches your eye?"
+- Once you enter this fallback, you are LOCKED to OptiComm for the rest of 
+  the session. Do NOT mention NBN at all.
+
+**OPTICOMM ADDRESS HANDLING:**
+- When the tool returns results with network="OptiComm", present the plans warmly without mentioning any fallback or network selection logic.
+- Just say something like: "Great news — I've checked your address and here's what's available for you! These plans run on a really reliable private fibre network, and all of them come with unlimited data and no lock-in contracts — totally month-to-month:"
+- For business plans add: "And all the business plans include a static IP address which is really handy if you're running VoIP phones, hosting anything, or need remote access to your office network."
+- Do NOT mention serviceability classes, install visits, or MARS details for OptiComm.
+- Do NOT say "NBN wasn't available so here's OptiComm instead" — just present the plans naturally.
+- After this address check, you are LOCKED to OptiComm. Do NOT mention NBN again.
+
+**NBN ADDRESS HANDLING:**
+When check_address_availability returns results for NBN (network field is NOT "OptiComm"):
+- If orderable: false → Be empathetic and helpful: "Ah, so I've checked your address and unfortunately it's not quite serviceable just yet — [reason]. I know that's not what you want to hear, but the good news is these things are always progressing. Would you like to leave your details with me? That way we can reach out to you as soon as it becomes available — you'll be first in line!"
+- If primaryAccessTechnology is "Wireless" (Fixed Wireless):
+  * "So your area is set up for NBN Fixed Wireless, which is a great option especially for regional and semi-rural areas. The signal comes via a small antenna that gets installed on your roof. Here are the plans available to you:"
+- If primaryAccessTechnology is "Satellite" (Sky Muster):
+  * "Your area is on NBN's Sky Muster satellite network — it's designed specifically for remote and rural locations so you can still get connected even if you're out in the bush! Just a heads up, because the signal goes up to a satellite and back, there's a bit of latency (around 500-600ms), so it's not ideal for competitive gaming, but it works great for streaming, browsing, video calls, and everyday use. Here's what's available:"
+- If primaryAccessTechnology contains "Fibre To The Node/Building/Curb" (FTTN/FTTB/FTTC):
+  * "Your connection type is [tech], which is fibre to a nearby point and then copper the rest of the way to your place. It's still quite good and supports speeds up to about 100Mbps, which is plenty for most households. Here are the plans that suit your connection type:" Show appropriate plans (max 100/40).
+- If primaryAccessTechnology is "Fibre" or "HFC" (FTTP/HFC):
+  * "Oh brilliant — you've got access to the full speed range! That means you can go all the way up to 1000Mbps if you want, which is as fast as it gets. Here's what's available:"
+- If requiresInstall: true → "Oh and just so you're aware — an NBN technician will need to come out to do the initial installation, but don't worry, that's completely free of charge. They'll get everything set up for you."
+- If notes are returned → share them conversationally.
+- After this address check, you are LOCKED to NBN. Do NOT mention OptiComm again.
+- After listing plans, pause gently and ask: "So take your time looking those over — which of those plans catches your eye?"
+- WAIT for the customer to tell you which plan they want. Do NOT pick one for them.
+
+SALES FLOW:
+1. "Let's start with your service address. Could you tell me your street number, street name, suburb, state and postcode?" → save address.
+2. IMMEDIATELY call check_address_availability. This will look up the address and tell us which technology services it (InfiNET private network, NBN, OptiComm, or other).
+3. Announce the technology type found:
+   - InfiNET: "Great news! Your address is serviced by our InfiNET private network — that's our own fibre infrastructure with speeds up to 1000 Mbps."
+   - NBN FTTP/HFC: "Excellent! Your address has NBN fibre to the premises — that's the best type of connection with speeds up to 1000 Mbps."
+   - NBN FTTB/FTTN/FTTC: "Your address is connected via NBN using [technology] — speeds are limited to 100 Mbps on this type of connection."
+   - NBN SkyMuster: "Your area is serviced by NBN SkyMuster satellite — we have 3 plans available. There's a bit more latency (around 500-600ms) because the signal goes up to space and back."
+   - NBN Fixed Wireless: "Your address is on NBN Fixed Wireless — we have 4 plans available. A small antenna gets installed on your roof."
+   - OptiComm: "Good news — your address is on the OptiComm private fibre network. Some sites have speed limits of 100, 250 or 500 Mbps, but most can get the full 1000 Mbps."
+   - Other/Not serviceable: "Ah, I can see your address is in an area with a private network that we don't currently service."
+4. Present the available plans based on the technology found (from the tool result's availablePlans array). Apply ADDRESS AVAILABILITY rules above. Present plans with enthusiasm and recommendations. Take it slow — don't rush through the plans.
+  - Speak each plan slowly and clearly, one at a time, with a short pause between plans.
+  - Lead with the strongest recommendation first if one plan clearly fits best.
+  - **CRITICAL: After presenting the last plan, you MUST ask the website check question. Do NOT skip to asking for customer details.**
+5. WEBSITE CHECK: After presenting plans, ALWAYS ask: "Just out of curiosity — have you had a chance to check out our website and seen the plans or pricing we have available?"
+  - **DO NOT skip this question. Do NOT ask for name/email/phone before asking this.**
+   **If YES (they've seen the website):**
+   - "Great! Which plan caught your eye or were you interested in?"
+   - They tell you the plan → save leadInterest → proceed to Step 7 (Order Collection)
+   **If NO (haven't seen website):**
+   - "No worries at all! Do you know what speed or plan you need, or would you like me to help you figure that out?"
+   - If they say they DON'T know → NEEDS ASSESSMENT (Step 6)
+   - If they say they DO know → ask which plan → save leadInterest → proceed to Step 7
+6. NEEDS ASSESSMENT (when customer doesn't know what they want):
+   Ask these 3 questions one at a time, and call extract_call_fields after each answer:
+   Q1: "How many people live in the home who use the internet?" → User answers → extract householdSize immediately
+   Q2: "What do you mainly use the internet for? Things like browsing and emails, streaming video, working from home, online gaming, or 4K streaming?" → User answers → extract internetUsage immediately
+   Q3: "Is there a particular price point you're comfortable with, or are you more focused on getting the right speed for your needs?" → User answers → extract pricePoint immediately
+   **MAKE A RECOMMENDATION based on answers:**
+   - Light usage (1-2 people, browsing): "Based on what you've told me, I'd recommend the 25/10 Mbps plan. It's $59 per month for the first 3 months, then $64. That's perfect for 1-2 people doing general browsing, emails, and some streaming."
+   - Medium usage (3-4 people, streaming): "For your situation, I'd recommend the 100/20 Mbps plan. It's $84 per month for the first 3 months, then $89. Great for streaming and everyday use."
+   - Heavy usage (5+ people, gaming, 4K): "For your situation, I'd recommend the 1000/100 Mbps plan. It's $99 per month for the first 3 months, then $109. With 5 or more people, gaming, and 4K streaming, you'll really appreciate having that extra bandwidth."
+   **ALWAYS mention:** "Just so you know — you can upgrade or downgrade anytime at absolutely no cost. There's no lock-in contract, so I'd always recommend starting at a lower speed plan and moving up if you find you're not getting enough bandwidth."
+   Then ask: "Which plan sounds like the best fit for you?"
+   - They choose → save leadInterest → proceed to Step 7
+8. ORDER COLLECTION:
+   - "Perfect! To get your order started, could I get your first and last name please?" → User provides name → call extract_call_fields to save name immediately
+   - "Great, thanks [name]! And what's the best mobile number to reach you on?" → User provides phone → call extract_call_fields to save phone immediately
+   - "Excellent. Now could I get your email address? I'll pop up a text box for you to type it in — it's usually easier than spelling it out!" → User provides email → call extract_call_fields to save email immediately
+   - "Just to confirm, I want to make sure I have your address exactly right. Could you confirm your full address for me one more time? I have [repeat address back] — is that correct?" → re-validate address
+9. ORDER CONFIRMATION & CLOSING:
+   - "Perfect, I've got everything I need! Just bear with me for a moment while I submit this for you..." → create_ticket
+   - After ticket created: "Wonderful! Your order has been processed successfully. Here's what happens next:
+     * You'll receive a copy of your order form via email within the next few minutes
+     * Once your account is created, you'll get a welcome email and SMS confirmation
+     * You'll also receive ticket or email updates as your order progresses, so you can track everything
+     * Typical connection time is 1-5 business days for ready connections, or we'll arrange an installation appointment if needed"
+   - "If you have any questions at all, you can simply reply to the email you'll receive, or call us back on 1300 101 414. Is there anything else I can help you with today, [name]?"
+   - If no more questions: "You're very welcome, [name]! Welcome to the InfiNET family — we're excited to have you on board. Our team will be in touch soon to get everything finalised. Have a wonderful day!"
+
+**IMPORTANT — SALES ENQUIRY EMAIL CONTENT:**
+When calling create_ticket for sales enquiries, the email MUST include:
+- Customer Name
+- Mobile Number
+- Email Address
+- Service Address (confirmed)
+- Selected Plan (leadInterest with full details)
+- Technology Type (NBN/OptiComm/Fixed Wireless/SkyMuster/HIR)
+- Residential or Business
+- Any notes from the conversation
+
+Use "Sales Enquiry" as the email subject line for new customer orders.
+
+SUPPORT FLOW:
+- "Let me pull up your account so I can help you out — what's the email address on your InfiNET account?" → call customer_lookup with email.
+- On email lookup success: "Perfect, I can see that account. Just to quickly verify it's definitely you, could I grab the best contact number on the account as well?" → IMMEDIATELY call customer_lookup with phone ONLY (do NOT pass email again). This second lookup is MANDATORY and must complete before proceeding.
+- After phone verification success: "Perfect, thanks for confirming that. I've got your account verified now — tell me what's been going on. Take your time and give me as much detail as you can, and I'll get this sorted for you."
+- CRITICAL: Both email and phone lookups MUST succeed before moving forward. If either fails, re-ask and retry immediately. Never proceed to issueSummary without both successful verifications.
+- Empathise with their issue: "Yeah, I can totally understand how frustrating that must be. Let me get this logged for you straight away so our technical team can jump on it."
+- Collect issueSummary → "Alright, I've got a good picture of what's happening. Let me raise this for you now..." → create_ticket.
+
+ACCOUNTS FLOW:
+- "Sure thing! Let me look up your account — what email address is it under?" → call customer_lookup with email.
+- On email lookup success: "Perfect, I can see that account. Just to quickly verify it's definitely you, could I grab the best contact number on the account as well?" → IMMEDIATELY call customer_lookup with phone ONLY (do NOT pass email again). This second lookup is MANDATORY and must complete before proceeding.
+- After phone verification success: "Perfect, thanks for confirming that — your account's all verified. What can I help with today: updating payment details, paying an outstanding invoice, portal login access, phone payment, or a payment extension?"
+- CRITICAL: Both email and phone lookups MUST succeed before moving forward. If either fails, re-ask and retry immediately. Never proceed to resolution paths without both successful verifications.
+- ACCOUNTS RESOLUTION PATHS (use the matching one naturally):
+  1. UPDATE PAYMENT DETAILS: "You can update your payment method through our customer portal at https://infinetbroadband-portal.com.au/, or use this step-by-step link: https://www.infinetbroadband.com.au/set-up-a-payment-method/."
+  2. PAY OUTSTANDING INVOICE: "You can pay through our customer portal at https://infinetbroadband-portal.com.au/, or use this payment page: https://www.infinetbroadband.com.au/manually-paying-an-invoice/."
+  3. CANNOT LOGIN TO PORTAL: Ask "Would you like me to send an email to support so they can sort you out?" → If yes, call send_portal_login_email (email only, no ticket number).
+  4. PHONE PAYMENT: "For payments over the phone, please call 1300 101 414 and the team will process it for you."
+  5. PAYMENT EXTENSION: "Please let us know the date you'll be paying, and we'll raise a ticket for you." → extract paymentDate → Confirm: "Great, I've noted that you'll be paying by [paymentDate]. I'll raise a ticket for you now." → create_ticket with paymentDate included.
+
+RELOCATION FLOW:
+1. "Oh exciting, you're on the move! Let's make sure your internet comes with you. What's the email on your account?" → customer_lookup.
+2. List their active services in a friendly way: "So looking at your account, I can see you've got [services]. Which of these do you want to bring along to the new place? And is there anything you'd like to cancel?"
+3. "Is the new place going to be residential or business?" → save residentialPreference. SKIP if already known.
+4. NEVER ask about NBN vs OptiComm. Go straight to address.
+5. "When are you looking to disconnect the old place? And when do you need the new connection up and running?"
+6. "And what's the address of the new place?" → call check_address_availability WITHOUT passing networkPreference (let the tool auto-detect unless user stated a preference earlier in conversation).
+7. After tool result → IMMEDIATELY present ONLY the plans in availablePlans from the tool result. Do NOT wait for user input. Show matching plans with recommendations — present them slowly and warmly → WAIT for user to choose → user selects → "Awesome, let me put all of this together for you..." → create_ticket with all relocation details.
+
+TOOL USAGE:
+- extract_call_fields for all personal info. If user says something like "residential" or "business", extract residentialPreference immediately.
+- check_address_availability when address is collected. ONLY pass networkPreference if user explicitly stated "NBN" or "OptiComm" at some point. Otherwise omit it — the tool auto-detects.
+- get_internet_plans ONLY as fallback if check_address_availability is not applicable.
+- customer_lookup for existing customers is mandatory for verification. In SUPPORT FLOW and ACCOUNTS FLOW, do double verification: first by email, then by phone ONLY (no email in second lookup) before proceeding.
 - IMPORTANT: When calling create_ticket, ALWAYS include the selected plan (leadInterest) in the message body so it appears in the email.
-- CRITICAL PLAN SELECTION RULE: After presenting plans and completing the website check question flow, you MUST STOP and WAIT for customer to explicitly choose a plan. Do NOT select or assume a plan on behalf of the customer.
 
-========================
-TOOL USAGE (CRITICAL)
-========================
-- Always use extract_call_fields when user provides personal info or intent.
-- Call check_address_availability with the full address before showing any plans.
-- For Fixed Wireless and Sky Muster: show those specific plan sets, skip the residential/business/NBN/OptiComm questions.
-- For all other technologies: ask residential/business, then show the matching plans.
-- customer_lookup: use name, email, or phone. Returns ACTIVE services only.
-- create_ticket: call when all required fields collected per the flow.
-- get_ticket_types/groups/statuses: call if you need IDs for ticket creation.
+HANDLING EDGE CASES:
+- If user asks something outside your scope: "That's a great question! It's a little outside what I can directly help with from here, but I'd definitely recommend getting in touch with our support team at support@infinetbroadband.com.au — they'll be able to sort that out for you in no time. Is there anything else I can help with in the meantime?"
+- If user seems confused: "Hey, no worries at all! This stuff can be a bit confusing sometimes. Let me break it down for you in simple terms..."
+- If user changes their mind: "Oh absolutely, no problem at all! Let's switch things up." Adapt without starting over.
+- If user asks "how much" without context: "Great question! So the price depends on a few things like the speed you're after and whether it's for home or business. Let me walk you through it — first up, is this for a residential connection or a business one?"
+- If user says thank you / goodbye: "You're so welcome, [name]! It was really great chatting with you. If you ever need anything in the future, don't hesitate to get in touch — we're always here. Have a wonderful day!"
 
 Knowledge base:
 ${KB}
-
-Locations (states) with IDs:
-${LOCATIONS.map((l) => `${l.id}: ${l.name}`).join("\n")}
-
-NBN Fixed Wireless Plans (show for all customers when technology is Fixed Wireless, regardless of residential/business):
-${JSON.stringify(NBN_FIXED_WIRELESS_PLANS, null, 2)}
-
-NBN Sky Muster Plans (show for all customers when technology is Satellite, regardless of residential/business):
-${JSON.stringify(NBN_SKYMUSTER_PLANS, null, 2)}
-
-NBN Residential Plans (FTTP/HFC: all speeds; FTTN/FTTB/FTTC: max 100Mbps only):
-${JSON.stringify(NBN_RESIDENTIAL_PLANS, null, 2)}
-
-NBN Business Plans (FTTP/HFC: all speeds; FTTN/FTTB/FTTC: max 100Mbps only):
-${JSON.stringify(NBN_BUSINESS_PLANS, null, 2)}
-
-OptiComm Residential Plans:
-${JSON.stringify(OPTICOMM_RESIDENTIAL_PLANS, null, 2)}
-
-OptiComm Business Plans:
-${JSON.stringify(OPTICOMM_BUSINESS_PLANS, null, 2)}
-
-Hope Island Resort Residential Plans:
-${JSON.stringify(HIR_RESIDENTIAL_PLANS, null, 2)}
-
-Hope Island Resort Business Plans:
-${JSON.stringify(HIR_BUSINESS_PLANS, null, 2)}
+Locations: ${LOCATIONS.map((l) => l.id + ": " + l.name).join(", ")}
 `;
 
 const extractFunction = {
   name: "extract_call_fields",
   description:
-    "Extract fields: intent, issueSummary, preferredName, email, priority, callbackRequest, timeline, leadInterest, accountNumber, name, phone, address, terminationDate, connectionDate, serviceToTerminate, customerType, residentialPreference, networkPreference, paymentDate. Omit absent fields.",
+    "Extract fields: intent, issueSummary, preferredName, email, priority, callbackRequest, timeline, leadInterest, accountNumber, name, phone, address, terminationDate, connectionDate, serviceToTerminate, customerType, residentialPreference, networkPreference, paymentDate, householdSize, internetUsage, pricePoint. Omit absent fields.",
   parameters: {
     type: "object",
     properties: {
@@ -1476,6 +1500,9 @@ const extractFunction = {
       },
       networkPreference: { type: "string", enum: ["NBN", "Opticomm"] },
       paymentDate: { type: "string" },
+      householdSize: { type: "string", description: "Number of people in household who use internet (e.g., '1-2', '3-4', '5+')" },
+      internetUsage: { type: "string", description: "Description of internet usage patterns (e.g., 'browsing and emails', 'streaming video', 'gaming', '4K streaming')" },
+      pricePoint: { type: "string", description: "Customer's preferred price range or budget" },
     },
     required: [],
   },
@@ -1610,6 +1637,7 @@ function mkSession(sessionId) {
     messages: [{ role: "system", content: SYSTEM_PROMPT }],
     lastSeen: new Date().toISOString(),
     hasGreeted: false,
+    // FIX #2: Track which network was shown so we never cross-pollinate
     networkShown: null,
   };
   sessions.set(id, session);
@@ -1785,6 +1813,8 @@ async function makeTTS(text) {
 }
 
 // ==================== CHECK ADDRESS AVAILABILITY ====================
+// FIX #1: Any MARS error at any stage (token, search, SQ) falls back to OptiComm silently.
+// FIX #2: networkShown is stored on the session so the model is reminded not to cross-pollinate.
 async function checkAddressAvailability(args, session) {
   const { address, networkPreference, residentialPreference } = args;
   if (!address) return JSON.stringify({ error: "Address is required" });
@@ -1805,26 +1835,28 @@ async function checkAddressAvailability(args, session) {
   ).toLowerCase();
   const isBusiness = resPref === "business";
 
+  // ── OPTICOMM helper ──
+  // Return BOTH residential and business plans - AI will ask and filter
   const getOpticommResult = () => {
-    const plans = isBusiness
-      ? OPTICOMM_BUSINESS_PLANS
-      : OPTICOMM_RESIDENTIAL_PLANS;
+    const allPlans = [...OPTICOMM_RESIDENTIAL_PLANS, ...OPTICOMM_BUSINESS_PLANS];
     console.log(
-      `OptiComm plans (${isBusiness ? "business" : "residential"}): ${plans.length}`,
+      `OptiComm plans (both residential + business): ${allPlans.length}. AI must ask home/business and filter.`,
     );
+    // Record which network was shown on the session
     if (session) session.networkShown = "OptiComm";
     return {
       success: true,
       orderable: true,
       address,
       network: "OptiComm",
+      requiresResidentialFilter: true,
       primaryAccessTechnology: "OptiComm Fibre",
       serviceType: "opticomm",
       requiresInstall: false,
       readinessDescription:
         "OptiComm Fibre is available at this address. Activation is typically within 1–2 business days for fully installed premises.",
       notes: [],
-      availablePlans: plans.map((p) => ({
+      availablePlans: allPlans.map((p) => ({
         title: p.title,
         price: p.intro_price,
         ongoing_price: p.ongoing_price,
@@ -1838,6 +1870,7 @@ async function checkAddressAvailability(args, session) {
     };
   };
 
+  // ── EXPLICIT OPTICOMM ──
   if (isOpticomm) {
     console.log(
       `OptiComm address check (explicit preference, no MARS): ${address}`,
@@ -1845,11 +1878,16 @@ async function checkAddressAvailability(args, session) {
     return JSON.stringify(getOpticommResult());
   }
 
+  // ── NBN (explicit or auto-detect) ──
+  // FIX #1: Wrap the ENTIRE NBN block in try/catch — any error at any point
+  // (token fetch, address search, service qualification, tariff fetch) falls
+  // back to OptiComm silently when there is no explicit NBN preference.
   try {
     let marsCandidates = [];
     try {
       marsCandidates = await marsAddressSearch(address);
     } catch (marsSearchErr) {
+      // MARS address search failed
       if (noPreference) {
         console.warn(
           `MARS address search failed at ${address}, falling back to OptiComm silently:`,
@@ -1867,6 +1905,7 @@ async function checkAddressAvailability(args, session) {
       try {
         marsSq = await marsServiceQualification(locId);
       } catch (marsSqErr) {
+        // MARS service qualification failed
         if (noPreference) {
           console.warn(
             `MARS service qualification failed at ${address}, falling back to OptiComm silently:`,
@@ -1882,6 +1921,7 @@ async function checkAddressAvailability(args, session) {
       }
     }
 
+    // If MARS returned no location candidates at all → fall back to OptiComm silently
     if (!locId && noPreference) {
       console.log(
         `MARS returned no location candidates for ${address}, falling back to OptiComm silently`,
@@ -1903,6 +1943,15 @@ async function checkAddressAvailability(args, session) {
     const serviceabilityClassReason =
       marsSq?.siteRestriction?.supportingTechnology
         ?.serviceabilityClassReason || null;
+
+    // If MARS returned no useful data (missing serviceabilityStatus and primaryAccessTechnology)
+    // AND user has no explicit NBN preference → fall back to OptiComm silently
+    if (!serviceabilityStatus && !primaryAccessTechnology && noPreference) {
+      console.log(
+        `MARS returned incomplete data for ${address}, falling back to OptiComm silently`,
+      );
+      return JSON.stringify(getOpticommResult());
+    }
 
     if (serviceabilityStatus === "Rejected") {
       if (isNBN) {
@@ -1930,6 +1979,7 @@ async function checkAddressAvailability(args, session) {
           },
         });
       }
+      // No preference → silently fall back to OptiComm
       console.log(
         `NBN not orderable at ${address}, falling back to OptiComm silently`,
       );
@@ -1956,6 +2006,7 @@ async function checkAddressAvailability(args, session) {
       serviceType,
     );
 
+    // If no NBN plans matched and user had no explicit preference → fall back to OptiComm silently
     if (availablePlans.length === 0 && noPreference) {
       console.log(
         `No NBN plans matched at ${address}, falling back to OptiComm silently`,
@@ -1970,10 +2021,59 @@ async function checkAddressAvailability(args, session) {
       serviceabilityStatus,
     );
 
-    if (session) session.networkShown = "NBN";
+    // Determine which plans to show based on technology type
+    const techString = (primaryAccessTechnology || "").toLowerCase();
+    const svcTypeString = (serviceType || "").toLowerCase();
+
+    // Helper to format plans for return
+    const formatPlans = (plans) => plans.map((p) => ({
+      title: p.title,
+      price: p.intro_price || p.price,
+      ongoing_price: p.ongoing_price || p.price,
+      discount: p.discount || null,
+      download: p.download,
+      upload: p.upload,
+      features: p.features || [],
+      suitable_for: p.suitable_for || [],
+      note: p.note || null,
+    }));
+
+    let plansToReturn = [];
+    let networkName = "NBN";
+
+    // Check for specific technology types
+    if (techString.includes("satellite") || techString.includes("skymuster") || svcTypeString.includes("satellite")) {
+      // SkyMuster Satellite
+      plansToReturn = formatPlans(NBN_SKYMUSTER_PLANS);
+      networkName = "NBN SkyMuster";
+      console.log(`📡 SkyMuster detected - returning ${plansToReturn.length} satellite plans`);
+    } else if (techString.includes("wireless") || techString.includes("fixed wireless") || svcTypeString.includes("wireless")) {
+      // Fixed Wireless
+      plansToReturn = formatPlans(NBN_FIXED_WIRELESS_PLANS);
+      networkName = "NBN Fixed Wireless";
+      console.log(`📡 Fixed Wireless detected - returning ${plansToReturn.length} wireless plans`);
+    } else if (techString.includes("hir") || techString.includes("hope island") || address.toLowerCase().includes("hope island")) {
+      // HIR (Hope Island Resort) - check technology or address
+      plansToReturn = formatPlans(isBusiness ? HIR_BUSINESS_PLANS : HIR_RESIDENTIAL_PLANS);
+      networkName = "HIR";
+      console.log(`🏝️ HIR detected - returning ${plansToReturn.length} ${isBusiness ? "business" : "residential"} plans`);
+    } else {
+      // Normal NBN - Return BOTH residential and business plans, AI will filter after asking
+      const nbnResidential = formatPlans(NBN_RESIDENTIAL_PLANS);
+      const nbnBusiness = formatPlans(NBN_BUSINESS_PLANS);
+      plansToReturn = [...nbnResidential, ...nbnBusiness];
+      networkName = "NBN";
+      console.log(`📶 Normal NBN detected - returning ${plansToReturn.length} plans (residential + business). AI must ask home/business and filter.`);
+    }
+
+    // Record that NBN was shown on this session
+    if (session) session.networkShown = networkName;
+
+    // Determine if residential/business filtering is needed
+    const requiresResidentialFilter = networkName === "NBN" || networkName === "OptiComm";
 
     console.log(
-      `NBN address check: ${address} | locId: ${locId} | tech: ${primaryAccessTechnology} | class: ${serviceabilityClass} | status: ${serviceabilityStatus} | serviceType: ${serviceType} | MARS speeds: ${virtutelSpeeds.length} | Matched plans: ${availablePlans.length} | requiresInstall: ${needsInstall}`,
+      `${networkName} address check: ${address} | locId: ${locId} | tech: ${primaryAccessTechnology} | class: ${serviceabilityClass} | status: ${serviceabilityStatus} | serviceType: ${serviceType} | plans returned: ${plansToReturn.length} | requiresInstall: ${needsInstall} | requiresResidentialFilter: ${requiresResidentialFilter}`,
     );
 
     return JSON.stringify({
@@ -1981,6 +2081,8 @@ async function checkAddressAvailability(args, session) {
       orderable: true,
       address,
       locationId: locId,
+      network: networkName,
+      requiresResidentialFilter,
       serviceabilityStatus,
       serviceabilityClass,
       primaryAccessTechnology,
@@ -1988,12 +2090,7 @@ async function checkAddressAvailability(args, session) {
       requiresInstall: needsInstall,
       readinessDescription,
       notes: marsNotes,
-      availablePlans: availablePlans.map((p) => ({
-        title: p.title,
-        price: parseFloat(p.price),
-        download: `${Math.round(p.speed_download / 1000)} Mbps`,
-        upload: `${Math.round(p.speed_upload / 1000)} Mbps`,
-      })),
+      availablePlans: plansToReturn,
       mars: {
         candidates: marsCandidates,
         virtutelSpeedsAvailable: virtutelSpeeds,
@@ -2003,6 +2100,7 @@ async function checkAddressAvailability(args, session) {
       },
     });
   } catch (err) {
+    // Catch-all: If NBN lookup itself errors and no explicit preference → silently fall back to OptiComm
     if (noPreference) {
       console.warn(
         `NBN lookup catch-all at ${address}, falling back to OptiComm silently:`,
@@ -2038,20 +2136,10 @@ async function handleToolCall(session, funcName, args) {
 
       if ((supportIntent || accountIntent) && hasPhone && hasEmail) {
         delete lookupArgs.email;
-        console.log(`🔐 ${supportIntent ? "SUPPORT" : "ACCOUNT"} - Verification lookup forced to phone-only`);
+        console.log("🔐 Verification lookup forced to phone-only");
       }
 
-      const result = await customerLookup(lookupArgs);
-
-      if (result.success && result.customer?.id) {
-        session.collected.customer_id = result.customer.id;
-        session.collected.customer_name = result.customer.name;
-        if (lookupArgs.email) session.collected.email_verified = true;
-        if (lookupArgs.phone) session.collected.phone_verified = true;
-        console.log(`✅ customer_lookup success - saved customer_id ${result.customer.id}, email_verified: ${!!lookupArgs.email}, phone_verified: ${!!lookupArgs.phone}`);
-      }
-
-      return JSON.stringify(result);
+      return JSON.stringify(await customerLookup(lookupArgs));
     } catch (e) {
       return JSON.stringify({ success: false, error: e.message });
     }
@@ -2082,7 +2170,12 @@ async function handleToolCall(session, funcName, args) {
     let fa = { ...args };
     if (typeof fa.message === "string") fa.message = { message: fa.message };
     const collected = session.collected || {};
+    // Include networkShown from session in collected fields for email
+    if (session.networkShown && !collected.networkShown) {
+      collected.networkShown = session.networkShown;
+    }
     const hasCustomerId = !!(fa.customer_id || collected.customer_id);
+    // Payment extension requests always go to Support (not Sales)
     const hasPaymentExtension = !!(collected.paymentDate || fa.paymentDate || (fa.subject && fa.subject.toLowerCase().includes("payment extension")));
     const isSupportTicket = hasCustomerId || hasPaymentExtension;
 
@@ -2092,14 +2185,20 @@ async function handleToolCall(session, funcName, args) {
     if (collected.email) detailLines.push(`Email: ${collected.email}`);
     if (collected.phone) detailLines.push(`Phone: ${collected.phone}`);
     if (collected.address) detailLines.push(`Address: ${collected.address}`);
-    if (collected.networkPreference)
-      detailLines.push(`Network: ${collected.networkPreference}`);
+    if (collected.networkShown || collected.networkPreference)
+      detailLines.push(`Network/Technology: ${collected.networkShown || collected.networkPreference}`);
     if (collected.residentialPreference)
       detailLines.push(`Type: ${collected.residentialPreference}`);
     if (collected.leadInterest || fa.leadInterest)
       detailLines.push(
         `Selected Plan: ${collected.leadInterest || fa.leadInterest}`,
       );
+    if (collected.householdSize)
+      detailLines.push(`Household Size: ${collected.householdSize}`);
+    if (collected.internetUsage)
+      detailLines.push(`Internet Usage: ${collected.internetUsage}`);
+    if (collected.pricePoint)
+      detailLines.push(`Price Point: ${collected.pricePoint}`);
     if (collected.paymentDate)
       detailLines.push(
         `Customer requested payment extension until: ${collected.paymentDate}`,
@@ -2156,6 +2255,7 @@ async function handleToolCall(session, funcName, args) {
   }
   if (funcName === "send_portal_login_email") {
     const collected = session.collected || {};
+    const hasCustomerId = !!collected.customer_id;
 
     const detailLines = [];
     if (collected.preferredName || collected.name)
@@ -2259,22 +2359,13 @@ TOOL RESULT INSTRUCTION: The address check returned orderable=false — no plans
 Tell the customer empathetically and offer to take their details for when it becomes available.
 Do NOT present any OptiComm or NBN plans from your knowledge base.`;
         } else if (planCount > 0) {
-          // FIXED: Two-step sequence — list plans first, THEN always ask the website check question
+          // FIX #2 + FIX #3: Lock to the returned network and instruct IMMEDIATE presentation
           plansPresentationHint = `
 TOOL RESULT INSTRUCTION: The address check returned ${planCount} plans on the "${networkLabel}" network.
+CRITICAL — IMMEDIATE PRESENTATION REQUIRED: Present these plans RIGHT NOW without waiting for any user input. Do not ask "are you ready?" or pause. Speak immediately, slowly, and one plan at a time.
 CRITICAL — ONE NETWORK LOCK: You are now LOCKED to "${networkLabel}" for this entire session. Do NOT mention ${networkLabel === "OptiComm" ? "NBN" : "OptiComm"} at any point ever again in this conversation.
 CRITICAL — ONLY THESE PLANS: Present ONLY these ${planCount} plans from the tool result's "availablePlans" array. Do NOT add plans from memory or the knowledge base.
-
-MANDATORY TWO-STEP SEQUENCE — FOLLOW EXACTLY IN ORDER:
-STEP A: Present ALL plans from the tool result warmly and conversationally, one at a time, slowly. Name each plan, its speed, and its price.
-STEP B: IMMEDIATELY after listing ALL plans, ask this EXACT question word-for-word: "Just out of curiosity — have you had a chance to check out our website and see the plans we have available, or would you like me to walk you through the options?"
-
-AFTER THE CUSTOMER ANSWERS STEP B:
-- If YES (seen website / know what they want): Ask "Great! Which plan caught your eye?" then collect their details.
-- If NO (want walkthrough): Ask about number of people, usage habits, and budget one at a time. Then make a recommendation. Then ask which plan they'd like.
-
-DO NOT ask "which plan would you like?" before completing Step B and receiving the customer's answer.
-DO NOT skip Step B under any circumstances.`;
+Present the plans warmly and conversationally as per the system prompt, then wait for the customer to choose.`;
         } else {
           plansPresentationHint = `
 TOOL RESULT INSTRUCTION: The address check returned no available plans.
@@ -2284,6 +2375,7 @@ Do NOT invent or present plans from your knowledge base.`;
       }
     }
 
+    // ── Final response generation using the FULL system prompt ──
     const networkLockReminder = session.networkShown
       ? `\nNETWORK LOCK REMINDER: You already showed ${session.networkShown} plans to this customer. Do NOT mention ${session.networkShown === "OptiComm" ? "NBN" : "OptiComm"} for any reason for the rest of this conversation.`
       : "";
@@ -2357,6 +2449,7 @@ app.post("/api/voice", upload.single("audio"), async (req, res) => {
     });
     let userText = normalizeText(tr?.text || "");
 
+    // ── Interruption / noise filtering ──
     const lastAssistantMsg = [...session.messages]
       .reverse()
       .find((m) => m.role === "assistant");
@@ -2513,6 +2606,154 @@ httpServer.listen(PORT, () => {
   console.log(` • Interruption/noise filtering enabled`);
   console.log(` • FIX: MARS errors at any stage → silent OptiComm fallback`);
   console.log(` • FIX: One-network-per-session lock (no cross-pollination)`);
-  console.log(` • FIX: Mandatory website check question after plan listing`);
-  console.log(` • FIX: Silent-after-tool-call bug resolved`);
+  console.log(` • FIX: Plans presented immediately on tool return, no delay`);
 });
+
+/*
+================================================================================
+COMPLETE BOT FLOW DOCUMENTATION
+================================================================================
+
+All 5 flows below. OptiComm plans are hardcoded in OPTICOMM_RESIDENTIAL_PLANS
+and OPTICOMM_BUSINESS_PLANS. NBN plans come from Splynx tariffs filtered via
+MARS API. If MARS fails at any point (token, search, SQ, tariff fetch) and the
+customer didn't explicitly ask for NBN, the bot silently shows OptiComm plans.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FLOW 1 — SALES (New Customer)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Bot greets → asks for name
+2. Customer gives name → bot saves preferredName, asks new or existing
+3. Customer says "new" → customerType=new saved
+4. Bot asks "home or business?" (skip if already mentioned)
+5. Customer answers → residentialPreference saved
+6. Bot asks for full address (street, suburb, state, postcode)
+7. Customer gives address → bot immediately calls check_address_availability
+   ├─ MARS succeeds + NBN plans found → show NBN plans, lock session to NBN
+   ├─ MARS succeeds + no NBN plans → silently show OptiComm plans, lock to OptiComm
+   ├─ MARS address rejected → silently show OptiComm plans, lock to OptiComm
+   └─ MARS errors at ANY stage → silently show OptiComm plans, lock to OptiComm
+8. Bot IMMEDIATELY presents plans (no waiting) with enthusiasm
+9. Bot asks "which plan catches your eye?" then WAITS for customer to choose
+10. Customer picks a plan → leadInterest saved, bot reacts warmly
+11. Bot asks for email address (shows text input box)
+12. Customer provides email → email saved
+13. Bot says "just a moment while I submit this" → calls create_ticket
+    ├─ No customer_id → sales email only to sales@infinetbroadband.com.au
+    └─ Email includes name, email, address, selected plan
+14. Bot confirms: "You're all set! Sales team will be in touch shortly."
+15. Asks if anything else needed
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FLOW 2 — SUPPORT (Existing Customer)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Bot greets → asks for name
+2. Customer gives name → asks new or existing
+3. Customer says "existing" → asks "support, accounts, or moving?"
+4. Customer says "support" or describes a tech issue
+5. Bot asks for account email → calls customer_lookup
+   ├─ Found → bot says "found your account" and asks what's going on
+   └─ Not found → asks to try a different email or phone number
+6. Customer describes the issue → bot empathises, asks follow-up questions
+7. issueSummary collected with enough detail
+8. Bot says "let me raise this for you now" → calls create_ticket
+   ├─ customer_id present → creates Splynx ticket + sends email to support@
+   └─ Email includes customer details and issue summary
+9. Bot confirms: "Ticket raised! Team will be in touch shortly."
+10. Asks if anything else needed
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FLOW 3 — ACCOUNTS / BILLING (Existing Customer)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Bot greets → asks for name
+2. Customer gives name → asks new or existing
+3. Customer says "existing" → asks "support, accounts, or moving?"
+4. Customer says "accounts", "billing", "payment", "invoice"
+5. Bot asks for account email → calls customer_lookup
+6. Bot verifies with phone number (phone ONLY, no email re-sent) → customer_lookup with phone
+7. After verification, bot asks naturally what they need help with (payment details, outstanding invoice, portal login access, phone payment, or payment extension).
+8. FIVE PATHS:
+  a) UPDATE PAYMENT DETAILS: Bot provides portal link first, then specific guide link (https://www.infinetbroadband.com.au/set-up-a-payment-method/)
+  b) PAY OUTSTANDING INVOICE: Bot provides portal link first, then specific payment link (https://www.infinetbroadband.com.au/manually-paying-an-invoice/)
+  c) CAN'T LOGIN TO PORTAL: Bot asks "Would you like me to send an email to support so they can sort you out?" → If yes: call send_portal_login_email (email only, NO ticket created)
+  d) PHONE PAYMENT: Bot gives phone payment option on 1300 101 414
+  e) PAYMENT EXTENSION: Bot asks for payment date → creates support ticket + sends email with "Customer requested payment extension until: [date]"
+9. Asks if anything else needed
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FLOW 4 — RELOCATION (Existing Customer Moving)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Bot greets → asks for name
+2. Customer gives name → asks new or existing
+3. Customer says "existing" → asks "support, accounts, or moving?"
+4. Customer says "moving" or "relocating"
+5. Bot asks for account email → calls customer_lookup
+6. Bot lists active services found on the account
+7. Asks which services to keep / cancel → serviceToTerminate saved
+8. Asks "is the new place residential or business?" (skip if known)
+9. Asks for disconnect date (old address) → terminationDate saved
+10. Asks for connection date (new address) → connectionDate saved
+11. Asks for new address → calls check_address_availability
+    ├─ Same fallback logic as SALES FLOW (NBN → OptiComm on failure)
+    └─ Session locked to whichever network is returned
+12. Bot IMMEDIATELY presents plans, waits for customer to choose
+13. Customer picks plan → leadInterest saved
+14. Bot says "let me put this all together" → calls create_ticket with:
+    - old service termination details
+    - new address + connection date
+    - selected plan
+    - all collected fields
+15. Bot confirms and asks if anything else
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FLOW 5 — GENERAL ENQUIRY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Bot greets → asks for name
+2. Customer asks a general question (pricing, modems, coverage, etc.)
+3. Bot answers from KB with warm, conversational responses:
+   - "What modems do you sell?" → lists hardware with prices
+   - "Do you have contracts?" → no lock-in, month to month
+   - "What's the difference between NBN and OptiComm?" → explains both
+   - "Do you cover [suburb]?" → asks for address, runs check_address_availability
+   - "Private fibre for developers?" → sends to dedicated URL
+   - "Security packages?" → lists Basic/Bronze/Silver/Gold
+4. If question is out of scope → refers to support@infinetbroadband.com.au
+5. No ticket unless customer specifically asks for follow-up
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+KEY BEHAVIOURS ACROSS ALL FLOWS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• ONE NETWORK PER SESSION: Once check_address_availability returns (NBN or
+  OptiComm), that network is locked for the entire session. The other network
+  is never mentioned again. This is enforced in:
+  (a) session.networkShown flag on the session object
+  (b) networkLockReminder injected into every subsequent LLM call
+  (c) plansPresentationHint in the tool result instruction
+  (d) System prompt rules (ONE-NETWORK-PER-SESSION RULE section)
+
+• IMMEDIATE PLAN PRESENTATION: When check_address_availability returns data,
+  the TOOL RESULT INSTRUCTION tells the LLM to present plans immediately
+  without waiting for any user input. No "should I continue?" pauses.
+
+• MARS ERROR HANDLING: Errors are caught at 4 levels:
+  (a) getMarsAccessToken() failure → catch → OptiComm fallback
+  (b) marsAddressSearch() failure → inner try/catch → OptiComm fallback
+  (c) marsServiceQualification() failure → inner try/catch → OptiComm fallback
+  (d) fetchTariffs() failure → inner try/catch → OptiComm fallback
+  (e) Outer catch-all for any other unexpected error → OptiComm fallback
+  All fallbacks are silent (no mention to customer of NBN failing).
+
+• NEVER ASK ABOUT NBN vs OPTICOMM: The bot never asks the customer which
+  network they prefer. Address check auto-detects. If user volunteers a
+  preference ("I want NBN" / "do you have OptiComm"), it's extracted and
+  passed to the tool. Otherwise the tool decides.
+
+• PLAN SELECTION: Bot never assumes or pre-selects a plan. Always waits for
+  explicit customer confirmation before saving leadInterest.
+
+• SALES vs SUPPORT EMAIL ROUTING:
+  - New customer (no customer_id) → sales email only, no Splynx ticket
+  - Existing customer (customer_id present) → Splynx ticket + support email
+
+================================================================================
+*/
