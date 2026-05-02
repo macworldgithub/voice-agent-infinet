@@ -69,11 +69,7 @@ async function sendTicketEmail(
   const referenceLine = ticketId
     ? `<p><strong>Ticket:</strong> ${ticketId}</p>`
     : `<p><strong>Reference:</strong> New ${type.toLowerCase()} enquiry</p>`;
-
-  // Use "Sales Enquiry" as subject for new customer orders
-  const subject = isSupportTicket
-    ? `New ${type} Enquiry — Ticket #${ticketId} — ${ticketArgs.subject || "Inquiry"}`
-    : `Sales Enquiry — ${collectedFields?.name || collectedFields?.preferredName || "New Customer"} — ${collectedFields?.leadInterest || "Plan Inquiry"}`;
+  const subject = `New ${type} Enquiry ${ticketId ? `— Ticket #${ticketId}` : ""} — ${ticketArgs.subject || "Inquiry"}`;
 
   const selectedPlan =
     collectedFields?.leadInterest || ticketArgs.leadInterest || null;
@@ -83,10 +79,6 @@ async function sendTicketEmail(
 
   const userEmail = collectedFields?.email || null;
   const address = collectedFields?.address || ticketArgs.address || null;
-  const phone = collectedFields?.phone || null;
-  const name = collectedFields?.name || collectedFields?.preferredName || null;
-  const networkType = collectedFields?.networkShown || collectedFields?.networkPreference || "NBN";
-  const residentialType = collectedFields?.residentialPreference || "Not specified";
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:Arial,sans-serif;line-height:1.6;">
     <h2>New ${type} Enquiry Received</h2>
@@ -96,22 +88,15 @@ async function sendTicketEmail(
     ${ticketArgs.customer_id ? `<p><strong>Customer ID:</strong> ${ticketArgs.customer_id}</p>` : `<p><strong>New Lead (no customer ID)</strong></p>`}
     <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:12px 16px;margin:12px 0;">
       <h3 style="margin:0 0 8px 0;color:#0369a1;">Customer Contact Details</h3>
-      ${name ? `<p style="margin:4px 0;"><strong>Name:</strong> ${name}</p>` : ""}
+      ${collectedFields?.preferredName || collectedFields?.name ? `<p style="margin:4px 0;"><strong>Name:</strong> ${collectedFields.preferredName || collectedFields.name}</p>` : ""}
       ${userEmail ? `<p style="margin:4px 0;"><strong>Email:</strong> <a href="mailto:${userEmail}">${userEmail}</a></p>` : '<p style="margin:4px 0;color:#dc2626;"><strong>Email:</strong> Not provided</p>'}
-      ${phone ? `<p style="margin:4px 0;"><strong>Phone:</strong> ${phone}</p>` : '<p style="margin:4px 0;color:#dc2626;"><strong>Phone:</strong> Not provided</p>'}
-      ${address ? `<p style="margin:4px 0;"><strong>Service Address:</strong> ${address}</p>` : ""}
+      ${collectedFields?.phone ? `<p style="margin:4px 0;"><strong>Phone:</strong> ${collectedFields.phone}</p>` : ""}
+      ${address ? `<p style="margin:4px 0;"><strong>Address:</strong> ${address}</p>` : ""}
     </div>
-    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 16px;margin:12px 0;">
-      <h3 style="margin:0 0 8px 0;color:#166534;">Order Details</h3>
-      ${selectedPlanHtml}
-      <p style="margin:4px 0;"><strong>Technology Type:</strong> ${networkType}</p>
-      <p style="margin:4px 0;"><strong>Service Type:</strong> ${residentialType}</p>
-      ${collectedFields?.householdSize ? `<p style="margin:4px 0;"><strong>Household Size:</strong> ${collectedFields.householdSize}</p>` : ""}
-      ${collectedFields?.internetUsage ? `<p style="margin:4px 0;"><strong>Internet Usage:</strong> ${collectedFields.internetUsage}</p>` : ""}
-      ${collectedFields?.pricePoint ? `<p style="margin:4px 0;"><strong>Price Point:</strong> ${collectedFields.pricePoint}</p>` : ""}
-      ${collectedFields?.customerType ? `<p style="margin:4px 0;"><strong>Customer Type:</strong> ${collectedFields.customerType}</p>` : ""}
-    </div>
-    <h3>Conversation Notes</h3>
+    ${selectedPlanHtml}
+    ${collectedFields?.networkPreference ? `<p><strong>Network:</strong> ${collectedFields.networkPreference}</p>` : ""}
+    ${collectedFields?.residentialPreference ? `<p><strong>Type:</strong> ${collectedFields.residentialPreference}</p>` : ""}
+    <h3>Message Body</h3>
     <p>${(ticketArgs.message && (ticketArgs.message.message || ticketArgs.message)) || "No additional message"}</p>
     <hr>
     <p><small>Automated email from InfiNET Broadband AI Assistant.<br>
@@ -165,291 +150,6 @@ const CONFIG = {
 try {
   dns.setDefaultResultOrder("ipv4first");
 } catch (_) {}
-
-// ==================== NBN PLANS ====================
-const NBN_RESIDENTIAL_PLANS = [
-  {
-    title: "NBN 25/10Mbps Basic",
-    download: "25 Mbps",
-    upload: "10 Mbps",
-    intro_price: 59,
-    ongoing_price: 64,
-    discount: "$5 off for 3 months",
-    features: ["Unlimited Data", "No Contract", "Month to Month"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p", "Web browsing & Social Media"],
-    technologies: ["FTTC", "FTTN", "FTTB", "FTTP", "HFC"],
-    max_speed_class: "all",
-  },
-  {
-    title: "NBN 50/20Mbps Standard",
-    download: "50 Mbps",
-    upload: "20 Mbps",
-    intro_price: 74,
-    ongoing_price: 79,
-    discount: "$5 off for 3 months",
-    features: ["Unlimited Data", "No Contract", "Month to Month"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p", "Web browsing & Social Media"],
-    technologies: ["FTTC", "FTTN", "FTTB", "FTTP", "HFC"],
-    max_speed_class: "all",
-  },
-  {
-    title: "NBN 100/20Mbps Fast",
-    download: "100 Mbps",
-    upload: "20 Mbps",
-    intro_price: 84,
-    ongoing_price: 89,
-    discount: "$5 off for 3 months",
-    features: ["Unlimited Data", "No Contract", "Month to Month"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 4K", "Web browsing & Social Media", "Fast Downloading", "Gaming"],
-    technologies: ["FTTC", "FTTN", "FTTB", "FTTP", "HFC"],
-    max_speed_class: "all",
-  },
-  {
-    title: "NBN 500/50Mbps Faster",
-    download: "500 Mbps",
-    upload: "50 Mbps",
-    intro_price: 84,
-    ongoing_price: 89,
-    discount: "$5 off for 3 months",
-    features: ["Unlimited Data", "No Contract", "Month to Month"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 4K", "Super Fast Downloading", "All Gaming Applications", "Low latency"],
-    technologies: ["FTTP", "HFC"],
-    max_speed_class: "high_speed_only",
-  },
-  {
-    title: "NBN 750/50Mbps Superfast",
-    download: "750 Mbps",
-    upload: "50 Mbps",
-    intro_price: 89,
-    ongoing_price: 99,
-    discount: "$10 off for 3 months",
-    features: ["Unlimited Data", "No Contract", "Month to Month"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 4K", "Super Fast Downloading", "All Gaming Applications", "Low latency"],
-    technologies: ["FTTP", "HFC"],
-    max_speed_class: "high_speed_only",
-  },
-  {
-    title: "NBN 1000/100Mbps Ultrafast",
-    download: "1000 Mbps",
-    upload: "100 Mbps",
-    intro_price: 99,
-    ongoing_price: 109,
-    discount: "$10 off for 3 months",
-    features: ["Unlimited Data", "No Contract", "Month to Month"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 4K", "Super Fast Uploads/Downloads", "All Gaming Applications", "Low latency"],
-    technologies: ["FTTP", "HFC"],
-    max_speed_class: "high_speed_only",
-  },
-];
-
-const NBN_BUSINESS_PLANS = [
-  {
-    title: "NBN Business 50/20Mbps Basic",
-    download: "50 Mbps",
-    upload: "20 Mbps",
-    price: 89,
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Static IP"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD + 4K", "Web browsing & Social Media"],
-    technologies: ["FTTC", "FTTN", "FTTB", "FTTP", "HFC"],
-    max_speed_class: "all",
-  },
-  {
-    title: "NBN Business 100/40Mbps Fast",
-    download: "100 Mbps",
-    upload: "40 Mbps",
-    price: 99,
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Static IP"],
-    suitable_for: ["VoIP / Business IP Phones", "Video Calls / Teams", "Streaming HD + 4K", "Moderate Uploads/Downloads", "All Gaming"],
-    technologies: ["FTTC", "FTTN", "FTTB", "FTTP", "HFC"],
-    max_speed_class: "all",
-  },
-  {
-    title: "NBN Business 250/100Mbps Faster",
-    download: "250 Mbps",
-    upload: "100 Mbps",
-    price: 149,
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Static IP"],
-    suitable_for: ["VoIP / Business IP Phones", "Video Calls / Teams", "Streaming HD + 4K", "Super Fast Uploads/Downloads", "All Gaming"],
-    technologies: ["FTTP", "HFC"],
-    max_speed_class: "high_speed_only",
-  },
-  {
-    title: "NBN Business 500/200Mbps Superfast",
-    download: "500 Mbps",
-    upload: "200 Mbps",
-    price: 189,
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Static IP"],
-    suitable_for: ["VoIP / Business IP Phones", "Video Calls / Teams", "Streaming HD + 4K", "Super Fast Uploads/Downloads", "All Gaming"],
-    technologies: ["FTTP", "HFC"],
-    max_speed_class: "high_speed_only",
-  },
-  {
-    title: "NBN Business 1000/400Mbps Ultrafast",
-    download: "1000 Mbps",
-    upload: "400 Mbps",
-    price: 239,
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Static IP"],
-    suitable_for: ["VoIP / Business IP Phones", "Video Calls / Teams", "Streaming HD + 4K", "Super Fast Uploads/Downloads", "All Gaming"],
-    technologies: ["FTTP", "HFC"],
-    max_speed_class: "high_speed_only",
-  },
-];
-
-const NBN_FIXED_WIRELESS_PLANS = [
-  {
-    title: "NBN 25/5Mbps Fixed Wireless Standard",
-    download: "25 Mbps",
-    upload: "5 Mbps",
-    price: 59,
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Free NBN Setup"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p", "Emails, Web browsing & Social Media"],
-  },
-  {
-    title: "NBN 100/20Mbps Fixed Wireless Plus",
-    download: "100 Mbps",
-    upload: "20 Mbps",
-    price: 89,
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Free NBN Setup"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p + 4K", "Web browsing & Social Media", "Fast Downloading", "All Gaming Applications"],
-  },
-  {
-    title: "NBN 200/20Mbps Fixed Wireless HomeFast",
-    download: "200 Mbps",
-    upload: "20 Mbps",
-    price: 99,
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Free NBN Setup"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p + 4K", "Web browsing & Social Media", "Fast Downloading", "All Gaming Applications"],
-  },
-  {
-    title: "NBN 400/40Mbps Fixed Wireless SuperFast",
-    download: "400 Mbps",
-    upload: "40 Mbps",
-    price: 109,
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Free NBN Setup"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p + 4K", "Web browsing & Social Media", "Super Fast Uploads/Downloads", "All Gaming Applications"],
-    note: "Available in eligible areas only",
-  },
-];
-
-const NBN_SKYMUSTER_PLANS = [
-  {
-    title: "NBN Sky Muster Plus 25/5Mbps Basic",
-    download: "25 Mbps",
-    upload: "5 Mbps",
-    price: 59,
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Free NBN Installation"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p", "Web browsing & Social Media"],
-    note: "Typical latency 500–600ms",
-  },
-  {
-    title: "NBN Sky Muster Plus 50/5Mbps Fast",
-    download: "50 Mbps",
-    upload: "5 Mbps",
-    price: 69,
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Free NBN Installation"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p", "Web browsing & Social Media", "Some Gaming Applications"],
-    note: "Typical latency 500–600ms",
-  },
-  {
-    title: "NBN Sky Muster Plus 100/5Mbps Ultra",
-    download: "100 Mbps",
-    upload: "5 Mbps",
-    price: 99,
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Free NBN Installation"],
-    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p + 4K", "Web browsing & Social Media", "Super Fast Uploads/Downloads", "All Gaming Applications"],
-    note: "Typical latency 500–600ms",
-  },
-];
-
-const HIR_RESIDENTIAL_PLANS = [
-  {
-    title: "HIR 25/10Mbps Basic",
-    download: "25 Mbps",
-    upload: "10 Mbps",
-    intro_price: 44,
-    ongoing_price: 59,
-    discount: "$15 off for 3 months",
-    features: ["Unlimited Data", "No Contract", "Month to Month"],
-    suitable_for: ["General browsing", "Video Calls", "HD Streaming"],
-  },
-  {
-    title: "HIR 50/20Mbps Standard",
-    download: "50 Mbps",
-    upload: "20 Mbps",
-    intro_price: 49,
-    ongoing_price: 64,
-    discount: "$15 off for 3 months",
-    features: ["Unlimited Data", "No Contract", "Month to Month"],
-    suitable_for: ["Video Calls", "HD Streaming", "Web browsing"],
-  },
-  {
-    title: "HIR 250/50Mbps Fast",
-    download: "250 Mbps",
-    upload: "50 Mbps",
-    intro_price: 64,
-    ongoing_price: 79,
-    discount: "$15 off for 3 months",
-    features: ["Unlimited Data", "No Contract", "Month to Month"],
-    suitable_for: ["Video Calls", "4K Streaming", "Fast Downloading", "Gaming"],
-  },
-  {
-    title: "HIR 500/50Mbps Home Fast",
-    download: "500 Mbps",
-    upload: "50 Mbps",
-    intro_price: 64,
-    ongoing_price: 79,
-    discount: "$15 off for 3 months",
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Free modem upgrade if required"],
-    suitable_for: ["Video Calls", "4K Streaming", "Super Fast Downloading", "All Gaming"],
-  },
-  {
-    title: "HIR 750/50Mbps Superfast",
-    download: "750 Mbps",
-    upload: "50 Mbps",
-    intro_price: 74,
-    ongoing_price: 89,
-    discount: "$15 off for 3 months",
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Free modem upgrade if required"],
-    suitable_for: ["Video Calls", "4K Streaming", "Super Fast Downloading", "All Gaming", "Low latency"],
-  },
-  {
-    title: "HIR 1000/100Mbps Ultrafast",
-    download: "1000 Mbps",
-    upload: "100 Mbps",
-    intro_price: 84,
-    ongoing_price: 99,
-    discount: "$15 off for 3 months",
-    features: ["Unlimited Data", "No Contract", "Month to Month", "Free modem upgrade if required"],
-    suitable_for: ["Video Calls", "4K Streaming", "Super Fast Uploads/Downloads", "All Gaming", "Low latency"],
-  },
-];
-
-const HIR_BUSINESS_PLANS = [
-  {
-    title: "HIR Business 250/100Mbps",
-    download: "250 Mbps",
-    upload: "100 Mbps",
-    price: 109,
-    features: ["Unlimited Data", "No Contract", "Month to Month"],
-    suitable_for: ["VoIP", "Video Calls", "4K Streaming", "Fast Uploads/Downloads"],
-  },
-  {
-    title: "HIR Business 500/200Mbps",
-    download: "500 Mbps",
-    upload: "200 Mbps",
-    price: 119,
-    features: ["Unlimited Data", "No Contract", "Month to Month"],
-    suitable_for: ["VoIP", "Video Calls", "4K Streaming", "Super Fast Uploads/Downloads"],
-  },
-  {
-    title: "HIR Business 1000/400Mbps",
-    download: "1000 Mbps",
-    upload: "400 Mbps",
-    price: 139,
-    features: ["Unlimited Data", "No Contract", "Month to Month"],
-    suitable_for: ["VoIP", "Video Calls", "4K Streaming", "Ultra Fast Uploads/Downloads", "All Gaming"],
-  },
-];
 
 // ==================== HARDCODED OPTICOMM PLANS ====================
 const OPTICOMM_RESIDENTIAL_PLANS = [
@@ -710,6 +410,304 @@ const OPTICOMM_BUSINESS_PLANS = [
   },
 ];
 
+// ==================== NBN RESIDENTIAL PLANS ====================
+const NBN_RESIDENTIAL_PLANS = [
+  {
+    title: "NBN 25/10Mbps Basic",
+    download: "25 Mbps",
+    upload: "10 Mbps",
+    intro_price: 59,
+    ongoing_price: 64,
+    discount: "$5 off for 3 months",
+    features: ["Unlimited Data", "No Contract", "Month to Month"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p", "Web browsing & Social Media"],
+  },
+  {
+    title: "NBN 50/20Mbps Standard",
+    download: "50 Mbps",
+    upload: "20 Mbps",
+    intro_price: 74,
+    ongoing_price: 79,
+    discount: "$5 off for 3 months",
+    features: ["Unlimited Data", "No Contract", "Month to Month"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p", "Web browsing & Social Media"],
+  },
+  {
+    title: "NBN 100/20Mbps Fast",
+    download: "100 Mbps",
+    upload: "20 Mbps",
+    intro_price: 84,
+    ongoing_price: 89,
+    discount: "$5 off for 3 months",
+    features: ["Unlimited Data", "No Contract", "Month to Month"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 4K", "Web browsing & Social Media", "Fast Downloading", "Gaming"],
+  },
+  {
+    title: "NBN 500/50Mbps Faster",
+    download: "500 Mbps",
+    upload: "50 Mbps",
+    intro_price: 84,
+    ongoing_price: 89,
+    discount: "$5 off for 3 months",
+    features: ["Unlimited Data", "No Contract", "Month to Month"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 4K", "Super Fast Downloading", "All Gaming Applications", "Low latency"],
+  },
+  {
+    title: "NBN 750/50Mbps Superfast",
+    download: "750 Mbps",
+    upload: "50 Mbps",
+    intro_price: 89,
+    ongoing_price: 99,
+    discount: "$10 off for 3 months",
+    features: ["Unlimited Data", "No Contract", "Month to Month"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 4K", "Super Fast Downloading", "All Gaming Applications", "Low latency"],
+  },
+  {
+    title: "NBN 1000/100Mbps Ultrafast",
+    download: "1000 Mbps",
+    upload: "100 Mbps",
+    intro_price: 99,
+    ongoing_price: 109,
+    discount: "$10 off for 3 months",
+    features: ["Unlimited Data", "No Contract", "Month to Month"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 4K", "Super Fast Uploads/Downloads", "All Gaming Applications", "Low latency"],
+  },
+];
+
+// ==================== NBN BUSINESS PLANS ====================
+const NBN_BUSINESS_PLANS = [
+  {
+    title: "NBN Business 50/20Mbps Basic",
+    download: "50 Mbps",
+    upload: "20 Mbps",
+    price: 89,
+    intro_price: 89,
+    ongoing_price: 89,
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Static IP"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD + 4K", "Web browsing & Social Media"],
+  },
+  {
+    title: "NBN Business 100/40Mbps Fast",
+    download: "100 Mbps",
+    upload: "40 Mbps",
+    price: 99,
+    intro_price: 99,
+    ongoing_price: 99,
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Static IP"],
+    suitable_for: ["VoIP / Business IP Phones", "Video Calls / Teams", "Streaming HD + 4K", "Moderate Uploads/Downloads", "All Gaming"],
+  },
+  {
+    title: "NBN Business 250/100Mbps Faster",
+    download: "250 Mbps",
+    upload: "100 Mbps",
+    price: 149,
+    intro_price: 149,
+    ongoing_price: 149,
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Static IP"],
+    suitable_for: ["VoIP / Business IP Phones", "Video Calls / Teams", "Streaming HD + 4K", "Super Fast Uploads/Downloads", "All Gaming"],
+  },
+  {
+    title: "NBN Business 500/200Mbps Superfast",
+    download: "500 Mbps",
+    upload: "200 Mbps",
+    price: 189,
+    intro_price: 189,
+    ongoing_price: 189,
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Static IP"],
+    suitable_for: ["VoIP / Business IP Phones", "Video Calls / Teams", "Streaming HD + 4K", "Super Fast Uploads/Downloads", "All Gaming"],
+  },
+  {
+    title: "NBN Business 1000/400Mbps Ultrafast",
+    download: "1000 Mbps",
+    upload: "400 Mbps",
+    price: 239,
+    intro_price: 239,
+    ongoing_price: 239,
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Static IP"],
+    suitable_for: ["VoIP / Business IP Phones", "Video Calls / Teams", "Streaming HD + 4K", "Super Fast Uploads/Downloads", "All Gaming"],
+  },
+];
+
+// ==================== NBN FIXED WIRELESS PLANS ====================
+const NBN_FIXED_WIRELESS_PLANS = [
+  {
+    title: "NBN 25/5Mbps Fixed Wireless Standard",
+    download: "25 Mbps",
+    upload: "5 Mbps",
+    price: 59,
+    intro_price: 59,
+    ongoing_price: 59,
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Free NBN Setup"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p", "Emails, Web browsing & Social Media"],
+  },
+  {
+    title: "NBN 100/20Mbps Fixed Wireless Plus",
+    download: "100 Mbps",
+    upload: "20 Mbps",
+    price: 89,
+    intro_price: 89,
+    ongoing_price: 89,
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Free NBN Setup"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p + 4K", "Web browsing & Social Media", "Fast Downloading", "All Gaming Applications"],
+  },
+  {
+    title: "NBN 200/20Mbps Fixed Wireless HomeFast",
+    download: "200 Mbps",
+    upload: "20 Mbps",
+    price: 99,
+    intro_price: 99,
+    ongoing_price: 99,
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Free NBN Setup"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p + 4K", "Web browsing & Social Media", "Fast Downloading", "All Gaming Applications"],
+  },
+  {
+    title: "NBN 400/40Mbps Fixed Wireless SuperFast",
+    download: "400 Mbps",
+    upload: "40 Mbps",
+    price: 109,
+    intro_price: 109,
+    ongoing_price: 109,
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Free NBN Setup"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p + 4K", "Web browsing & Social Media", "Super Fast Uploads/Downloads", "All Gaming Applications"],
+    note: "Available in eligible areas only",
+  },
+];
+
+// ==================== NBN SKY MUSTER PLANS ====================
+const NBN_SKYMUSTER_PLANS = [
+  {
+    title: "NBN Sky Muster Plus 25/5Mbps Basic",
+    download: "25 Mbps",
+    upload: "5 Mbps",
+    price: 59,
+    intro_price: 59,
+    ongoing_price: 59,
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Free NBN Installation"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p", "Web browsing & Social Media"],
+    note: "Typical latency 500–600ms",
+  },
+  {
+    title: "NBN Sky Muster Plus 50/5Mbps Fast",
+    download: "50 Mbps",
+    upload: "5 Mbps",
+    price: 69,
+    intro_price: 69,
+    ongoing_price: 69,
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Free NBN Installation"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p", "Web browsing & Social Media", "Some Gaming Applications"],
+    note: "Typical latency 500–600ms",
+  },
+  {
+    title: "NBN Sky Muster Plus 100/5Mbps Ultra",
+    download: "100 Mbps",
+    upload: "5 Mbps",
+    price: 99,
+    intro_price: 99,
+    ongoing_price: 99,
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Free NBN Installation"],
+    suitable_for: ["Video Calls / Teams", "Streaming HD Video + 1080p + 4K", "Web browsing & Social Media", "Super Fast Uploads/Downloads", "All Gaming Applications"],
+    note: "Typical latency 500–600ms",
+  },
+];
+
+// ==================== HOPE ISLAND RESORT RESIDENTIAL PLANS ====================
+const HIR_RESIDENTIAL_PLANS = [
+  {
+    title: "HIR 25/10Mbps Basic",
+    download: "25 Mbps",
+    upload: "10 Mbps",
+    intro_price: 44,
+    ongoing_price: 59,
+    discount: "$15 off for 3 months",
+    features: ["Unlimited Data", "No Contract", "Month to Month"],
+    suitable_for: ["General browsing", "Video Calls", "HD Streaming"],
+  },
+  {
+    title: "HIR 50/20Mbps Standard",
+    download: "50 Mbps",
+    upload: "20 Mbps",
+    intro_price: 49,
+    ongoing_price: 64,
+    discount: "$15 off for 3 months",
+    features: ["Unlimited Data", "No Contract", "Month to Month"],
+    suitable_for: ["Video Calls", "HD Streaming", "Web browsing"],
+  },
+  {
+    title: "HIR 250/50Mbps Fast",
+    download: "250 Mbps",
+    upload: "50 Mbps",
+    intro_price: 64,
+    ongoing_price: 79,
+    discount: "$15 off for 3 months",
+    features: ["Unlimited Data", "No Contract", "Month to Month"],
+    suitable_for: ["Video Calls", "4K Streaming", "Fast Downloading", "Gaming"],
+  },
+  {
+    title: "HIR 500/50Mbps Home Fast",
+    download: "500 Mbps",
+    upload: "50 Mbps",
+    intro_price: 64,
+    ongoing_price: 79,
+    discount: "$15 off for 3 months",
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Free modem upgrade if required"],
+    suitable_for: ["Video Calls", "4K Streaming", "Super Fast Downloading", "All Gaming"],
+  },
+  {
+    title: "HIR 750/50Mbps Superfast",
+    download: "750 Mbps",
+    upload: "50 Mbps",
+    intro_price: 74,
+    ongoing_price: 89,
+    discount: "$15 off for 3 months",
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Free modem upgrade if required"],
+    suitable_for: ["Video Calls", "4K Streaming", "Super Fast Downloading", "All Gaming", "Low latency"],
+  },
+  {
+    title: "HIR 1000/100Mbps Ultrafast",
+    download: "1000 Mbps",
+    upload: "100 Mbps",
+    intro_price: 84,
+    ongoing_price: 99,
+    discount: "$15 off for 3 months",
+    features: ["Unlimited Data", "No Contract", "Month to Month", "Free modem upgrade if required"],
+    suitable_for: ["Video Calls", "4K Streaming", "Super Fast Uploads/Downloads", "All Gaming", "Low latency"],
+  },
+];
+
+// ==================== HOPE ISLAND RESORT BUSINESS PLANS ====================
+const HIR_BUSINESS_PLANS = [
+  {
+    title: "HIR Business 250/100Mbps",
+    download: "250 Mbps",
+    upload: "100 Mbps",
+    price: 109,
+    intro_price: 109,
+    ongoing_price: 109,
+    features: ["Unlimited Data", "No Contract", "Month to Month"],
+    suitable_for: ["VoIP", "Video Calls", "4K Streaming", "Fast Uploads/Downloads"],
+  },
+  {
+    title: "HIR Business 500/200Mbps",
+    download: "500 Mbps",
+    upload: "200 Mbps",
+    price: 119,
+    intro_price: 119,
+    ongoing_price: 119,
+    features: ["Unlimited Data", "No Contract", "Month to Month"],
+    suitable_for: ["VoIP", "Video Calls", "4K Streaming", "Super Fast Uploads/Downloads"],
+  },
+  {
+    title: "HIR Business 1000/400Mbps",
+    download: "1000 Mbps",
+    upload: "400 Mbps",
+    price: 139,
+    intro_price: 139,
+    ongoing_price: 139,
+    features: ["Unlimited Data", "No Contract", "Month to Month"],
+    suitable_for: ["VoIP", "Video Calls", "4K Streaming", "Ultra Fast Uploads/Downloads", "All Gaming"],
+  },
+];
+
 // ==================== MARS SPEED MAPPING ====================
 const MARS_SPEED_MAP = {
   TC425D5U: { dl: 25, ul: 5 },
@@ -725,18 +723,15 @@ const MARS_SPEED_MAP = {
   TC41000D50U: { dl: 1000, ul: 50 },
   TC41000D100U: { dl: 1000, ul: 100 },
   TC41000D400U: { dl: 1000, ul: 400 },
-  // Fixed Wireless
   TC4FWP: { dl: 25, ul: 5 },
   TC4FWHF: { dl: 100, ul: 20 },
   TC4FWSF: { dl: 200, ul: 20 },
   TC4FWUF: { dl: 400, ul: 40 },
 };
-// Auto-populate Layer 3 variants
 Object.keys(MARS_SPEED_MAP).forEach((k) => {
   MARS_SPEED_MAP["L3" + k] = MARS_SPEED_MAP[k];
 });
 
-// ==================== SERVICE TYPE → PLAN KEYWORD FILTER ====================
 function isPlanMatchingServiceType(planTitle, serviceType) {
   const title = (planTitle || "").toLowerCase();
   if (serviceType === "nsas") {
@@ -762,24 +757,16 @@ function isPlanMatchingServiceType(planTitle, serviceType) {
   );
 }
 
-function filterTariffsByMarsAvailability(
-  tariffs,
-  virtutelSpeedsAvailable,
-  serviceType,
-) {
+function filterTariffsByMarsAvailability(tariffs, virtutelSpeedsAvailable, serviceType) {
   const availableSpeeds = new Set();
-  if (
-    Array.isArray(virtutelSpeedsAvailable) &&
-    virtutelSpeedsAvailable.length > 0
-  ) {
+  if (Array.isArray(virtutelSpeedsAvailable) && virtutelSpeedsAvailable.length > 0) {
     for (const code of virtutelSpeedsAvailable) {
       const mapped = MARS_SPEED_MAP[code];
       if (mapped) availableSpeeds.add(`${mapped.dl}/${mapped.ul}`);
     }
   }
   return tariffs.filter((t) => {
-    if (serviceType && !isPlanMatchingServiceType(t.title, serviceType))
-      return false;
+    if (serviceType && !isPlanMatchingServiceType(t.title, serviceType)) return false;
     if (availableSpeeds.size > 0) {
       const dl = Math.round(t.speed_download / 1000);
       const ul = Math.round(t.speed_upload / 1000);
@@ -790,83 +777,47 @@ function filterTariffsByMarsAvailability(
 }
 
 function requiresInstallVisit(serviceabilityClass) {
-  const installRequired = new Set([
-    "1",
-    "2",
-    "5",
-    "8",
-    "21",
-    "22",
-    "23",
-    "31",
-    "32",
-    "33",
-    "11",
-    "12",
-  ]);
+  const installRequired = new Set(["1","2","5","8","21","22","23","31","32","33","11","12"]);
   return installRequired.has(String(serviceabilityClass));
 }
 
-function getServiceabilityDescription(
-  primaryAccessTechnology,
-  serviceabilityClass,
-  serviceabilityStatus,
-) {
+function getServiceabilityDescription(primaryAccessTechnology, serviceabilityClass, serviceabilityStatus) {
   const cls = String(serviceabilityClass);
   const tech = (primaryAccessTechnology || "").toLowerCase();
-  if (serviceabilityStatus === "Rejected")
-    return "Not currently orderable at this address.";
+  if (serviceabilityStatus === "Rejected") return "Not currently orderable at this address.";
   if (tech === "fibre") {
-    if (cls === "1")
-      return "Fibre serviceable — no drop or NTD in place. Technician visit required for installation.";
-    if (cls === "2")
-      return "Fibre drop in place — NTD not yet installed. Technician visit required to complete installation.";
-    if (cls === "3")
-      return "Fibre fully installed (drop + NTD in place). Ready to connect — typically 1–5 business days.";
+    if (cls === "1") return "Fibre serviceable — no drop or NTD in place. Technician visit required for installation.";
+    if (cls === "2") return "Fibre drop in place — NTD not yet installed. Technician visit required to complete installation.";
+    if (cls === "3") return "Fibre fully installed (drop + NTD in place). Ready to connect — typically 1–5 business days.";
   }
   if (tech === "hfc") {
-    if (cls === "21")
-      return "HFC serviceable — lead-in, PCD, and internal cabling required. Technician visit needed.";
-    if (cls === "22")
-      return "HFC lead-in & PCD in place — internal cabling with wall plates still needed. Technician visit required.";
-    if (cls === "23")
-      return "HFC wall plate present — NTD not yet installed. Technician visit required.";
-    if (cls === "24")
-      return "HFC fully installed (wall plate + NTD in place). Ready to connect.";
+    if (cls === "21") return "HFC serviceable — lead-in, PCD, and internal cabling required. Technician visit needed.";
+    if (cls === "22") return "HFC lead-in & PCD in place — internal cabling with wall plates still needed. Technician visit required.";
+    if (cls === "23") return "HFC wall plate present — NTD not yet installed. Technician visit required.";
+    if (cls === "24") return "HFC fully installed (wall plate + NTD in place). Ready to connect.";
   }
   if (tech === "wireless") {
-    if (cls === "5")
-      return "Fixed Wireless serviceable — CPE (antenna/NTD) not yet installed. Technician visit required. Standard install is free.";
-    if (cls === "6")
-      return "Fixed Wireless fully installed (CPE in place). Ready to connect. Note: Superfast tier may require WNTD upgrade appointment.";
+    if (cls === "5") return "Fixed Wireless serviceable — CPE (antenna/NTD) not yet installed. Technician visit required. Standard install is free.";
+    if (cls === "6") return "Fixed Wireless fully installed (CPE in place). Ready to connect. Note: Superfast tier may require WNTD upgrade appointment.";
   }
   if (tech === "satellite") {
-    if (cls === "8")
-      return "Satellite serviceable — dish and NTD not yet installed. Technician visit required. Standard install is free. Typical latency: 500–600ms.";
-    if (cls === "9")
-      return "Satellite fully installed (dish + NTD in place). Ready to connect. Typical latency: 500–600ms.";
+    if (cls === "8") return "Satellite serviceable — dish and NTD not yet installed. Technician visit required. Standard install is free. Typical latency: 500–600ms.";
+    if (cls === "9") return "Satellite fully installed (dish + NTD in place). Ready to connect. Typical latency: 500–600ms.";
   }
   if (tech === "fibre to the node") {
-    if (cls === "11")
-      return "FTTN serviceable — active node present. Technician visit may be required for jumpering.";
-    if (cls === "12")
-      return "FTTN serviceable — jumpering required. Technician visit needed.";
+    if (cls === "11") return "FTTN serviceable — active node present. Technician visit may be required for jumpering.";
+    if (cls === "12") return "FTTN serviceable — jumpering required. Technician visit needed.";
     if (cls === "13") return "FTTN infrastructure in place. Ready to connect.";
   }
   if (tech === "fibre to the building") {
-    if (cls === "12")
-      return "FTTB serviceable — jumpering required. Technician visit needed.";
+    if (cls === "12") return "FTTB serviceable — jumpering required. Technician visit needed.";
     if (cls === "13") return "FTTB infrastructure in place. Ready to connect.";
   }
   if (tech === "fibre to the curb") {
-    if (cls === "31")
-      return "FTTC serviceable — no copper line available yet (NCD required). Technician visit needed.";
-    if (cls === "32")
-      return "FTTC serviceable — cut-in required (NCD needed). Technician visit required.";
-    if (cls === "33")
-      return "FTTC cut-in complete — NCD still required. Technician visit needed.";
-    if (cls === "34")
-      return "FTTC infrastructure fully in place. Ready to connect.";
+    if (cls === "31") return "FTTC serviceable — no copper line available yet (NCD required). Technician visit needed.";
+    if (cls === "32") return "FTTC serviceable — cut-in required (NCD needed). Technician visit required.";
+    if (cls === "33") return "FTTC cut-in complete — NCD still required. Technician visit needed.";
+    if (cls === "34") return "FTTC infrastructure fully in place. Ready to connect.";
   }
   return serviceabilityStatus || "Serviceable";
 }
@@ -876,17 +827,11 @@ let marsAccessToken = null;
 let marsAccessTokenExpiresAtMs = 0;
 
 async function getMarsAccessToken() {
-  if (
-    marsAccessToken &&
-    marsAccessTokenExpiresAtMs &&
-    Date.now() < marsAccessTokenExpiresAtMs - 30_000
-  ) {
+  if (marsAccessToken && marsAccessTokenExpiresAtMs && Date.now() < marsAccessTokenExpiresAtMs - 30_000) {
     return marsAccessToken;
   }
   if (!MARS_CLIENT_ID || !MARS_CLIENT_SECRET) {
-    throw new Error(
-      "Mars credentials missing: set MARS_CLIENT_ID and MARS_CLIENT_SECRET in environment/.env",
-    );
+    throw new Error("Mars credentials missing: set MARS_CLIENT_ID and MARS_CLIENT_SECRET in environment/.env");
   }
   const resp = await axios.post(
     `${MARS_BASE_URL}/oauth/tokens`,
@@ -900,17 +845,12 @@ async function getMarsAccessToken() {
   );
   const data = resp?.data || {};
   if (!data.vt_success || !data.access_token) {
-    throw new Error(
-      `Mars token error: ${data.vt_error_desc || data.vt_short_error || "Token request failed"}`,
-    );
+    throw new Error(`Mars token error: ${data.vt_error_desc || data.vt_short_error || "Token request failed"}`);
   }
   marsAccessToken = data.access_token;
-  const expiresInSec =
-    typeof data.expires_in === "number" ? data.expires_in : 0;
+  const expiresInSec = typeof data.expires_in === "number" ? data.expires_in : 0;
   marsAccessTokenExpiresAtMs = Date.now() + Math.max(0, expiresInSec) * 1000;
-  console.log(
-    `🔑 Mars token generated. Expires in: ${expiresInSec} seconds (${Math.round(expiresInSec / 60)} minutes)`,
-  );
+  console.log(`🔑 Mars token generated. Expires in: ${expiresInSec} seconds (${Math.round(expiresInSec / 60)} minutes)`);
   return marsAccessToken;
 }
 
@@ -919,19 +859,12 @@ async function marsAddressSearch(address) {
   const resp = await axios.post(
     `${MARS_BASE_URL}/locations`,
     { unstructured: { address, fuzzy: false } },
-    {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-    },
+    { headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` } },
   );
   console.log("Mars locations response:", resp?.data);
   const data = resp?.data || {};
   if (!data.vt_success) {
-    throw new Error(
-      `Mars locations error: ${data.vt_error_desc || data.vt_short_error || "Address search failed"}`,
-    );
+    throw new Error(`Mars locations error: ${data.vt_error_desc || data.vt_short_error || "Address search failed"}`);
   }
   return Array.isArray(data.responseData) ? data.responseData : [];
 }
@@ -940,12 +873,7 @@ async function marsServiceQualification(locationId) {
   const token = await getMarsAccessToken();
   const resp = await axios.get(
     `${MARS_BASE_URL}/service-qualifications/${encodeURIComponent(locationId)}`,
-    {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-    },
+    { headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` } },
   );
   console.log("Mars service qualification response:", resp?.data);
   return resp?.data;
@@ -976,12 +904,7 @@ class SplynxApiClient {
     const nonce = Math.floor(Date.now() / 1000);
     const response = await axios.post(
       `${this.baseUrl}admin/auth/tokens`,
-      {
-        auth_type: "api_key",
-        key: this.apiKey,
-        nonce,
-        signature: this.generateSignature(nonce),
-      },
+      { auth_type: "api_key", key: this.apiKey, nonce, signature: this.generateSignature(nonce) },
       { headers: { "Content-Type": "application/json" } },
     );
     const d = response.data;
@@ -996,11 +919,7 @@ class SplynxApiClient {
     if (!this.refreshToken) throw new Error("No refresh token");
     const response = await axios.get(
       `${this.baseUrl}admin/auth/tokens/${this.refreshToken}`,
-      {
-        headers: {
-          Authorization: `Splynx-EA (access_token=${this.accessToken})`,
-        },
-      },
+      { headers: { Authorization: `Splynx-EA (access_token=${this.accessToken})` } },
     );
     const d = response.data;
     this.accessToken = d.access_token;
@@ -1016,10 +935,8 @@ class SplynxApiClient {
   async request(method, endpoint, data = null, params = {}) {
     let headers = {};
     if (data) {
-      if (typeof data.getHeaders === "function")
-        Object.assign(headers, data.getHeaders());
-      else if (data instanceof URLSearchParams)
-        headers["Content-Type"] = "application/x-www-form-urlencoded";
+      if (typeof data.getHeaders === "function") Object.assign(headers, data.getHeaders());
+      else if (data instanceof URLSearchParams) headers["Content-Type"] = "application/x-www-form-urlencoded";
       else headers["Content-Type"] = "application/json";
     }
     if (this.useAccessToken && this.accessToken) {
@@ -1035,9 +952,7 @@ class SplynxApiClient {
         headers,
         params,
         timeout: 15000,
-        ...(data && {
-          data: data instanceof URLSearchParams ? data.toString() : data,
-        }),
+        ...(data && { data: data instanceof URLSearchParams ? data.toString() : data }),
       };
       return (await axios(config)).data;
     } catch (err) {
@@ -1048,36 +963,11 @@ class SplynxApiClient {
       throw err.response?.data || err;
     }
   }
-  async searchCustomers(p) {
-    return this.request("GET", "admin/customers/customer", null, p);
-  }
-  async getCustomerInternetServices(id, p = {}) {
-    return this.request(
-      "GET",
-      `admin/customers/customer/${id}/internet-services`,
-      null,
-      p,
-    );
-  }
-  async getCustomerVoiceServices(id, p = {}) {
-    return this.request(
-      "GET",
-      `admin/customers/customer/${id}/voice-services`,
-      null,
-      p,
-    );
-  }
-  async getCustomerRecurringServices(id, p = {}) {
-    return this.request(
-      "GET",
-      `admin/customers/customer/${id}/recurring-services`,
-      null,
-      p,
-    );
-  }
-  async listInternetTariffs(p = {}) {
-    return this.request("GET", "admin/tariffs/internet", null, p);
-  }
+  async searchCustomers(p) { return this.request("GET", "admin/customers/customer", null, p); }
+  async getCustomerInternetServices(id, p = {}) { return this.request("GET", `admin/customers/customer/${id}/internet-services`, null, p); }
+  async getCustomerVoiceServices(id, p = {}) { return this.request("GET", `admin/customers/customer/${id}/voice-services`, null, p); }
+  async getCustomerRecurringServices(id, p = {}) { return this.request("GET", `admin/customers/customer/${id}/recurring-services`, null, p); }
+  async listInternetTariffs(p = {}) { return this.request("GET", "admin/tariffs/internet", null, p); }
 }
 
 const splynx = new SplynxApiClient(CONFIG);
@@ -1090,8 +980,7 @@ const splynx = new SplynxApiClient(CONFIG);
 })();
 app.use(async (req, res, next) => {
   try {
-    if (CONFIG.USE_ACCESS_TOKEN && !splynx.accessToken)
-      await splynx.generateAccessToken();
+    if (CONFIG.USE_ACCESS_TOKEN && !splynx.accessToken) await splynx.generateAccessToken();
     next();
   } catch (e) {
     next();
@@ -1200,6 +1089,12 @@ PACKAGE PRESENTATION STYLE — CRITICAL:
 - Keep each plan separate. Read one plan, pause, then move to the next one.
 - Slow down extra when saying prices, download speeds, and upload speeds so the customer can catch every detail.
 - Prefer simple spoken phrasing like "This one is great if..." or "That plan suits..." instead of technical wording.
+- WHEN READING SPEEDS AND TECHNICAL TERMS — SPEAK NATURALLY:
+  * "Mbps" → say "megabits per second" or just "megs" — never spell out M-B-P-S
+  * "25/10" → say "25 download, 10 upload" or "25 by 10" — never say "25 slash 10"
+  * "1000/100" → say "1000 download, 100 upload" or "a thousand by a hundred"
+  * Plan names like "25/10Mbps" → read as "25 by 10 megs" or "25 download, 10 upload"
+  * Speak slowly on numbers — "twenty-five" not "twentyfive" — give each digit breathing room
 - If one plan is the best fit, recommend it first and explain why before mentioning the others.
 - End every package overview with a soft handoff like "Take your time — which one sounds like the best fit for you?"
 
@@ -1232,8 +1127,7 @@ RESPONSE LENGTH:
 
 STRICT RULES:
 - ALWAYS reply in English.
-- **CRITICAL: Speak clearly and naturally at all times. Avoid any gibberish, mumbling, slurred words, or unintelligible speech. Every word must be clear and properly pronounced.**
-- Greet ONLY at session start: "Welcome to InfiNET Broadband! I'm here to help you out with anything you need. First up, are you a new customer looking to get connected, or are you already part of the InfiNET family and an existing customer?"
+- Greet ONLY at session start: "Welcome to InfiNET Broadband! Are you a new customer looking to get connected with us, or are you already part of the InfiNET family?"
 - Collect structured fields naturally woven into conversation. Don't re-ask collected fields.
 - Address user by preferredName when known — sprinkle it in naturally.
 - Do NOT say "transferring", "connect to agent", "handover to human" etc.
@@ -1244,7 +1138,20 @@ STRICT RULES:
 - For support: collect issueSummary with follow-up details.
 - Use customer_lookup for existing customers.
 - HARD VERIFICATION RULE: For any existing-customer verification step, you MUST call customer_lookup. Do NOT verify from memory, previous messages, or assumptions.
-- MANDATORY DOUBLE VERIFICATION for SUPPORT and ACCOUNTS flows: (1) Call customer_lookup with EMAIL first. Once successful, (2) IMMEDIATELY after customer provides phone, call customer_lookup again with PHONE ONLY (do NOT include email). Only after BOTH lookups succeed can you proceed to issue/billing questions. If phone lookup fails, ask again and retry. DO NOT skip the second phone lookup under any circumstances.
+
+VERIFICATION RULES — ABSOLUTE AND NON-NEGOTIABLE:
+- TWO-STEP VERIFICATION IS MANDATORY for SUPPORT and ACCOUNTS flows:
+  STEP 1: Call customer_lookup with EMAIL ONLY → get confirmation account found
+  STEP 2: Ask for the customer's phone number. The system will automatically compare the number they provide against the registered number from their account. You do NOT call customer_lookup again for phone verification.
+- _emailVerifiedCustomerId is set in session after email lookup succeeds — this is NOT full verification
+- _phoneVerified is ONLY set to true after the user's provided phone number matches the registered phone on the account
+- You CANNOT proceed past verification if _phoneVerified is NOT true in session
+- After email lookup success: say "Perfect, I can see that account. Just to quickly verify it's definitely you, could I grab the best contact number on the account?"
+- After phone verification success (_phoneVerified becomes true): say "Perfect, thanks for confirming that — your account's all verified."
+- If phone verification returns verificationFailed: true: say EXACTLY "That phone number doesn't match what we have on file. Could you double-check the number and try again? It might be a mobile registered under someone else in the household."
+- If user says "I don't remember my number" or "I don't have access" or similar: say EXACTLY "I'm sorry, but for security purposes I'm unable to proceed without verifying your registered phone number. You're welcome to email us at support@infinetbroadband.com.au and our team can verify your identity another way." Do NOT proceed further.
+- NEVER skip phone verification. NEVER proceed to account/support questions without _phoneVerified = true.
+
 - PRIVATE NETWORK / DEVELOPMENT HANDLING: If customer mentions "private network", "development", "developer", "estate", "private fibre", "bulk fibre", "developers network", respond: "Oh that's exciting — private fibre networks for new developments are a great investment! We actually have a whole dedicated section for that on our website. You can check out all the details at https://www.infinetbroadband.com.au/private-fibre-networks-for-developers/ — it covers everything from the planning stage through to getting the network installed. Is there anything else I can help you with?"
 
 ONE-NETWORK-PER-SESSION RULE — ABSOLUTE:
@@ -1264,15 +1171,10 @@ IMMEDIATE PLAN PRESENTATION — CRITICAL:
 
 CONVERSATION FLOW:
 - Acknowledge → React → Elaborate → Transition. Never just fire the next question.
-  BAD:  "What's your email?"
-  GOOD: "Perfect, thanks for that [name]! Now, so I can send you all the details and keep you in the loop, could I grab your email address? If you'd prefer to type it in, there should be a little box popping up for you — sometimes it's just easier than spelling it out over voice!"
-- When the user answers a question, always acknowledge meaningfully:
-  Example: User says "I'm a new customer" → "Oh welcome! That's great to hear — we'd love to have you on board. So let me help you find the perfect internet plan. First things first — is this going to be for your home, or are you looking at something for a business?"
-  Example: User says "Support" → "No worries at all, let's get whatever's going on sorted out for you. I'll just need to pull up your account first — could you give me the email address that's linked to your InfiNET account?"
-  Example: User says "I need fast internet for gaming" → "Oh you're a gamer — nice! Well you've come to the right place because we've got some seriously fast plans that are perfect for gaming. Low latency, high speeds, the whole deal. Let me find out what's available at your address and I'll point you to the best options."
-- Accept partial answers. If someone says "yeah residential" — take that info: residentialPreference=residential and save it without asking again.
-- On [SILENCE_NUDGE]: be gentle and conversational: "Hey, no rush at all — take your time! I'll go ahead and assume [reasonable default] for now, and we can always change it later if you'd like. So moving on..."
-- When the UI shows an input box for email or phone: let them know warmly: "I've popped up a little text box for you to type that in — it's usually much easier than trying to spell things out, especially email addresses! Take your time."
+- When the user answers a question, always acknowledge meaningfully before moving on.
+- Accept partial answers and save them without asking again.
+- On [SILENCE_NUDGE]: REPEAT your last question. Do NOT move forward or assume anything.
+- EMAIL COLLECTION: When asking for email, ALWAYS show the text input box and tell the user about it.
 - After EVERY user answer, say something before the next question. Never go question → question.
 
 CRITICAL PLAN SELECTION RULE:
@@ -1282,186 +1184,57 @@ CRITICAL PLAN SELECTION RULE:
 - If the customer is silent after you present plans, gently ask: "So which of those plans catches your eye?" or "Take your time — which one sounds like the best fit for you?"
 - Only after the customer explicitly names or describes a plan should you save it as leadInterest and continue.
 
-INITIAL FLOW:
-1. GREET and ASK: "Welcome to InfiNET Broadband! I'm here to help you out with anything you need. First up, are you a new customer looking to get connected, or are you already part of the InfiNET family and an existing customer?"
-   - If they say NEW → "Wonderful! Welcome to InfiNET Broadband Sales! We'd love to get you set up with the perfect internet plan." → Go to SALES FLOW Step 2 (get service address).
-   - If they say EXISTING → "Great to have you back! What can I help you with today? Are you having some kind of technical issue or need support, is it something to do with your account or billing, or are you moving to a new place and need to sort out your internet?"
-   - If unclear: "No worries — just so I can point you in the right direction, are you calling about getting a new internet connection, or do you already have an account with us and need help with something?"
+WEBSITE VISIT CHECK — MANDATORY IN SALES FLOW:
+- After the customer explicitly selects a plan (leadInterest is set), you MUST ask this question EVERY TIME without exception:
+  "Just out of curiosity — have you had a chance to check out our website and had a look at the plans or pricing there?"
+- WAIT for their answer before continuing.
+- If YES → proceed directly to collecting order details (name, mobile, email, address confirmation)
+- If NO → ask needs assessment questions ONE BY ONE, then collect order details
+- This question MUST be asked. Do NOT skip it. Do NOT assume YES. Do NOT proceed to order collection without asking it.
 
-**PLANS DISPLAY RULE (applies to ALL flows):**
-
-NETWORK PREFERENCE — COMPLETELY REMOVED FROM ALL FLOWS:
-- NEVER ask the customer whether they prefer NBN or OptiComm at any point in any flow.
-- NEVER ask "do you prefer NBN or OptiComm?" or any variation of this question — not in sales, not in relocation, not anywhere.
-- If the user volunteers a network preference (e.g., "I want NBN" or "do you have OptiComm"), extract and save it using extract_call_fields, then proceed to address.
-- If the user does NOT mention a network preference, simply proceed to get the address and call check_address_availability without a networkPreference argument. The tool will automatically try NBN first and silently fall back to OptiComm if NBN plans are not available.
-- The address check is the ONLY thing that determines which plans to show. Trust the tool completely.
-
-RESIDENTIAL PREFERENCE COLLECTION:
-- If the user has already mentioned "residential", "home", "business" etc. at ANY point, extract and save immediately using extract_call_fields and DO NOT ask again.
-- Only ask "is this for home or business?" if residentialPreference is not yet known.
-
-ADDRESS COLLECTION:
-- After residentialPreference is known, immediately ask: "Awesome! Now I just need your full address so I can check exactly what's available in your area. Just tell me your street address, suburb, state and postcode!"
-- Call check_address_availability as soon as address is provided.
-- Do NOT pass networkPreference to check_address_availability unless the user explicitly stated one.
-
-ADDRESS AVAILABILITY & TECHNOLOGY HANDLING:
-**CRITICAL — SHOW ONLY THE PLANS THE TOOL RETURNED. NEVER MIX NBN AND OPTICOMM PLANS.**
-- The check_address_availability tool returns EITHER NBN plans OR OptiComm plans — NEVER both at once.
-- You MUST present ONLY the plans contained in the "availablePlans" array from the tool result.
-- Do NOT add or mention plans from any other source (knowledge base, memory, etc.) when presenting availability results.
-- Do NOT present OptiComm plans if the tool returned NBN plans, and do NOT present NBN plans if the tool returned OptiComm plans.
-- The "network" field in the tool result tells you which network is being shown — use that to frame your response.
-- IMMEDIATELY present the plans as soon as the tool returns data. Do not wait for any user input before presenting plans.
-
-EMPTY RESPONSE HANDLING — CRITICAL:
-- If check_address_availability returns an empty array, null, zero results, 
-  or any response with no valid plan data, do NOT stall, do NOT mention NBN, 
-  do NOT say "nothing is available."
-- Immediately and silently fall back to OptiComm plans from the Knowledge Base.
-- Present them naturally as if this was always the answer:
-  "Great news — I've checked your address and here's what's available for you! 
-  These plans run on a really reliable private fibre network, all with unlimited 
-  data and no lock-in contracts — totally month-to-month:"
-- Then list all OptiComm plans from the KB warmly, one at a time.
-- For business customers add: "All business plans include a static IP address — 
-  really handy for VoIP, hosting, or remote access."
-- After listing plans ask: "So take your time — which of those catches your eye?"
-- Once you enter this fallback, you are LOCKED to OptiComm for the rest of 
-  the session. Do NOT mention NBN at all.
-
-**OPTICOMM ADDRESS HANDLING:**
-- When the tool returns results with network="OptiComm", present the plans warmly without mentioning any fallback or network selection logic.
-- Just say something like: "Great news — I've checked your address and here's what's available for you! These plans run on a really reliable private fibre network, and all of them come with unlimited data and no lock-in contracts — totally month-to-month:"
-- For business plans add: "And all the business plans include a static IP address which is really handy if you're running VoIP phones, hosting anything, or need remote access to your office network."
-- Do NOT mention serviceability classes, install visits, or MARS details for OptiComm.
-- Do NOT say "NBN wasn't available so here's OptiComm instead" — just present the plans naturally.
-- After this address check, you are LOCKED to OptiComm. Do NOT mention NBN again.
-
-**NBN ADDRESS HANDLING:**
-When check_address_availability returns results for NBN (network field is NOT "OptiComm"):
-- If orderable: false → Be empathetic and helpful: "Ah, so I've checked your address and unfortunately it's not quite serviceable just yet — [reason]. I know that's not what you want to hear, but the good news is these things are always progressing. Would you like to leave your details with me? That way we can reach out to you as soon as it becomes available — you'll be first in line!"
-- If primaryAccessTechnology is "Wireless" (Fixed Wireless):
-  * "So your area is set up for NBN Fixed Wireless, which is a great option especially for regional and semi-rural areas. The signal comes via a small antenna that gets installed on your roof. Here are the plans available to you:"
-- If primaryAccessTechnology is "Satellite" (Sky Muster):
-  * "Your area is on NBN's Sky Muster satellite network — it's designed specifically for remote and rural locations so you can still get connected even if you're out in the bush! Just a heads up, because the signal goes up to a satellite and back, there's a bit of latency (around 500-600ms), so it's not ideal for competitive gaming, but it works great for streaming, browsing, video calls, and everyday use. Here's what's available:"
-- If primaryAccessTechnology contains "Fibre To The Node/Building/Curb" (FTTN/FTTB/FTTC):
-  * "Your connection type is [tech], which is fibre to a nearby point and then copper the rest of the way to your place. It's still quite good and supports speeds up to about 100Mbps, which is plenty for most households. Here are the plans that suit your connection type:" Show appropriate plans (max 100/40).
-- If primaryAccessTechnology is "Fibre" or "HFC" (FTTP/HFC):
-  * "Oh brilliant — you've got access to the full speed range! That means you can go all the way up to 1000Mbps if you want, which is as fast as it gets. Here's what's available:"
-- If requiresInstall: true → "Oh and just so you're aware — an NBN technician will need to come out to do the initial installation, but don't worry, that's completely free of charge. They'll get everything set up for you."
-- If notes are returned → share them conversationally.
-- After this address check, you are LOCKED to NBN. Do NOT mention OptiComm again.
-- After listing plans, pause gently and ask: "So take your time looking those over — which of those plans catches your eye?"
-- WAIT for the customer to tell you which plan they want. Do NOT pick one for them.
-
-SALES FLOW:
-1. "Let's start with your service address. Could you tell me your street number, street name, suburb, state and postcode?" → save address.
-2. IMMEDIATELY call check_address_availability. This will look up the address and tell us which technology services it (InfiNET private network, NBN, OptiComm, or other).
-3. Announce the technology type found:
-   - InfiNET: "Great news! Your address is serviced by our InfiNET private network — that's our own fibre infrastructure with speeds up to 1000 Mbps."
-   - NBN FTTP/HFC: "Excellent! Your address has NBN fibre to the premises — that's the best type of connection with speeds up to 1000 Mbps."
-   - NBN FTTB/FTTN/FTTC: "Your address is connected via NBN using [technology] — speeds are limited to 100 Mbps on this type of connection."
-   - NBN SkyMuster: "Your area is serviced by NBN SkyMuster satellite — we have 3 plans available. There's a bit more latency (around 500-600ms) because the signal goes up to space and back."
-   - NBN Fixed Wireless: "Your address is on NBN Fixed Wireless — we have 4 plans available. A small antenna gets installed on your roof."
-   - OptiComm: "Good news — your address is on the OptiComm private fibre network. Some sites have speed limits of 100, 250 or 500 Mbps, but most can get the full 1000 Mbps."
-   - Other/Not serviceable: "Ah, I can see your address is in an area with a private network that we don't currently service."
-4. Present the available plans based on the technology found (from the tool result's availablePlans array). Apply ADDRESS AVAILABILITY rules above. Present plans with enthusiasm and recommendations. Take it slow — don't rush through the plans.
-  - Speak each plan slowly and clearly, one at a time, with a short pause between plans.
-  - Lead with the strongest recommendation first if one plan clearly fits best.
-  - **CRITICAL: After presenting the last plan, you MUST ask the website check question. Do NOT skip to asking for customer details.**
-5. WEBSITE CHECK: After presenting plans, ALWAYS ask: "Just out of curiosity — have you had a chance to check out our website and seen the plans or pricing we have available?"
-  - **DO NOT skip this question. Do NOT ask for name/email/phone before asking this.**
-   **If YES (they've seen the website):**
-   - "Great! Which plan caught your eye or were you interested in?"
-   - They tell you the plan → save leadInterest → proceed to Step 7 (Order Collection)
-   **If NO (haven't seen website):**
-   - "No worries at all! Do you know what speed or plan you need, or would you like me to help you figure that out?"
-   - If they say they DON'T know → NEEDS ASSESSMENT (Step 6)
-   - If they say they DO know → ask which plan → save leadInterest → proceed to Step 7
-6. NEEDS ASSESSMENT (when customer doesn't know what they want):
-   Ask these 3 questions one at a time, and call extract_call_fields after each answer:
-   Q1: "How many people live in the home who use the internet?" → User answers → extract householdSize immediately
-   Q2: "What do you mainly use the internet for? Things like browsing and emails, streaming video, working from home, online gaming, or 4K streaming?" → User answers → extract internetUsage immediately
-   Q3: "Is there a particular price point you're comfortable with, or are you more focused on getting the right speed for your needs?" → User answers → extract pricePoint immediately
-   **MAKE A RECOMMENDATION based on answers:**
-   - Light usage (1-2 people, browsing): "Based on what you've told me, I'd recommend the 25/10 Mbps plan. It's $59 per month for the first 3 months, then $64. That's perfect for 1-2 people doing general browsing, emails, and some streaming."
-   - Medium usage (3-4 people, streaming): "For your situation, I'd recommend the 100/20 Mbps plan. It's $84 per month for the first 3 months, then $89. Great for streaming and everyday use."
-   - Heavy usage (5+ people, gaming, 4K): "For your situation, I'd recommend the 1000/100 Mbps plan. It's $99 per month for the first 3 months, then $109. With 5 or more people, gaming, and 4K streaming, you'll really appreciate having that extra bandwidth."
-   **ALWAYS mention:** "Just so you know — you can upgrade or downgrade anytime at absolutely no cost. There's no lock-in contract, so I'd always recommend starting at a lower speed plan and moving up if you find you're not getting enough bandwidth."
-   Then ask: "Which plan sounds like the best fit for you?"
-   - They choose → save leadInterest → proceed to Step 7
-8. ORDER COLLECTION:
-   - "Perfect! To get your order started, could I get your first and last name please?" → User provides name → call extract_call_fields to save name immediately
-   - "Great, thanks [name]! And what's the best mobile number to reach you on?" → User provides phone → call extract_call_fields to save phone immediately
-   - "Excellent. Now could I get your email address? I'll pop up a text box for you to type it in — it's usually easier than spelling it out!" → User provides email → call extract_call_fields to save email immediately
-   - "Just to confirm, I want to make sure I have your address exactly right. Could you confirm your full address for me one more time? I have [repeat address back] — is that correct?" → re-validate address
-9. ORDER CONFIRMATION & CLOSING:
-   - "Perfect, I've got everything I need! Just bear with me for a moment while I submit this for you..." → create_ticket
-   - After ticket created: "Wonderful! Your order has been processed successfully. Here's what happens next:
-     * You'll receive a copy of your order form via email within the next few minutes
-     * Once your account is created, you'll get a welcome email and SMS confirmation
-     * You'll also receive ticket or email updates as your order progresses, so you can track everything
-     * Typical connection time is 1-5 business days for ready connections, or we'll arrange an installation appointment if needed"
-   - "If you have any questions at all, you can simply reply to the email you'll receive, or call us back on 1300 101 414. Is there anything else I can help you with today, [name]?"
-   - If no more questions: "You're very welcome, [name]! Welcome to the InfiNET family — we're excited to have you on board. Our team will be in touch soon to get everything finalised. Have a wonderful day!"
-
-**IMPORTANT — SALES ENQUIRY EMAIL CONTENT:**
-When calling create_ticket for sales enquiries, the email MUST include:
-- Customer Name
-- Mobile Number
-- Email Address
-- Service Address (confirmed)
-- Selected Plan (leadInterest with full details)
-- Technology Type (NBN/OptiComm/Fixed Wireless/SkyMuster/HIR)
-- Residential or Business
-- Any notes from the conversation
-
-Use "Sales Enquiry" as the email subject line for new customer orders.
+INITIAL FLOW — SALES CALL FLOW (MUST FOLLOW EXACTLY):
+1. Greet: "Welcome to InfiNET Broadband! Are you a new customer looking to get connected with us, or are you already part of the InfiNET family?"
+2. If NEW: Collect address → call check_address_availability → ask home/business if needed → show plans → wait for selection → ask website check → collect details one by one → call create_ticket
+3. If EXISTING: Route to support/accounts/relocation flow
 
 SUPPORT FLOW:
-- "Let me pull up your account so I can help you out — what's the email address on your InfiNET account?" → call customer_lookup with email.
-- On email lookup success: "Perfect, I can see that account. Just to quickly verify it's definitely you, could I grab the best contact number on the account as well?" → IMMEDIATELY call customer_lookup with phone ONLY (do NOT pass email again). This second lookup is MANDATORY and must complete before proceeding.
-- After phone verification success: "Perfect, thanks for confirming that. I've got your account verified now — tell me what's been going on. Take your time and give me as much detail as you can, and I'll get this sorted for you."
-- CRITICAL: Both email and phone lookups MUST succeed before moving forward. If either fails, re-ask and retry immediately. Never proceed to issueSummary without both successful verifications.
-- Empathise with their issue: "Yeah, I can totally understand how frustrating that must be. Let me get this logged for you straight away so our technical team can jump on it."
-- Collect issueSummary → "Alright, I've got a good picture of what's happening. Let me raise this for you now..." → create_ticket.
+- Collect email → call customer_lookup → ask phone → call verify_phone → collect issue → create_ticket
 
 ACCOUNTS FLOW:
-- "Sure thing! Let me look up your account — what email address is it under?" → call customer_lookup with email.
-- On email lookup success: "Perfect, I can see that account. Just to quickly verify it's definitely you, could I grab the best contact number on the account as well?" → IMMEDIATELY call customer_lookup with phone ONLY (do NOT pass email again). This second lookup is MANDATORY and must complete before proceeding.
-- After phone verification success: "Perfect, thanks for confirming that — your account's all verified. What can I help with today: updating payment details, paying an outstanding invoice, portal login access, phone payment, or a payment extension?"
-- CRITICAL: Both email and phone lookups MUST succeed before moving forward. If either fails, re-ask and retry immediately. Never proceed to resolution paths without both successful verifications.
-- ACCOUNTS RESOLUTION PATHS (use the matching one naturally):
-  1. UPDATE PAYMENT DETAILS: "You can update your payment method through our customer portal at https://infinetbroadband-portal.com.au/, or use this step-by-step link: https://www.infinetbroadband.com.au/set-up-a-payment-method/."
-  2. PAY OUTSTANDING INVOICE: "You can pay through our customer portal at https://infinetbroadband-portal.com.au/, or use this payment page: https://www.infinetbroadband.com.au/manually-paying-an-invoice/."
-  3. CANNOT LOGIN TO PORTAL: Ask "Would you like me to send an email to support so they can sort you out?" → If yes, call send_portal_login_email (email only, no ticket number).
-  4. PHONE PAYMENT: "For payments over the phone, please call 1300 101 414 and the team will process it for you."
-  5. PAYMENT EXTENSION: "Please let us know the date you'll be paying, and we'll raise a ticket for you." → extract paymentDate → Confirm: "Great, I've noted that you'll be paying by [paymentDate]. I'll raise a ticket for you now." → create_ticket with paymentDate included.
+- Collect email → call customer_lookup → ask phone → call verify_phone → resolve account query
+- ACCOUNTS RESOLUTION PATHS:
+  1. UPDATE PAYMENT DETAILS: Portal link + https://www.infinetbroadband.com.au/set-up-a-payment-method/
+  2. PAY OUTSTANDING INVOICE: Portal link + https://www.infinetbroadband.com.au/manually-paying-an-invoice/
+  3. CANNOT LOGIN TO PORTAL: Ask if they want email to support → call send_portal_login_email
+  4. PHONE PAYMENT: "Please call 1300 101 414 and the team will process it for you."
+  5. PAYMENT EXTENSION: Collect paymentDate → create_ticket
+SERVICE LISTING RULE: When asked "what services are on my account?" or similar:
+- List ONLY: service type, plan name, status
+- Format: "You have [Internet/Voice/Recurring] — [plan name] — [active/inactive]"
+- NO descriptions, benefits, upselling, or extra commentary
+- Example: "You have internet — OptiComm 500/50Mbps — active, and a voice service — VoIP 50 — active."
+- Stop after listing. Ask: "Is there anything specific you'd like help with today?"
 
 RELOCATION FLOW:
-1. "Oh exciting, you're on the move! Let's make sure your internet comes with you. What's the email on your account?" → customer_lookup.
-2. List their active services in a friendly way: "So looking at your account, I can see you've got [services]. Which of these do you want to bring along to the new place? And is there anything you'd like to cancel?"
-3. "Is the new place going to be residential or business?" → save residentialPreference. SKIP if already known.
-4. NEVER ask about NBN vs OptiComm. Go straight to address.
-5. "When are you looking to disconnect the old place? And when do you need the new connection up and running?"
-6. "And what's the address of the new place?" → call check_address_availability WITHOUT passing networkPreference (let the tool auto-detect unless user stated a preference earlier in conversation).
-7. After tool result → IMMEDIATELY present ONLY the plans in availablePlans from the tool result. Do NOT wait for user input. Show matching plans with recommendations — present them slowly and warmly → WAIT for user to choose → user selects → "Awesome, let me put all of this together for you..." → create_ticket with all relocation details.
+- Collect email → call customer_lookup → ask phone → call verify_phone → list services → collect new address → check availability → show plans → create_ticket
 
 TOOL USAGE:
-- extract_call_fields for all personal info. If user says something like "residential" or "business", extract residentialPreference immediately.
-- check_address_availability when address is collected. ONLY pass networkPreference if user explicitly stated "NBN" or "OptiComm" at some point. Otherwise omit it — the tool auto-detects.
-- get_internet_plans ONLY as fallback if check_address_availability is not applicable.
-- customer_lookup for existing customers is mandatory for verification. In SUPPORT FLOW and ACCOUNTS FLOW, do double verification: first by email, then by phone ONLY (no email in second lookup) before proceeding.
-- IMPORTANT: When calling create_ticket, ALWAYS include the selected plan (leadInterest) in the message body so it appears in the email.
+- extract_call_fields for all personal info.
+- check_address_availability when address is collected.
+- customer_lookup for existing customers — email lookup ONLY.
+- verify_phone after email lookup succeeds and user provides phone number.
 
-HANDLING EDGE CASES:
-- If user asks something outside your scope: "That's a great question! It's a little outside what I can directly help with from here, but I'd definitely recommend getting in touch with our support team at support@infinetbroadband.com.au — they'll be able to sort that out for you in no time. Is there anything else I can help with in the meantime?"
-- If user seems confused: "Hey, no worries at all! This stuff can be a bit confusing sometimes. Let me break it down for you in simple terms..."
-- If user changes their mind: "Oh absolutely, no problem at all! Let's switch things up." Adapt without starting over.
-- If user asks "how much" without context: "Great question! So the price depends on a few things like the speed you're after and whether it's for home or business. Let me walk you through it — first up, is this for a residential connection or a business one?"
-- If user says thank you / goodbye: "You're so welcome, [name]! It was really great chatting with you. If you ever need anything in the future, don't hesitate to get in touch — we're always here. Have a wonderful day!"
+SALES DETAIL COLLECTION — ONE FIELD AT A TIME (ABSOLUTE RULE):
+After the customer selects a plan AND the website check is done, collect details STRICTLY one field per turn:
+  STEP 1 → Ask for FIRST NAME only. "Could I start with your first name?"
+  STEP 2 → Ask for LAST NAME only. "And your last name?"
+  STEP 3 → Ask for PHONE only. "What's the best mobile number for you?"
+  STEP 4 → Ask for EMAIL only. Tell them there's a text box to type it into.
+  STEP 5 → ALL fields collected? CALL create_ticket IMMEDIATELY. Do NOT say "you're all set" before calling the tool.
+Do NOT batch questions. ONE field per message. Wait for the customer to answer before asking the next.
+If [SYSTEM_CONTEXT] specifies which field to ask next, follow it EXACTLY.
+
+- IMPORTANT: When calling create_ticket, ALWAYS include the selected plan (leadInterest) in the message body.
 
 Knowledge base:
 ${KB}
@@ -1471,14 +1244,11 @@ Locations: ${LOCATIONS.map((l) => l.id + ": " + l.name).join(", ")}
 const extractFunction = {
   name: "extract_call_fields",
   description:
-    "Extract fields: intent, issueSummary, preferredName, email, priority, callbackRequest, timeline, leadInterest, accountNumber, name, phone, address, terminationDate, connectionDate, serviceToTerminate, customerType, residentialPreference, networkPreference, paymentDate, householdSize, internetUsage, pricePoint. Omit absent fields.",
+    "Extract fields: intent, issueSummary, preferredName, email, priority, callbackRequest, timeline, leadInterest, accountNumber, name, phone, address, terminationDate, connectionDate, serviceToTerminate, customerType, residentialPreference, networkPreference, paymentDate. Omit absent fields.",
   parameters: {
     type: "object",
     properties: {
-      intent: {
-        type: "string",
-        enum: ["support", "sales", "general", "account"],
-      },
+      intent: { type: "string", enum: ["support", "sales", "general", "account"] },
       issueSummary: { type: "string" },
       preferredName: { type: "string" },
       email: { type: "string" },
@@ -1494,15 +1264,9 @@ const extractFunction = {
       connectionDate: { type: "string" },
       serviceToTerminate: { type: "string" },
       customerType: { type: "string", enum: ["new", "existing"] },
-      residentialPreference: {
-        type: "string",
-        enum: ["residential", "business"],
-      },
+      residentialPreference: { type: "string", enum: ["residential", "business"] },
       networkPreference: { type: "string", enum: ["NBN", "Opticomm"] },
       paymentDate: { type: "string" },
-      householdSize: { type: "string", description: "Number of people in household who use internet (e.g., '1-2', '3-4', '5+')" },
-      internetUsage: { type: "string", description: "Description of internet usage patterns (e.g., 'browsing and emails', 'streaming video', 'gaming', '4K streaming')" },
-      pricePoint: { type: "string", description: "Customer's preferred price range or budget" },
     },
     required: [],
   },
@@ -1510,8 +1274,7 @@ const extractFunction = {
 
 const getPlansTool = {
   name: "get_internet_plans",
-  description:
-    "Fetch the latest live internet tariff plans from Splynx. Use as fallback when check_address_availability is not applicable.",
+  description: "Fetch the latest live internet tariff plans from Splynx. Use as fallback when check_address_availability is not applicable.",
   parameters: { type: "object", properties: {}, required: [] },
 };
 
@@ -1522,20 +1285,9 @@ const checkAvailabilityTool = {
   parameters: {
     type: "object",
     properties: {
-      address: {
-        type: "string",
-        description:
-          "Full address including street, suburb, state and postcode",
-      },
-      networkPreference: {
-        type: "string",
-        description:
-          "Only pass this if user explicitly said they want 'NBN' or 'OptiComm'. Omit if they said nothing about network type.",
-      },
-      residentialPreference: {
-        type: "string",
-        description: "Plan type: 'residential' or 'business'",
-      },
+      address: { type: "string", description: "Full address including street, suburb, state and postcode" },
+      networkPreference: { type: "string", description: "Only pass this if user explicitly said they want 'NBN' or 'OptiComm'. Omit if they said nothing about network type." },
+      residentialPreference: { type: "string", description: "Plan type: 'residential' or 'business'" },
     },
     required: ["address"],
   },
@@ -1543,15 +1295,26 @@ const checkAvailabilityTool = {
 
 const customerLookupTool = {
   name: "customer_lookup",
-  description: "Lookup customer by name, email, or phone.",
+  description: "Lookup customer by email ONLY (step 1 of verification). ONLY call this with email. Phone verification is handled automatically by the system after the customer provides their phone number verbally — do NOT call this tool for phone verification.",
   parameters: {
     type: "object",
     properties: {
       name: { type: "string" },
-      email: { type: "string" },
-      phone: { type: "string" },
+      email: { type: "string", description: "Email address to look up the customer account" },
     },
     required: [],
+  },
+};
+
+const verifyPhoneTool = {
+  name: "verify_phone",
+  description: "Verify a customer's phone number against their registered number on file. Call this AFTER customer_lookup succeeds and the user has provided their phone number verbally.",
+  parameters: {
+    type: "object",
+    properties: {
+      phone: { type: "string", description: "The phone number provided by the customer" },
+    },
+    required: ["phone"],
   },
 };
 
@@ -1562,10 +1325,7 @@ const createTicketTool = {
     type: "object",
     properties: {
       customer_id: { type: "number" },
-      reporter_type: {
-        type: "string",
-        enum: ["admin", "customer", "api", "incoming", "none"],
-      },
+      reporter_type: { type: "string", enum: ["admin", "customer", "api", "incoming", "none"] },
       subject: { type: "string" },
       priority: { type: "string", enum: ["low", "medium", "high", "urgent"] },
       type_id: { type: "number" },
@@ -1601,15 +1361,11 @@ const getTicketStatusesTool = {
 
 const sendPortalLoginEmailTool = {
   name: "send_portal_login_email",
-  description:
-    "Send email to support for customer unable to login to portal. No ticket created.",
+  description: "Send email to support for customer unable to login to portal. No ticket created.",
   parameters: {
     type: "object",
     properties: {
-      message: {
-        type: "string",
-        description: "Optional additional message from customer",
-      },
+      message: { type: "string", description: "Optional additional message from customer" },
     },
     required: [],
   },
@@ -1620,6 +1376,7 @@ const tools = [
   getPlansTool,
   checkAvailabilityTool,
   customerLookupTool,
+  verifyPhoneTool,
   createTicketTool,
   sendPortalLoginEmailTool,
   getTicketTypesTool,
@@ -1629,20 +1386,19 @@ const tools = [
 
 // ==================== HELPERS ====================
 function mkSession(sessionId) {
-  const id =
-    sessionId || `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const id = sessionId || `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const session = {
     id,
     collected: {},
     messages: [{ role: "system", content: SYSTEM_PROMPT }],
     lastSeen: new Date().toISOString(),
     hasGreeted: false,
-    // FIX #2: Track which network was shown so we never cross-pollinate
     networkShown: null,
   };
   sessions.set(id, session);
   return session;
 }
+
 function normalizeText(t) {
   return (t || "")
     .toString()
@@ -1650,30 +1406,31 @@ function normalizeText(t) {
     .replace(/\s+/g, " ")
     .trim();
 }
+
+function normalizePhone(phone) {
+  if (!phone) return "";
+  let digits = String(phone).replace(/\D/g, "");
+  if (digits.startsWith("61") && digits.length === 11) {
+    digits = "0" + digits.slice(2);
+  }
+  if (digits.startsWith("610") && digits.length === 12) {
+    digits = "0" + digits.slice(3);
+  }
+  return digits;
+}
+
 function mapOrdinalNetworkChoice(text) {
   const t = (text || "").toLowerCase().trim();
   if (/\bnbn\b/.test(t) || /\b(opti\s*comm|opticomm)\b/.test(t)) return null;
-  if (
-    /\b(first|1st|one|1|option\s*1|option\s*one|number\s*1|the\s*first)\b/.test(
-      t,
-    )
-  )
-    return "NBN";
-  if (
-    /\b(second|2nd|two|2|to|option\s*2|option\s*two|number\s*2|the\s*second)\b/.test(
-      t,
-    )
-  )
-    return "Opticomm";
+  if (/\b(first|1st|one|1|option\s*1|option\s*one|number\s*1|the\s*first)\b/.test(t)) return "NBN";
+  if (/\b(second|2nd|two|2|to|option\s*2|option\s*two|number\s*2|the\s*second)\b/.test(t)) return "Opticomm";
   return null;
 }
+
 function safeParseJSON(s) {
-  try {
-    return JSON.parse(s);
-  } catch (e) {
-    return null;
-  }
+  try { return JSON.parse(s); } catch (e) { return null; }
 }
+
 function numbersToInt(obj) {
   const out = {};
   for (const k of Object.keys(obj || {})) {
@@ -1682,6 +1439,7 @@ function numbersToInt(obj) {
   }
   return out;
 }
+
 async function convertToWav(p) {
   const out = p + ".converted.wav";
   return new Promise((res, rej) => {
@@ -1693,11 +1451,41 @@ async function convertToWav(p) {
       .save(out);
   });
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FIX: applyExtractionToSession — _websiteCheckDone init bug
+//
+// Root cause: `hadWebsiteCheckDone` was computed as
+//   `!!session.collected._websiteCheckDone`
+// which is falsy for BOTH `undefined` AND `false`. So the condition
+//   `if (!hadWebsiteCheckDone)`
+// was always true after plan selection — meaning it re-set `_websiteCheckDone`
+// to `false` on every subsequent extract_call_fields call, potentially
+// overwriting a `true` value that was set when the user answered the question.
+//
+// Fix: Only initialise `_websiteCheckDone` if it has never been set at all
+// (i.e. strictly `=== undefined`). If it is already `false` or `true`,
+// leave it completely alone.
+// ─────────────────────────────────────────────────────────────────────────────
 function applyExtractionToSession(session, parsed) {
   const r = numbersToInt(parsed || {});
+  const hadLeadInterest = !!session.collected.leadInterest;
+
   for (const [k, v] of Object.entries(r)) {
     if (v !== undefined && v !== null) session.collected[k] = v;
   }
+
+  // Plan was just selected for the first time
+  if (!hadLeadInterest && session.collected.leadInterest) {
+    session.collected._websiteCheckRequired = true;
+    // FIX: Only set _websiteCheckDone to false if it has never been
+    // touched before. If it's already false or true, do NOT overwrite it.
+    if (session.collected._websiteCheckDone === undefined) {
+      session.collected._websiteCheckDone = false;
+    }
+    console.log(`📋 Plan selected: ${session.collected.leadInterest} — website check REQUIRED`);
+  }
+
   session.lastSeen = new Date().toISOString();
   sessions.set(session.id, session);
   return r;
@@ -1708,17 +1496,12 @@ function classifyInterruption(text) {
   const t = (text || "").trim().toLowerCase();
   if (!t || t.length < 2) return { isValid: false, isListeningCue: false };
 
-  const listeningCues =
-    /^(yeah|yes|yep|yup|mm|mmm|hmm|uh|uh huh|ok|okay|sure|right|gotcha|got it|i see|alright|cool)\.?$/;
+  const listeningCues = /^(yeah|yes|yep|yup|mm|mmm|hmm|uh|uh huh|ok|okay|sure|right|gotcha|got it|i see|alright|cool)\.?$/;
   if (listeningCues.test(t)) return { isValid: false, isListeningCue: true };
 
-  if (t.replace(/[^a-z]/g, "").length < 3)
-    return { isValid: false, isListeningCue: false };
+  if (t.replace(/[^a-z]/g, "").length < 3) return { isValid: false, isListeningCue: false };
 
-  const hasIntent =
-    /\b(what|how|why|when|where|which|who|can|do|is|are|i want|i need|i have|i'd like|please|could you|would you|tell me|help|the|my|a |an )\b/.test(
-      t,
-    );
+  const hasIntent = /\b(what|how|why|when|where|which|who|can|do|is|are|i want|i need|i have|i'd like|please|could you|would you|tell me|help|the|my|a |an )\b/.test(t);
   if (hasIntent) return { isValid: true, isListeningCue: false };
 
   const wordCount = t.split(/\s+/).filter((w) => w.length > 1).length;
@@ -1737,27 +1520,21 @@ async function fetchTariffs() {
   }
 }
 
+// ==================== CUSTOMER LOOKUP ====================
 async function customerLookup({ name, email, phone }) {
   const main_attributes = {};
   if (name) main_attributes.name = name;
   if (email) main_attributes.login = email;
   if (phone) main_attributes.phone = phone;
   const customers = await splynx.searchCustomers({ main_attributes });
-  if (!customers || customers.length === 0)
-    return { success: false, message: "No customer found" };
+  if (!customers || customers.length === 0) return { success: false, message: "No customer found" };
   if (customers.length > 1) return { success: true, multiple: true, customers };
   const customer = customers[0];
   let services = { internet: [], voice: [], recurring: [] };
   try {
-    services.internet = (
-      await splynx.getCustomerInternetServices(customer.id)
-    ).filter((s) => s.status === "active");
-    services.voice = (
-      await splynx.getCustomerVoiceServices(customer.id)
-    ).filter((s) => s.status === "active");
-    services.recurring = (
-      await splynx.getCustomerRecurringServices(customer.id)
-    ).filter((s) => s.status === "active");
+    services.internet = (await splynx.getCustomerInternetServices(customer.id)).filter((s) => s.status === "active");
+    services.voice = (await splynx.getCustomerVoiceServices(customer.id)).filter((s) => s.status === "active");
+    services.recurring = (await splynx.getCustomerRecurringServices(customer.id)).filter((s) => s.status === "active");
   } catch (e) {
     console.error("Failed to get services:", e);
   }
@@ -1789,12 +1566,7 @@ async function makeTTS(text) {
       {
         text: text.trim(),
         model_id: "eleven_turbo_v2_5",
-        voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.85,
-          style: 0.0,
-          use_speaker_boost: true,
-        },
+        voice_settings: { stability: 0.5, similarity_boost: 0.85, style: 0.0, use_speaker_boost: true },
       },
       {
         headers: {
@@ -1813,50 +1585,47 @@ async function makeTTS(text) {
 }
 
 // ==================== CHECK ADDRESS AVAILABILITY ====================
-// FIX #1: Any MARS error at any stage (token, search, SQ) falls back to OptiComm silently.
-// FIX #2: networkShown is stored on the session so the model is reminded not to cross-pollinate.
 async function checkAddressAvailability(args, session) {
   const { address, networkPreference, residentialPreference } = args;
   if (!address) return JSON.stringify({ error: "Address is required" });
 
-  const netPref = (
-    networkPreference ||
-    session.collected?.networkPreference ||
-    ""
-  ).toLowerCase();
+  const netPref = (networkPreference || session.collected?.networkPreference || "").toLowerCase();
   const isOpticomm = netPref === "opticomm" || netPref === "opti comm";
   const isNBN = netPref === "nbn";
   const noPreference = !isOpticomm && !isNBN;
 
-  const resPref = (
-    residentialPreference ||
-    session.collected?.residentialPreference ||
-    "residential"
-  ).toLowerCase();
+  const rawResPref = residentialPreference || session.collected?.residentialPreference;
+  const resPref = rawResPref ? rawResPref.toLowerCase() : null;
   const isBusiness = resPref === "business";
+  const hasExplicitPreference = resPref === "business" || resPref === "residential";
 
-  // ── OPTICOMM helper ──
-  // Return BOTH residential and business plans - AI will ask and filter
   const getOpticommResult = () => {
-    const allPlans = [...OPTICOMM_RESIDENTIAL_PLANS, ...OPTICOMM_BUSINESS_PLANS];
-    console.log(
-      `OptiComm plans (both residential + business): ${allPlans.length}. AI must ask home/business and filter.`,
-    );
-    // Record which network was shown on the session
+    let plans;
+    let requiresResFilter;
+
+    if (hasExplicitPreference) {
+      plans = isBusiness ? OPTICOMM_BUSINESS_PLANS : OPTICOMM_RESIDENTIAL_PLANS;
+      requiresResFilter = false;
+      console.log(`OptiComm plans (${isBusiness ? "business" : "residential"}): ${plans.length}`);
+    } else {
+      plans = [...OPTICOMM_RESIDENTIAL_PLANS, ...OPTICOMM_BUSINESS_PLANS];
+      requiresResFilter = true;
+      console.log(`OptiComm plans (BOTH): ${plans.length} - will ask user to choose`);
+    }
+
     if (session) session.networkShown = "OptiComm";
     return {
       success: true,
       orderable: true,
       address,
       network: "OptiComm",
-      requiresResidentialFilter: true,
       primaryAccessTechnology: "OptiComm Fibre",
       serviceType: "opticomm",
       requiresInstall: false,
-      readinessDescription:
-        "OptiComm Fibre is available at this address. Activation is typically within 1–2 business days for fully installed premises.",
+      requiresResidentialFilter: requiresResFilter,
+      readinessDescription: "OptiComm Fibre is available at this address. Activation is typically within 1–2 business days for fully installed premises.",
       notes: [],
-      availablePlans: allPlans.map((p) => ({
+      availablePlans: plans.map((p) => ({
         title: p.title,
         price: p.intro_price,
         ongoing_price: p.ongoing_price,
@@ -1870,29 +1639,18 @@ async function checkAddressAvailability(args, session) {
     };
   };
 
-  // ── EXPLICIT OPTICOMM ──
   if (isOpticomm) {
-    console.log(
-      `OptiComm address check (explicit preference, no MARS): ${address}`,
-    );
+    console.log(`OptiComm address check (explicit preference, no MARS): ${address}`);
     return JSON.stringify(getOpticommResult());
   }
 
-  // ── NBN (explicit or auto-detect) ──
-  // FIX #1: Wrap the ENTIRE NBN block in try/catch — any error at any point
-  // (token fetch, address search, service qualification, tariff fetch) falls
-  // back to OptiComm silently when there is no explicit NBN preference.
   try {
     let marsCandidates = [];
     try {
       marsCandidates = await marsAddressSearch(address);
     } catch (marsSearchErr) {
-      // MARS address search failed
       if (noPreference) {
-        console.warn(
-          `MARS address search failed at ${address}, falling back to OptiComm silently:`,
-          marsSearchErr.message,
-        );
+        console.warn(`MARS address search failed, falling back to OptiComm:`, marsSearchErr.message);
         return JSON.stringify(getOpticommResult());
       }
       throw marsSearchErr;
@@ -1905,60 +1663,31 @@ async function checkAddressAvailability(args, session) {
       try {
         marsSq = await marsServiceQualification(locId);
       } catch (marsSqErr) {
-        // MARS service qualification failed
         if (noPreference) {
-          console.warn(
-            `MARS service qualification failed at ${address}, falling back to OptiComm silently:`,
-            marsSqErr.message,
-          );
+          console.warn(`MARS SQ failed, falling back to OptiComm:`, marsSqErr.message);
           return JSON.stringify(getOpticommResult());
         }
-        console.warn(
-          "MARS service qualification failed (NBN explicit):",
-          marsSqErr.message,
-        );
+        console.warn("MARS SQ failed (NBN explicit):", marsSqErr.message);
         marsSq = null;
       }
     }
 
-    // If MARS returned no location candidates at all → fall back to OptiComm silently
     if (!locId && noPreference) {
-      console.log(
-        `MARS returned no location candidates for ${address}, falling back to OptiComm silently`,
-      );
+      console.log(`MARS returned no candidates for ${address}, falling back to OptiComm`);
       return JSON.stringify(getOpticommResult());
     }
 
-    const serviceabilityStatus =
-      marsSq?.siteRestriction?.serviceabilityStatus || null;
-    const serviceabilityClass =
-      marsSq?.siteRestriction?.supportingTechnology?.serviceabilityClass ||
-      null;
-    const primaryAccessTechnology =
-      marsSq?.siteRestriction?.supportingTechnology?.primaryAccessTechnology ||
-      null;
+    const serviceabilityStatus = marsSq?.siteRestriction?.serviceabilityStatus || null;
+    const serviceabilityClass = marsSq?.siteRestriction?.supportingTechnology?.serviceabilityClass || null;
+    const primaryAccessTechnology = marsSq?.siteRestriction?.supportingTechnology?.primaryAccessTechnology || null;
     const serviceType = marsSq?.serviceType || null;
     const virtutelSpeeds = marsSq?.virtutelSpeedsAvailable || [];
     const marsNotes = marsSq?.siteRestriction?.notes || [];
-    const serviceabilityClassReason =
-      marsSq?.siteRestriction?.supportingTechnology
-        ?.serviceabilityClassReason || null;
-
-    // If MARS returned no useful data (missing serviceabilityStatus and primaryAccessTechnology)
-    // AND user has no explicit NBN preference → fall back to OptiComm silently
-    if (!serviceabilityStatus && !primaryAccessTechnology && noPreference) {
-      console.log(
-        `MARS returned incomplete data for ${address}, falling back to OptiComm silently`,
-      );
-      return JSON.stringify(getOpticommResult());
-    }
+    const serviceabilityClassReason = marsSq?.siteRestriction?.supportingTechnology?.serviceabilityClassReason || null;
 
     if (serviceabilityStatus === "Rejected") {
       if (isNBN) {
-        const reason =
-          serviceabilityClassReason ||
-          "This address is planned to be serviced in the future but is not yet orderable.";
-        console.log(`NBN NOT orderable: ${address} | Reason: ${reason}`);
+        const reason = serviceabilityClassReason || "This address is planned to be serviced in the future but is not yet orderable.";
         return JSON.stringify({
           success: true,
           orderable: false,
@@ -1970,19 +1699,10 @@ async function checkAddressAvailability(args, session) {
           serviceType,
           message: reason,
           availablePlans: [],
-          mars: {
-            candidates: marsCandidates,
-            virtutelSpeedsAvailable: virtutelSpeeds,
-            serviceType,
-            supportingTechnology:
-              marsSq?.siteRestriction?.supportingTechnology || null,
-          },
+          mars: { candidates: marsCandidates, virtutelSpeedsAvailable: virtutelSpeeds, serviceType, supportingTechnology: marsSq?.siteRestriction?.supportingTechnology || null },
         });
       }
-      // No preference → silently fall back to OptiComm
-      console.log(
-        `NBN not orderable at ${address}, falling back to OptiComm silently`,
-      );
+      console.log(`NBN not orderable at ${address}, falling back to OptiComm`);
       return JSON.stringify(getOpticommResult());
     }
 
@@ -1991,42 +1711,109 @@ async function checkAddressAvailability(args, session) {
       allTariffs = await fetchTariffs();
     } catch (tariffErr) {
       if (noPreference) {
-        console.warn(
-          `Tariff fetch failed at ${address}, falling back to OptiComm silently:`,
-          tariffErr.message,
-        );
+        console.warn(`Tariff fetch failed, falling back to OptiComm:`, tariffErr.message);
         return JSON.stringify(getOpticommResult());
       }
       throw tariffErr;
     }
 
-    const availablePlans = filterTariffsByMarsAvailability(
-      allTariffs,
-      virtutelSpeeds,
-      serviceType,
-    );
+    const needsInstall = requiresInstallVisit(serviceabilityClass);
+    const readinessDescription = getServiceabilityDescription(primaryAccessTechnology, serviceabilityClass, serviceabilityStatus);
 
-    // If no NBN plans matched and user had no explicit preference → fall back to OptiComm silently
-    if (availablePlans.length === 0 && noPreference) {
-      console.log(
-        `No NBN plans matched at ${address}, falling back to OptiComm silently`,
-      );
+    const techLower = (primaryAccessTechnology || "").toLowerCase();
+    const svcTypeLower = (serviceType || "").toLowerCase();
+
+    let plansToReturn = [];
+    let networkName = "NBN";
+    let techCategory = "";
+    let requiresResFilter = false;
+
+    if (address.toLowerCase().includes("hope island") || locId?.includes("HIR")) {
+      techCategory = "HIR";
+      networkName = "HIR";
+      if (hasExplicitPreference) {
+        plansToReturn = isBusiness ? HIR_BUSINESS_PLANS : HIR_RESIDENTIAL_PLANS;
+        requiresResFilter = false;
+      } else {
+        plansToReturn = [...HIR_RESIDENTIAL_PLANS, ...HIR_BUSINESS_PLANS];
+        requiresResFilter = true;
+      }
+    } else if (svcTypeLower === "nsas" || techLower === "satellite") {
+      techCategory = "SkyMuster";
+      networkName = "NBN SkyMuster";
+      plansToReturn = NBN_SKYMUSTER_PLANS;
+      requiresResFilter = false;
+    } else if (svcTypeLower === "nwas" || techLower === "wireless" || techLower === "fixed wireless") {
+      techCategory = "FixedWireless";
+      networkName = "NBN Fixed Wireless";
+      plansToReturn = NBN_FIXED_WIRELESS_PLANS;
+      requiresResFilter = false;
+    } else if (svcTypeLower === "nfas" || svcTypeLower.startsWith("nf")) {
+      techCategory = "NBNFibre";
+      networkName = "NBN";
+
+      const isFttnFttbFttc = techLower.includes("fibre to the node") ||
+                              techLower.includes("fibre to the building") ||
+                              techLower.includes("fibre to the curb") ||
+                              techLower.includes("fttn") || techLower.includes("fttb") || techLower.includes("fttc");
+
+      if (isFttnFttbFttc) {
+        techCategory = "NBN_FTTN";
+        if (hasExplicitPreference) {
+          const nbnPlans = isBusiness ? NBN_BUSINESS_PLANS : NBN_RESIDENTIAL_PLANS;
+          plansToReturn = nbnPlans.filter(p => parseInt(p.download) <= 100);
+          requiresResFilter = false;
+        } else {
+          const residentialPlans = NBN_RESIDENTIAL_PLANS.filter(p => parseInt(p.download) <= 100);
+          const businessPlans = NBN_BUSINESS_PLANS.filter(p => parseInt(p.download) <= 100);
+          plansToReturn = [...residentialPlans, ...businessPlans];
+          requiresResFilter = true;
+        }
+      } else {
+        if (hasExplicitPreference) {
+          const nbnPlans = isBusiness ? NBN_BUSINESS_PLANS : NBN_RESIDENTIAL_PLANS;
+          if (virtutelSpeeds.length > 0) {
+            const availableSpeeds = new Set();
+            for (const code of virtutelSpeeds) {
+              const mapped = MARS_SPEED_MAP[code];
+              if (mapped) availableSpeeds.add(`${mapped.dl}/${mapped.ul}`);
+            }
+            plansToReturn = nbnPlans.filter(p => availableSpeeds.has(`${parseInt(p.download)}/${parseInt(p.upload)}`));
+          } else {
+            plansToReturn = nbnPlans;
+          }
+          requiresResFilter = false;
+        } else {
+          let residentialPlans = [...NBN_RESIDENTIAL_PLANS];
+          let businessPlans = [...NBN_BUSINESS_PLANS];
+          if (virtutelSpeeds.length > 0) {
+            const availableSpeeds = new Set();
+            for (const code of virtutelSpeeds) {
+              const mapped = MARS_SPEED_MAP[code];
+              if (mapped) availableSpeeds.add(`${mapped.dl}/${mapped.ul}`);
+            }
+            residentialPlans = residentialPlans.filter(p => availableSpeeds.has(`${parseInt(p.download)}/${parseInt(p.upload)}`));
+            businessPlans = businessPlans.filter(p => availableSpeeds.has(`${parseInt(p.download)}/${parseInt(p.upload)}`));
+          }
+          plansToReturn = [...residentialPlans, ...businessPlans];
+          requiresResFilter = true;
+        }
+      }
+    } else {
+      techCategory = "NBN_Other";
+      networkName = "NBN";
+      plansToReturn = filterTariffsByMarsAvailability(allTariffs, virtutelSpeeds, serviceType);
+      requiresResFilter = true;
+    }
+
+    if (plansToReturn.length === 0 && noPreference) {
+      console.log(`No plans found for ${techCategory} at ${address}, falling back to OptiComm`);
       return JSON.stringify(getOpticommResult());
     }
 
-    const needsInstall = requiresInstallVisit(serviceabilityClass);
-    const readinessDescription = getServiceabilityDescription(
-      primaryAccessTechnology,
-      serviceabilityClass,
-      serviceabilityStatus,
-    );
+    if (session) session.networkShown = networkName;
 
-    // Determine which plans to show based on technology type
-    const techString = (primaryAccessTechnology || "").toLowerCase();
-    const svcTypeString = (serviceType || "").toLowerCase();
-
-    // Helper to format plans for return
-    const formatPlans = (plans) => plans.map((p) => ({
+    const formattedPlans = plansToReturn.map((p) => ({
       title: p.title,
       price: p.intro_price || p.price,
       ongoing_price: p.ongoing_price || p.price,
@@ -2038,80 +1825,30 @@ async function checkAddressAvailability(args, session) {
       note: p.note || null,
     }));
 
-    let plansToReturn = [];
-    let networkName = "NBN";
-
-    // Check for specific technology types
-    if (techString.includes("satellite") || techString.includes("skymuster") || svcTypeString.includes("satellite")) {
-      // SkyMuster Satellite
-      plansToReturn = formatPlans(NBN_SKYMUSTER_PLANS);
-      networkName = "NBN SkyMuster";
-      console.log(`📡 SkyMuster detected - returning ${plansToReturn.length} satellite plans`);
-    } else if (techString.includes("wireless") || techString.includes("fixed wireless") || svcTypeString.includes("wireless")) {
-      // Fixed Wireless
-      plansToReturn = formatPlans(NBN_FIXED_WIRELESS_PLANS);
-      networkName = "NBN Fixed Wireless";
-      console.log(`📡 Fixed Wireless detected - returning ${plansToReturn.length} wireless plans`);
-    } else if (techString.includes("hir") || techString.includes("hope island") || address.toLowerCase().includes("hope island")) {
-      // HIR (Hope Island Resort) - check technology or address
-      plansToReturn = formatPlans(isBusiness ? HIR_BUSINESS_PLANS : HIR_RESIDENTIAL_PLANS);
-      networkName = "HIR";
-      console.log(`🏝️ HIR detected - returning ${plansToReturn.length} ${isBusiness ? "business" : "residential"} plans`);
-    } else {
-      // Normal NBN - Return BOTH residential and business plans, AI will filter after asking
-      const nbnResidential = formatPlans(NBN_RESIDENTIAL_PLANS);
-      const nbnBusiness = formatPlans(NBN_BUSINESS_PLANS);
-      plansToReturn = [...nbnResidential, ...nbnBusiness];
-      networkName = "NBN";
-      console.log(`📶 Normal NBN detected - returning ${plansToReturn.length} plans (residential + business). AI must ask home/business and filter.`);
-    }
-
-    // Record that NBN was shown on this session
-    if (session) session.networkShown = networkName;
-
-    // Determine if residential/business filtering is needed
-    const requiresResidentialFilter = networkName === "NBN" || networkName === "OptiComm";
-
-    console.log(
-      `${networkName} address check: ${address} | locId: ${locId} | tech: ${primaryAccessTechnology} | class: ${serviceabilityClass} | status: ${serviceabilityStatus} | serviceType: ${serviceType} | plans returned: ${plansToReturn.length} | requiresInstall: ${needsInstall} | requiresResidentialFilter: ${requiresResidentialFilter}`,
-    );
-
     return JSON.stringify({
       success: true,
       orderable: true,
       address,
       locationId: locId,
-      network: networkName,
-      requiresResidentialFilter,
       serviceabilityStatus,
       serviceabilityClass,
       primaryAccessTechnology,
       serviceType,
       requiresInstall: needsInstall,
+      requiresResidentialFilter: requiresResFilter,
       readinessDescription,
       notes: marsNotes,
-      availablePlans: plansToReturn,
-      mars: {
-        candidates: marsCandidates,
-        virtutelSpeedsAvailable: virtutelSpeeds,
-        serviceType,
-        supportingTechnology:
-          marsSq?.siteRestriction?.supportingTechnology || null,
-      },
+      technologyCategory: techCategory,
+      network: networkName,
+      availablePlans: formattedPlans,
+      mars: { candidates: marsCandidates, virtutelSpeedsAvailable: virtutelSpeeds, serviceType, supportingTechnology: marsSq?.siteRestriction?.supportingTechnology || null },
     });
   } catch (err) {
-    // Catch-all: If NBN lookup itself errors and no explicit preference → silently fall back to OptiComm
     if (noPreference) {
-      console.warn(
-        `NBN lookup catch-all at ${address}, falling back to OptiComm silently:`,
-        err.message,
-      );
+      console.warn(`NBN lookup catch-all at ${address}, falling back to OptiComm:`, err.message);
       return JSON.stringify(getOpticommResult());
     }
-    console.error(
-      "check_address_availability (NBN explicit) error:",
-      err.message,
-    );
+    console.error("check_address_availability (NBN explicit) error:", err.message);
     return JSON.stringify({ success: false, error: err.message, address });
   }
 }
@@ -2122,28 +1859,115 @@ async function handleToolCall(session, funcName, args) {
     applyExtractionToSession(session, args);
     return JSON.stringify({ success: true });
   }
+
   if (funcName === "customer_lookup") {
     try {
       const lookupArgs = { ...(args || {}) };
-      const supportIntent =
-        String(session?.collected?.intent || "").toLowerCase() === "support";
-      const accountIntent =
-        String(session?.collected?.intent || "").toLowerCase() === "account";
-      const hasPhone =
-        typeof lookupArgs.phone === "string" && !!lookupArgs.phone.trim();
-      const hasEmail =
-        typeof lookupArgs.email === "string" && !!lookupArgs.email.trim();
+      delete lookupArgs.phone;
 
-      if ((supportIntent || accountIntent) && hasPhone && hasEmail) {
-        delete lookupArgs.email;
-        console.log("🔐 Verification lookup forced to phone-only");
+      if (!lookupArgs.email && !lookupArgs.name) {
+        return JSON.stringify({ success: false, message: "Email is required for customer lookup" });
       }
 
-      return JSON.stringify(await customerLookup(lookupArgs));
+      const result = await customerLookup(lookupArgs);
+
+      if (result.success && result.customer) {
+        session.collected._emailVerifiedCustomerId = result.customer.id;
+        session.collected._registeredPhone = result.customer.phone || result.customer.phone_mobile || null;
+        session.collected._phoneVerified = false;
+        session.collected.customer_id = result.customer.id;
+        sessions.set(session.id, session);
+        console.log(
+          `📧 Email lookup OK — customer ${result.customer.id} stored. ` +
+          `Registered phone: ${session.collected._registeredPhone ? "found" : "NOT found on record"}`
+        );
+        const safeResult = { ...result };
+        if (safeResult.customer) {
+          safeResult.customer = { ...safeResult.customer };
+          // FIX (Security): Remove ALL phone variants so the LLM
+          // cannot see the registered number and pass it as input.
+          delete safeResult.customer.phone;
+          delete safeResult.customer.phone_mobile;
+          delete safeResult.customer.mobile;
+          delete safeResult.customer.phone2;
+          delete safeResult.customer.cell;
+          delete safeResult.customer.telephone;
+        }
+        return JSON.stringify(safeResult);
+      }
+
+      return JSON.stringify(result);
     } catch (e) {
       return JSON.stringify({ success: false, error: e.message });
     }
   }
+
+  if (funcName === "verify_phone") {
+    try {
+      const emailCustomerId = session.collected._emailVerifiedCustomerId;
+      if (!emailCustomerId) {
+        return JSON.stringify({
+          success: false,
+          verificationFailed: true,
+          message: "Email verification must be completed first before phone verification.",
+        });
+      }
+
+      // FIX (Security): Do NOT trust args.phone from the LLM.
+      // The LLM can hallucinate or reuse the registered phone it saw
+      // in its context window. Instead, use session.collected.phone
+      // which was set by extract_call_fields from the user's actual words.
+      // Fall back to args.phone only as a last resort.
+      const userProvidedPhone = session.collected.phone || args?.phone;
+
+      if (!userProvidedPhone) {
+        return JSON.stringify({
+          success: false,
+          verificationFailed: true,
+          message: "No phone number provided.",
+        });
+      }
+
+      const registeredPhone = session.collected._registeredPhone;
+      if (!registeredPhone) {
+        console.warn(`⚠️ No registered phone found for customer ${emailCustomerId}. Cannot verify.`);
+        return JSON.stringify({
+          success: false,
+          verificationFailed: true,
+          message: "No phone number is registered on this account. Please contact support via email.",
+        });
+      }
+
+      const normalizedInput = normalizePhone(userProvidedPhone);
+      const normalizedRegistered = normalizePhone(registeredPhone);
+
+      // Partially mask registered phone in logs for security
+      console.log(`📞 Phone verification: input="${normalizedInput}" registered="${normalizedRegistered.substring(0, 4)}****"`);
+
+      if (normalizedInput !== normalizedRegistered) {
+        console.log(`❌ Phone verification FAILED: mismatch`);
+        return JSON.stringify({
+          success: false,
+          verificationFailed: true,
+          message: "Phone number does not match the registered number on this account.",
+        });
+      }
+
+      session.collected._phoneVerified = true;
+      sessions.set(session.id, session);
+      console.log(`✅ Phone verification PASSED — customer ${emailCustomerId} fully verified`);
+
+      return JSON.stringify({
+        success: true,
+        verified: true,
+        customer_id: emailCustomerId,
+        message: "Phone number verified successfully.",
+      });
+    } catch (e) {
+      return JSON.stringify({ success: false, error: e.message });
+    }
+  }
+
   if (funcName === "get_internet_plans") {
     try {
       const tariffs = await fetchTariffs();
@@ -2162,52 +1986,46 @@ async function handleToolCall(session, funcName, args) {
       return JSON.stringify({ success: false, error: err.message });
     }
   }
+
   if (funcName === "check_address_availability") {
     if (args.address) session.collected.address = args.address;
     return await checkAddressAvailability(args, session);
   }
+
   if (funcName === "create_ticket") {
     let fa = { ...args };
     if (typeof fa.message === "string") fa.message = { message: fa.message };
     const collected = session.collected || {};
-    // Include networkShown from session in collected fields for email
-    if (session.networkShown && !collected.networkShown) {
-      collected.networkShown = session.networkShown;
-    }
+
+    // ─────────────────────────────────────────────────────────────
+    // FIX: isSalesInquiry detection was checking `fa.leadInterest`
+    // which is never passed in the tool args — the LLM only sends
+    // customer_id, subject, priority, message. leadInterest only
+    // ever lives in `collected`. The old check made `isSalesInquiry`
+    // always false when customer_id was present even for a sales call
+    // that somehow had a customer_id, and always false when only
+    // collected.leadInterest was present. Fixed to check collected
+    // first, then fall back to subject keyword matching.
+    // ─────────────────────────────────────────────────────────────
     const hasCustomerId = !!(fa.customer_id || collected.customer_id);
-    // Payment extension requests always go to Support (not Sales)
-    const hasPaymentExtension = !!(collected.paymentDate || fa.paymentDate || (fa.subject && fa.subject.toLowerCase().includes("payment extension")));
-    const isSupportTicket = hasCustomerId || hasPaymentExtension;
+    const hasLeadInterest = !!(collected.leadInterest);
+    const hasPaymentExtension = !!(collected.paymentDate || (fa.subject && fa.subject.toLowerCase().includes("payment extension")));
+
+    // A ticket is a support ticket if it has a customer ID AND
+    // is NOT a pure sales enquiry (no leadInterest) OR is a payment extension
+    const isSupportTicket = (hasCustomerId && !hasLeadInterest) || hasPaymentExtension;
 
     const detailLines = [];
-    if (collected.preferredName || collected.name)
-      detailLines.push(`Name: ${collected.preferredName || collected.name}`);
+    if (collected.preferredName || collected.name) detailLines.push(`Name: ${collected.preferredName || collected.name}`);
     if (collected.email) detailLines.push(`Email: ${collected.email}`);
     if (collected.phone) detailLines.push(`Phone: ${collected.phone}`);
     if (collected.address) detailLines.push(`Address: ${collected.address}`);
-    if (collected.networkShown || collected.networkPreference)
-      detailLines.push(`Network/Technology: ${collected.networkShown || collected.networkPreference}`);
-    if (collected.residentialPreference)
-      detailLines.push(`Type: ${collected.residentialPreference}`);
-    if (collected.leadInterest || fa.leadInterest)
-      detailLines.push(
-        `Selected Plan: ${collected.leadInterest || fa.leadInterest}`,
-      );
-    if (collected.householdSize)
-      detailLines.push(`Household Size: ${collected.householdSize}`);
-    if (collected.internetUsage)
-      detailLines.push(`Internet Usage: ${collected.internetUsage}`);
-    if (collected.pricePoint)
-      detailLines.push(`Price Point: ${collected.pricePoint}`);
-    if (collected.paymentDate)
-      detailLines.push(
-        `Customer requested payment extension until: ${collected.paymentDate}`,
-      );
+    if (collected.networkPreference) detailLines.push(`Network: ${collected.networkPreference}`);
+    if (collected.residentialPreference) detailLines.push(`Type: ${collected.residentialPreference}`);
+    if (collected.leadInterest) detailLines.push(`Selected Plan: ${collected.leadInterest}`);
+    if (collected.paymentDate) detailLines.push(`Customer requested payment extension until: ${collected.paymentDate}`);
 
-    const detailsBlock =
-      detailLines.length > 0
-        ? `\n\n--- Customer Details ---\n${detailLines.join("\n")}`
-        : "";
+    const detailsBlock = detailLines.length > 0 ? `\n\n--- Customer Details ---\n${detailLines.join("\n")}` : "";
 
     if (fa.message?.message) {
       fa.message.message += detailsBlock;
@@ -2215,62 +2033,40 @@ async function handleToolCall(session, funcName, args) {
       fa.message = { message: detailsBlock.trim() };
     }
 
+    let ticketResult;
     try {
       if (isSupportTicket) {
-        console.log(
-          `📝 Creating SUPPORT ticket in Splynx: subject="${fa.subject}" customer_id=${fa.customer_id}`,
-        );
-        const r = await splynx.request(
-          "POST",
-          "admin/support/tickets",
-          objectToUrlEncoded(fa),
-        );
+        console.log(`📝 Creating SUPPORT ticket: subject="${fa.subject}" customer_id=${fa.customer_id}`);
+        const r = await splynx.request("POST", "admin/support/tickets", objectToUrlEncoded(fa));
         console.log(`✅ Splynx ticket created: ID=${r.id}`);
         const emailResult = await sendTicketEmail(r.id, fa, collected, true);
-        return JSON.stringify({
-          success: true,
-          ticket_id: r.id,
-          email_sent: emailResult.sent,
-          email_error: emailResult.reason || null,
-        });
+        ticketResult = { success: true, ticket_id: r.id, email_sent: emailResult.sent, email_error: emailResult.reason || null };
       } else {
-        console.log(
-          `📧 SALES inquiry — sending email only (no Splynx ticket): subject="${fa.subject}"`,
-        );
+        console.log(`📧 SALES inquiry — email only: subject="${fa.subject}"`);
         const emailResult = await sendTicketEmail(null, fa, collected, false);
-        return JSON.stringify({
-          success: true,
-          message: "Sales inquiry submitted successfully",
-          email_sent: emailResult.sent,
-          email_error: emailResult.reason || null,
-        });
+        ticketResult = { success: true, message: "Sales inquiry submitted successfully", email_sent: emailResult.sent, email_error: emailResult.reason || null };
       }
     } catch (err) {
       console.error("❌ Create ticket/email failed:", err.message || err);
-      return JSON.stringify({
-        success: false,
-        error: err.message || "Failed to process request",
-      });
+      ticketResult = { success: false, error: err.message || "Failed to process request" };
     }
+
+    ticketResult._ticketCompleted = true;
+    ticketResult._isSalesTicket = !isSupportTicket;
+    return JSON.stringify(ticketResult);
   }
+
   if (funcName === "send_portal_login_email") {
     const collected = session.collected || {};
-    const hasCustomerId = !!collected.customer_id;
-
     const detailLines = [];
-    if (collected.preferredName || collected.name)
-      detailLines.push(`Name: ${collected.preferredName || collected.name}`);
+    if (collected.preferredName || collected.name) detailLines.push(`Name: ${collected.preferredName || collected.name}`);
     if (collected.email) detailLines.push(`Email: ${collected.email}`);
     if (collected.phone) detailLines.push(`Phone: ${collected.phone}`);
-    if (collected.customer_id)
-      detailLines.push(`Customer ID: ${collected.customer_id}`);
-    detailLines.push(
-      "Issue: Customer unable to login to portal - please provide login credentials or reset access",
-    );
+    if (collected.customer_id) detailLines.push(`Customer ID: ${collected.customer_id}`);
+    detailLines.push("Issue: Customer unable to login to portal - please provide login credentials or reset access");
 
     const detailsBlock = `\n\n--- Customer Details ---\n${detailLines.join("\n")}`;
     const messageBody = `${args.message || "Customer requested assistance with portal login"}${detailsBlock}`;
-
     const emailArgs = {
       subject: "Support - Portal Login Assistance",
       priority: "medium",
@@ -2279,41 +2075,16 @@ async function handleToolCall(session, funcName, args) {
     };
 
     try {
-      console.log(`📧 Sending portal login assistance email to support@`);
-      const emailResult = await sendTicketEmail(
-        null,
-        emailArgs,
-        collected,
-        true,
-      );
-      return JSON.stringify({
-        success: true,
-        email_sent: emailResult.sent,
-        email_error: emailResult.reason || null,
-      });
+      const emailResult = await sendTicketEmail(null, emailArgs, collected, true);
+      return JSON.stringify({ success: true, email_sent: emailResult.sent, email_error: emailResult.reason || null });
     } catch (err) {
-      console.error("❌ Portal login email failed:", err.message || err);
-      return JSON.stringify({
-        success: false,
-        error: err.message || "Failed to send email",
-      });
+      return JSON.stringify({ success: false, error: err.message || "Failed to send email" });
     }
   }
-  if (funcName === "get_ticket_types")
-    return JSON.stringify({
-      success: true,
-      types: await splynx.request("GET", "admin/support/tickets-types"),
-    });
-  if (funcName === "get_ticket_groups")
-    return JSON.stringify({
-      success: true,
-      groups: await splynx.request("GET", "admin/support/tickets-groups"),
-    });
-  if (funcName === "get_ticket_statuses")
-    return JSON.stringify({
-      success: true,
-      statuses: await splynx.request("GET", "admin/support/tickets-statuses"),
-    });
+
+  if (funcName === "get_ticket_types") return JSON.stringify({ success: true, types: await splynx.request("GET", "admin/support/tickets-types") });
+  if (funcName === "get_ticket_groups") return JSON.stringify({ success: true, groups: await splynx.request("GET", "admin/support/tickets-groups") });
+  if (funcName === "get_ticket_statuses") return JSON.stringify({ success: true, statuses: await splynx.request("GET", "admin/support/tickets-statuses") });
   return JSON.stringify({ error: `Unknown tool: ${funcName}` });
 }
 
@@ -2340,53 +2111,121 @@ async function processWithTools(session) {
     }
     session.messages.push({ role: "function", name: fn, content: toolContent });
 
-    // ── Build the context hint for the final response ──
-    let plansPresentationHint = "";
+    let toolResultHint = "";
+
     if (fn === "check_address_availability") {
       let parsedResult = null;
-      try {
-        parsedResult = JSON.parse(toolContent);
-      } catch (_) {}
+      try { parsedResult = JSON.parse(toolContent); } catch (_) {}
       if (parsedResult) {
         const networkLabel = parsedResult.network || "the available network";
-        const planCount = Array.isArray(parsedResult.availablePlans)
-          ? parsedResult.availablePlans.length
-          : 0;
+        const planCount = Array.isArray(parsedResult.availablePlans) ? parsedResult.availablePlans.length : 0;
 
         if (parsedResult.orderable === false) {
-          plansPresentationHint = `
-TOOL RESULT INSTRUCTION: The address check returned orderable=false — no plans are available at this address via NBN.
-Tell the customer empathetically and offer to take their details for when it becomes available.
-Do NOT present any OptiComm or NBN plans from your knowledge base.`;
+          toolResultHint = `TOOL RESULT: Address check returned orderable=false. Tell the customer empathetically that NBN is not yet available and offer to take their details.`;
         } else if (planCount > 0) {
-          // FIX #2 + FIX #3: Lock to the returned network and instruct IMMEDIATE presentation
-          plansPresentationHint = `
-TOOL RESULT INSTRUCTION: The address check returned ${planCount} plans on the "${networkLabel}" network.
-CRITICAL — IMMEDIATE PRESENTATION REQUIRED: Present these plans RIGHT NOW without waiting for any user input. Do not ask "are you ready?" or pause. Speak immediately, slowly, and one plan at a time.
-CRITICAL — ONE NETWORK LOCK: You are now LOCKED to "${networkLabel}" for this entire session. Do NOT mention ${networkLabel === "OptiComm" ? "NBN" : "OptiComm"} at any point ever again in this conversation.
-CRITICAL — ONLY THESE PLANS: Present ONLY these ${planCount} plans from the tool result's "availablePlans" array. Do NOT add plans from memory or the knowledge base.
-Present the plans warmly and conversationally as per the system prompt, then wait for the customer to choose.`;
+          toolResultHint = `TOOL RESULT: Address check returned ${planCount} plans on "${networkLabel}". YOU MUST RESPOND NOW — present these plans immediately and warmly. LOCK to ${networkLabel} for this session. ONLY present plans from availablePlans array.`;
         } else {
-          plansPresentationHint = `
-TOOL RESULT INSTRUCTION: The address check returned no available plans.
-Tell the customer no plans are currently available at this address and offer to help them in another way.
-Do NOT invent or present plans from your knowledge base.`;
+          toolResultHint = `TOOL RESULT: Address check returned no plans. Tell the customer and offer alternative help.`;
         }
+      }
+    } else if (fn === "customer_lookup") {
+      let parsedResult = null;
+      try { parsedResult = JSON.parse(toolContent); } catch (_) {}
+      if (parsedResult?.success && parsedResult?.customer) {
+        toolResultHint = `TOOL RESULT: Email lookup succeeded — customer found. Say "Perfect, I can see that account." and ask for their phone number to complete verification. Call verify_phone with whatever number they give you.`;
+      } else if (parsedResult?.success === false) {
+        toolResultHint = `TOOL RESULT: Customer lookup failed — no customer found. Tell the customer and ask them to double-check their email address.`;
+      }
+    } else if (fn === "verify_phone") {
+      let parsedResult = null;
+      try { parsedResult = JSON.parse(toolContent); } catch (_) {}
+      if (parsedResult?.verificationFailed) {
+        toolResultHint = `TOOL RESULT: Phone verification FAILED. Tell the customer their number doesn't match. Ask them to double-check. Do NOT proceed to account details.`;
+      } else if (parsedResult?.success && parsedResult?.verified) {
+        toolResultHint = `TOOL RESULT: Phone verification PASSED — customer fully verified. Say "Perfect, thanks for confirming that — your account's all verified now." and proceed to ask what they need help with.`;
+      } else if (!parsedResult?.success) {
+        toolResultHint = `TOOL RESULT: Phone verification could not be completed — ${parsedResult?.message || "unknown error"}. Tell the customer and suggest emailing support@infinetbroadband.com.au.`;
+      }
+    } else if (fn === "create_ticket") {
+      let parsedResult = null;
+      try { parsedResult = JSON.parse(toolContent); } catch (_) {}
+      if (parsedResult?.success) {
+        const ticketId = parsedResult.ticket_id;
+        const isSales = parsedResult._isSalesTicket === true || !ticketId;
+        if (isSales) {
+          toolResultHint = `TOOL RESULT: Sales enquiry submitted successfully. YOU MUST RESPOND IMMEDIATELY NOW. Say: "Awesome, you're all set! I've submitted your enquiry and our sales team will be reaching out to you via email shortly to get everything finalised. Is there anything else you'd like to know in the meantime?"`;
+        } else {
+          toolResultHint = `TOOL RESULT: Support ticket #${ticketId} created successfully. YOU MUST RESPOND IMMEDIATELY NOW. Say: "Brilliant, all done! I've raised support ticket number ${ticketId} for you and you'll receive all the details via email shortly. Our team will be in touch with you soon. Is there anything else I can help you with today?"`;
+        }
+      } else {
+        toolResultHint = `TOOL RESULT: Ticket/email submission FAILED — error: ${parsedResult?.error || "unknown"}. YOU MUST RESPOND NOW. Apologise and suggest the customer contact support directly at support@infinetbroadband.com.au or call 1300 101 414.`;
+      }
+    } else if (fn === "send_portal_login_email") {
+      toolResultHint = `TOOL RESULT: Portal login email sent to support team. YOU MUST RESPOND NOW saying the email has been sent and the team will be in touch shortly.`;
+    } else if (fn === "extract_call_fields") {
+      const collected = session.collected || {};
+      // ─────────────────────────────────────────────────────────────
+      // FIX: websiteCheckState hint was only checking _websiteCheckDone,
+      // not _websiteCheckAsked. This meant the gate hint was re-injected
+      // even after the AI had already asked the question (but before the
+      // user answered), causing the AI to ask it again mid-sentence.
+      // Now we check BOTH flags — if either is set, we do NOT gate.
+      // ─────────────────────────────────────────────────────────────
+      if (collected.leadInterest && collected._websiteCheckRequired && !collected._websiteCheckAsked && !collected._websiteCheckDone) {
+        toolResultHint = `TOOL RESULT: Fields extracted. Plan "${collected.leadInterest}" is now selected. YOU MUST NOW ask the website visit question: "Just out of curiosity — have you had a chance to check out our website and had a look at the plans or pricing there?" Do NOT skip this. Do NOT proceed to name/email collection without asking this first.`;
+      }
+      if (collected.leadInterest && collected._websiteCheckRequired && (collected._websiteCheckAsked || collected._websiteCheckDone)) {
+        toolResultHint = `TOOL RESULT: Fields extracted. Website check already asked/answered — do NOT ask again. Continue with current step of order collection.`;
       }
     }
 
-    // ── Final response generation using the FULL system prompt ──
     const networkLockReminder = session.networkShown
-      ? `\nNETWORK LOCK REMINDER: You already showed ${session.networkShown} plans to this customer. Do NOT mention ${session.networkShown === "OptiComm" ? "NBN" : "OptiComm"} for any reason for the rest of this conversation.`
+      ? `\nNETWORK LOCK: You already showed ${session.networkShown} plans. Do NOT mention ${session.networkShown === "OptiComm" ? "NBN" : "OptiComm"} again.`
       : "";
+
+    // ─────────────────────────────────────────────────────────────
+    // FIX: websiteCheckState now checks _websiteCheckAsked in addition
+    // to _websiteCheckDone, preventing double-asking
+    // ─────────────────────────────────────────────────────────────
+    const websiteCheckState = (() => {
+      const c = session.collected || {};
+      if (c.leadInterest && c._websiteCheckRequired && !c._websiteCheckAsked && !c._websiteCheckDone) {
+        return `\nWEBSITE CHECK REQUIRED: Plan "${c.leadInterest}" selected but website check question NOT yet asked. You MUST ask "Just out of curiosity — have you had a chance to check out our website and had a look at the plans or pricing there?" before collecting name/mobile/email.`;
+      }
+      if (c._websiteCheckAsked || c._websiteCheckDone) {
+        return `\nWEBSITE CHECK DONE/ASKED: Already handled. Do NOT ask again. Proceed with order collection.`;
+      }
+      return "";
+    })();
+
+    const verificationState = (() => {
+      const c = session.collected || {};
+      const intent = String(c.intent || "").toLowerCase();
+      if (intent === "support" || intent === "account") {
+        if (c._emailVerifiedCustomerId && !c._phoneVerified) {
+          return `\nVERIFICATION STATE: Email verified (customer ID: ${c._emailVerifiedCustomerId}), phone NOT yet verified. Ask user for their phone number, then call verify_phone. Do NOT call customer_lookup again.`;
+        }
+        if (c._phoneVerified) {
+          return `\nVERIFICATION STATE: FULLY VERIFIED — both email and phone confirmed. You may now proceed with support/account questions.`;
+        }
+        return `\nVERIFICATION STATE: NOT verified. Collect email first, then call customer_lookup. After success, ask for phone and call verify_phone.`;
+      }
+      return "";
+    })();
+
+    const contextHint = [
+      `Current collected fields: ${JSON.stringify(session.collected || {})}.`,
+      networkLockReminder,
+      websiteCheckState,
+      verificationState,
+      toolResultHint ? `\n${toolResultHint}` : "",
+      toolResultHint ? `\nIMPORTANT: You MUST respond with a full message right now based on the tool result above. Do NOT stay silent.` : "",
+    ].join("").trim();
 
     const finalMessages = [
       { role: "system", content: SYSTEM_PROMPT },
       ...session.messages,
-      {
-        role: "system",
-        content: `Current collected fields: ${JSON.stringify(session.collected || {})}.${networkLockReminder}${plansPresentationHint}`,
-      },
+      { role: "system", content: contextHint },
     ];
 
     const finalResp = await openai.chat.completions.create({
@@ -2395,9 +2234,7 @@ Do NOT invent or present plans from your knowledge base.`;
       temperature: 0.0,
       max_tokens: 700,
     });
-    const text =
-      finalResp.choices?.[0]?.message?.content?.trim() ||
-      "Thanks — I have your details.";
+    const text = finalResp.choices?.[0]?.message?.content?.trim() || "Thanks — I have your details.";
     session.messages.push({ role: "assistant", content: text });
     return text;
   } else if (msg?.content) {
@@ -2411,8 +2248,7 @@ Do NOT invent or present plans from your knowledge base.`;
 app.post("/api/voice-chat/init", async (req, res) => {
   try {
     const session = mkSession();
-    const greeting =
-      "Hey there! Welcome to InfiNET Broadband — great to have you! I'm the InfiNET assistant and I'm here to help you out with anything you need. First up, could I grab your name?";
+    const greeting = "Welcome to InfiNET Broadband! Are you a new customer looking to get connected with us, or are you already part of the InfiNET family?";
     session.messages.push({ role: "assistant", content: greeting });
     sessions.set(session.id, session);
     const ttsBuf = await makeTTS(greeting);
@@ -2427,59 +2263,30 @@ app.post("/api/voice-chat/init", async (req, res) => {
 });
 
 app.post("/api/voice", upload.single("audio"), async (req, res) => {
-  const sid =
-    req.body?.sessionId ||
-    req.query.sessionId ||
-    req.headers["x-session-id"] ||
-    null;
+  const sid = req.body?.sessionId || req.query.sessionId || req.headers["x-session-id"] || null;
   if (!req.file) return res.status(400).json({ error: "Missing audio" });
   const up = path.resolve(req.file.path);
   let cp = null;
   try {
-    const session =
-      sid && sessions.has(sid) ? sessions.get(sid) : mkSession(sid);
+    const session = sid && sessions.has(sid) ? sessions.get(sid) : mkSession(sid);
     const orig = (req.file.originalname || "").toLowerCase();
     const mime = (req.file.mimetype || "").toLowerCase();
-    const isWav =
-      orig.endsWith(".wav") || mime === "audio/wav" || mime === "audio/wave";
+    const isWav = orig.endsWith(".wav") || mime === "audio/wav" || mime === "audio/wave";
     cp = isWav ? up : await convertToWav(up);
-    const tr = await openai.audio.transcriptions.create({
-      file: fs.createReadStream(cp),
-      model: "whisper-1",
-    });
+    const tr = await openai.audio.transcriptions.create({ file: fs.createReadStream(cp), model: "whisper-1" });
     let userText = normalizeText(tr?.text || "");
 
-    // ── Interruption / noise filtering ──
-    const lastAssistantMsg = [...session.messages]
-      .reverse()
-      .find((m) => m.role === "assistant");
+    const lastAssistantMsg = [...session.messages].reverse().find((m) => m.role === "assistant");
     if (lastAssistantMsg && userText) {
       const { isValid, isListeningCue } = classifyInterruption(userText);
       if (isListeningCue) {
-        console.log(
-          `🎙️ Listening cue detected ("${userText}"), ignoring as input`,
-        );
         const repeatMsg = "Sorry, I didn't catch that — please go ahead.";
-        return res.json({
-          sessionId: session.id,
-          text: repeatMsg,
-          audioBase64: (await makeTTS(repeatMsg))?.toString("base64") || null,
-          userText,
-        });
+        return res.json({ sessionId: session.id, text: repeatMsg, audioBase64: (await makeTTS(repeatMsg))?.toString("base64") || null, userText });
       }
       if (!isValid && userText.split(/\s+/).length < 3) {
-        console.log(
-          `🎙️ Likely noise barge-in ("${userText}"), repeating last message`,
-        );
-        const repeatPrefix =
-          "Oh sorry, I think there might have been a little hiccup — let me just repeat that. ";
+        const repeatPrefix = "Oh sorry, I think there might have been a little hiccup — let me just repeat that. ";
         const repeatText = repeatPrefix + lastAssistantMsg.content;
-        return res.json({
-          sessionId: session.id,
-          text: repeatText,
-          audioBase64: (await makeTTS(repeatText))?.toString("base64") || null,
-          userText,
-        });
+        return res.json({ sessionId: session.id, text: repeatText, audioBase64: (await makeTTS(repeatText))?.toString("base64") || null, userText });
       }
     }
 
@@ -2487,63 +2294,38 @@ app.post("/api/voice", upload.single("audio"), async (req, res) => {
     if (mapped) userText = mapped;
     if (!userText) {
       const p = "Sorry, I didn't catch that — could you please repeat?";
-      return res.json({
-        sessionId: session.id,
-        text: p,
-        audioBase64: (await makeTTS(p))?.toString("base64") || null,
-        userText: null,
-      });
+      return res.json({ sessionId: session.id, text: p, audioBase64: (await makeTTS(p))?.toString("base64") || null, userText: null });
     }
     session.messages.push({ role: "user", content: userText });
     const assistantText = await processWithTools(session);
     const ttsBuf = await makeTTS(assistantText);
     session.lastSeen = new Date().toISOString();
     sessions.set(session.id, session);
-    return res.json({
-      sessionId: session.id,
-      text: assistantText,
-      audioBase64: ttsBuf ? ttsBuf.toString("base64") : null,
-      userText,
-    });
+    return res.json({ sessionId: session.id, text: assistantText, audioBase64: ttsBuf ? ttsBuf.toString("base64") : null, userText });
   } catch (e) {
     console.error("voice error:", e);
     return res.status(500).json({ error: e?.message });
   } finally {
-    try {
-      if (up && fs.existsSync(up)) fs.unlinkSync(up);
-    } catch (_) {}
-    try {
-      if (cp && cp !== up && fs.existsSync(cp)) fs.unlinkSync(cp);
-    } catch (_) {}
+    try { if (up && fs.existsSync(up)) fs.unlinkSync(up); } catch (_) {}
+    try { if (cp && cp !== up && fs.existsSync(cp)) fs.unlinkSync(cp); } catch (_) {}
   }
 });
 
 app.post("/api/voice/structured-input", async (req, res) => {
   try {
     const { sessionId, field, value } = req.body || {};
-    if (!sessionId || !field || !value)
-      return res.status(400).json({ error: "Missing params" });
-    if (!["email", "phone"].includes(field))
-      return res.status(400).json({ error: "Invalid field" });
+    if (!sessionId || !field || !value) return res.status(400).json({ error: "Missing params" });
+    if (!["email", "phone"].includes(field)) return res.status(400).json({ error: "Invalid field" });
     const session = sessions.get(sessionId);
     if (!session) return res.status(404).json({ error: "Session not found" });
     session.collected[field] = value;
-    const userMsg =
-      field === "email"
-        ? `My email is ${value}`
-        : `My phone number is ${value}`;
+    const userMsg = field === "email" ? `My email is ${value}` : `My phone number is ${value}`;
     session.messages.push({ role: "user", content: userMsg });
     const assistantText = await processWithTools(session);
     const ttsBuf = await makeTTS(assistantText);
     session.lastSeen = new Date().toISOString();
     sessions.set(session.id, session);
-    return res.json({
-      sessionId: session.id,
-      text: assistantText,
-      audioBase64: ttsBuf ? ttsBuf.toString("base64") : null,
-      userText: userMsg,
-      collected: session.collected,
-    });
+    return res.json({ sessionId: session.id, text: assistantText, audioBase64: ttsBuf ? ttsBuf.toString("base64") : null, userText: userMsg, collected: session.collected });
   } catch (e) {
     console.error("structured-input error:", e);
     return res.status(500).json({ error: e?.message });
@@ -2551,9 +2333,7 @@ app.post("/api/voice/structured-input", async (req, res) => {
 });
 
 app.get("/", (req, res) => {
-  res.send(
-    `<h1 style="text-align:center;margin-top:100px;font-family:sans-serif;color:#00bfff">✅ InfiNET AI Backend is running!</h1>`,
-  );
+  res.send(`<h1 style="text-align:center;margin-top:100px;font-family:sans-serif;color:#00bfff">✅ InfiNET AI Backend is running!</h1>`);
 });
 
 // ==================== SERVER ====================
@@ -2573,6 +2353,7 @@ setupRealtimeVoice(io, {
   mkSession,
   sessions,
   normalizeText,
+  normalizePhone,
   safeParseJSON,
   applyExtractionToSession,
   fetchTariffs,
@@ -2596,164 +2377,7 @@ httpServer.listen(PORT, () => {
   console.log(`🚀 InfiNET Broadband AI Server running on port ${PORT}`);
   console.log(`🎤 Realtime API + ElevenLabs • Ultra-low latency mode`);
   console.log(`🔌 Socket.IO ready for voice clients`);
-  console.log(` • OptiComm plans = HARDCODED (no MARS API call)`);
-  console.log(
-    ` • NBN plans filtered by MARS virtutelSpeedsAvailable + serviceType`,
-  );
-  console.log(
-    ` • check_address_availability auto-detects network (NBN first → OptiComm fallback)`,
-  );
-  console.log(` • Interruption/noise filtering enabled`);
-  console.log(` • FIX: MARS errors at any stage → silent OptiComm fallback`);
-  console.log(` • FIX: One-network-per-session lock (no cross-pollination)`);
-  console.log(` • FIX: Plans presented immediately on tool return, no delay`);
+  console.log(` • FIX: applyExtractionToSession — _websiteCheckDone only init'd once`);
+  console.log(` • FIX: isSalesInquiry now reads from collected.leadInterest correctly`);
+  console.log(` • FIX: websiteCheckState hint checks both _websiteCheckAsked and _websiteCheckDone`);
 });
-
-/*
-================================================================================
-COMPLETE BOT FLOW DOCUMENTATION
-================================================================================
-
-All 5 flows below. OptiComm plans are hardcoded in OPTICOMM_RESIDENTIAL_PLANS
-and OPTICOMM_BUSINESS_PLANS. NBN plans come from Splynx tariffs filtered via
-MARS API. If MARS fails at any point (token, search, SQ, tariff fetch) and the
-customer didn't explicitly ask for NBN, the bot silently shows OptiComm plans.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-FLOW 1 — SALES (New Customer)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Bot greets → asks for name
-2. Customer gives name → bot saves preferredName, asks new or existing
-3. Customer says "new" → customerType=new saved
-4. Bot asks "home or business?" (skip if already mentioned)
-5. Customer answers → residentialPreference saved
-6. Bot asks for full address (street, suburb, state, postcode)
-7. Customer gives address → bot immediately calls check_address_availability
-   ├─ MARS succeeds + NBN plans found → show NBN plans, lock session to NBN
-   ├─ MARS succeeds + no NBN plans → silently show OptiComm plans, lock to OptiComm
-   ├─ MARS address rejected → silently show OptiComm plans, lock to OptiComm
-   └─ MARS errors at ANY stage → silently show OptiComm plans, lock to OptiComm
-8. Bot IMMEDIATELY presents plans (no waiting) with enthusiasm
-9. Bot asks "which plan catches your eye?" then WAITS for customer to choose
-10. Customer picks a plan → leadInterest saved, bot reacts warmly
-11. Bot asks for email address (shows text input box)
-12. Customer provides email → email saved
-13. Bot says "just a moment while I submit this" → calls create_ticket
-    ├─ No customer_id → sales email only to sales@infinetbroadband.com.au
-    └─ Email includes name, email, address, selected plan
-14. Bot confirms: "You're all set! Sales team will be in touch shortly."
-15. Asks if anything else needed
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-FLOW 2 — SUPPORT (Existing Customer)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Bot greets → asks for name
-2. Customer gives name → asks new or existing
-3. Customer says "existing" → asks "support, accounts, or moving?"
-4. Customer says "support" or describes a tech issue
-5. Bot asks for account email → calls customer_lookup
-   ├─ Found → bot says "found your account" and asks what's going on
-   └─ Not found → asks to try a different email or phone number
-6. Customer describes the issue → bot empathises, asks follow-up questions
-7. issueSummary collected with enough detail
-8. Bot says "let me raise this for you now" → calls create_ticket
-   ├─ customer_id present → creates Splynx ticket + sends email to support@
-   └─ Email includes customer details and issue summary
-9. Bot confirms: "Ticket raised! Team will be in touch shortly."
-10. Asks if anything else needed
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-FLOW 3 — ACCOUNTS / BILLING (Existing Customer)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Bot greets → asks for name
-2. Customer gives name → asks new or existing
-3. Customer says "existing" → asks "support, accounts, or moving?"
-4. Customer says "accounts", "billing", "payment", "invoice"
-5. Bot asks for account email → calls customer_lookup
-6. Bot verifies with phone number (phone ONLY, no email re-sent) → customer_lookup with phone
-7. After verification, bot asks naturally what they need help with (payment details, outstanding invoice, portal login access, phone payment, or payment extension).
-8. FIVE PATHS:
-  a) UPDATE PAYMENT DETAILS: Bot provides portal link first, then specific guide link (https://www.infinetbroadband.com.au/set-up-a-payment-method/)
-  b) PAY OUTSTANDING INVOICE: Bot provides portal link first, then specific payment link (https://www.infinetbroadband.com.au/manually-paying-an-invoice/)
-  c) CAN'T LOGIN TO PORTAL: Bot asks "Would you like me to send an email to support so they can sort you out?" → If yes: call send_portal_login_email (email only, NO ticket created)
-  d) PHONE PAYMENT: Bot gives phone payment option on 1300 101 414
-  e) PAYMENT EXTENSION: Bot asks for payment date → creates support ticket + sends email with "Customer requested payment extension until: [date]"
-9. Asks if anything else needed
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-FLOW 4 — RELOCATION (Existing Customer Moving)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Bot greets → asks for name
-2. Customer gives name → asks new or existing
-3. Customer says "existing" → asks "support, accounts, or moving?"
-4. Customer says "moving" or "relocating"
-5. Bot asks for account email → calls customer_lookup
-6. Bot lists active services found on the account
-7. Asks which services to keep / cancel → serviceToTerminate saved
-8. Asks "is the new place residential or business?" (skip if known)
-9. Asks for disconnect date (old address) → terminationDate saved
-10. Asks for connection date (new address) → connectionDate saved
-11. Asks for new address → calls check_address_availability
-    ├─ Same fallback logic as SALES FLOW (NBN → OptiComm on failure)
-    └─ Session locked to whichever network is returned
-12. Bot IMMEDIATELY presents plans, waits for customer to choose
-13. Customer picks plan → leadInterest saved
-14. Bot says "let me put this all together" → calls create_ticket with:
-    - old service termination details
-    - new address + connection date
-    - selected plan
-    - all collected fields
-15. Bot confirms and asks if anything else
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-FLOW 5 — GENERAL ENQUIRY
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Bot greets → asks for name
-2. Customer asks a general question (pricing, modems, coverage, etc.)
-3. Bot answers from KB with warm, conversational responses:
-   - "What modems do you sell?" → lists hardware with prices
-   - "Do you have contracts?" → no lock-in, month to month
-   - "What's the difference between NBN and OptiComm?" → explains both
-   - "Do you cover [suburb]?" → asks for address, runs check_address_availability
-   - "Private fibre for developers?" → sends to dedicated URL
-   - "Security packages?" → lists Basic/Bronze/Silver/Gold
-4. If question is out of scope → refers to support@infinetbroadband.com.au
-5. No ticket unless customer specifically asks for follow-up
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-KEY BEHAVIOURS ACROSS ALL FLOWS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• ONE NETWORK PER SESSION: Once check_address_availability returns (NBN or
-  OptiComm), that network is locked for the entire session. The other network
-  is never mentioned again. This is enforced in:
-  (a) session.networkShown flag on the session object
-  (b) networkLockReminder injected into every subsequent LLM call
-  (c) plansPresentationHint in the tool result instruction
-  (d) System prompt rules (ONE-NETWORK-PER-SESSION RULE section)
-
-• IMMEDIATE PLAN PRESENTATION: When check_address_availability returns data,
-  the TOOL RESULT INSTRUCTION tells the LLM to present plans immediately
-  without waiting for any user input. No "should I continue?" pauses.
-
-• MARS ERROR HANDLING: Errors are caught at 4 levels:
-  (a) getMarsAccessToken() failure → catch → OptiComm fallback
-  (b) marsAddressSearch() failure → inner try/catch → OptiComm fallback
-  (c) marsServiceQualification() failure → inner try/catch → OptiComm fallback
-  (d) fetchTariffs() failure → inner try/catch → OptiComm fallback
-  (e) Outer catch-all for any other unexpected error → OptiComm fallback
-  All fallbacks are silent (no mention to customer of NBN failing).
-
-• NEVER ASK ABOUT NBN vs OPTICOMM: The bot never asks the customer which
-  network they prefer. Address check auto-detects. If user volunteers a
-  preference ("I want NBN" / "do you have OptiComm"), it's extracted and
-  passed to the tool. Otherwise the tool decides.
-
-• PLAN SELECTION: Bot never assumes or pre-selects a plan. Always waits for
-  explicit customer confirmation before saving leadInterest.
-
-• SALES vs SUPPORT EMAIL ROUTING:
-  - New customer (no customer_id) → sales email only, no Splynx ticket
-  - Existing customer (customer_id present) → Splynx ticket + support email
-
-================================================================================
-*/
