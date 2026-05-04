@@ -1,5 +1,4 @@
 import WebSocket from "ws";
-
 export function setupRealtimeVoice(io, deps) {
   const {
     OPENAI_API_KEY,
@@ -30,12 +29,12 @@ export function setupRealtimeVoice(io, deps) {
   }));
 
   io.on("connection", (socket) => {
-    console.log(`🔌 Voice client connected: ${socket.id}`);
+    console.log(`📌 Voice client connected: ${socket.id}`);
 
     const session = mkSession();
     let openaiWs = null;
 
-    // ─── ElevenLabs state ────────────────────────────────────────
+    // --- ElevenLabs state -------------------------------------------
     let elevenLabsWs = null;
     let elevenLabsReady = false;
     let textBuffer = [];
@@ -45,13 +44,18 @@ export function setupRealtimeVoice(io, deps) {
     let lastTtsText = "";
     let isResponseActive = false;
     let assistantSpeaking = false;
+    let responseTextComplete = false;
+    let ttsChunkCount = 0;
+    let ttsFinalized = false;
+    let ttsDrainTimer = null;
+    let lastTtsAudioAt = 0;
     let awaitingStructuredInput = false;
     let structuredInputField = null;
 
     const PCM_SAMPLE_RATE = 16000;
     let lastAssistantText = "";
 
-    // ─── FIX 5: Retry state at connection scope ──────────────────
+    // --- FIX 5: Retry state at connection scope ------------------
     let emptyResponseCount = 0;
     const MAX_EMPTY_RETRIES = 3;
 
@@ -60,16 +64,14 @@ export function setupRealtimeVoice(io, deps) {
     let currentResponseId = null;
     let currentResponseHadOutput = false;
 
-    // ─── FIX 4: Post-done response.create gate ───────────────────
+    // --- FIX 4: Post-done response.create gate -------------------
     let pendingPostDoneCreate = false;
     let pendingPostDoneHint = null;
 
-    // ─── FIX 1 & 2: Sales step machine ──────────────────────────
+    // --- FIX 1 & 2: Sales step machine --------------------------
     let salesStep = null;
 
-    // ─── SILENCE TIMER FIX: Track whether last response was package-related ──
-    // This flag is set when GPT finishes text generation, then consumed
-    // by the ElevenLabs isFinal handler to choose the correct delay.
+    // --- SILENCE TIMER FIX: Track whether last response was package-related ---
     let lastResponseWasPackage = false;
 
     function initSalesStepMachine() {
@@ -94,17 +96,41 @@ export function setupRealtimeVoice(io, deps) {
     function advanceSalesStep(completedStep) {
       const c = session.collected || {};
       if (salesStep !== completedStep) return;
-      const order = ["firstName", "lastName", "phone", "email", "createTicket", "done"];
+      const order = [
+        "firstName",
+        "lastName",
+        "phone",
+        "email",
+        "createTicket",
+        "done",
+      ];
       const idx = order.indexOf(completedStep);
       if (idx === -1) return;
       const next = order[idx + 1];
-      if (!next) { salesStep = "done"; return; }
+      if (!next) {
+        salesStep = "done";
+        return;
+      }
 
-      if (next === "lastName" && c._lastName) { advanceSalesStep("lastName"); return; }
-      if (next === "phone" && c.phone)         { advanceSalesStep("phone"); return; }
-      if (next === "email" && c.email)         { advanceSalesStep("email"); return; }
-      if (next === "createTicket" &&
-          c._firstName && c._lastName && c.phone && c.email) {
+      if (next === "lastName" && c._lastName) {
+        advanceSalesStep("lastName");
+        return;
+      }
+      if (next === "phone" && c.phone) {
+        advanceSalesStep("phone");
+        return;
+      }
+      if (next === "email" && c.email) {
+        advanceSalesStep("email");
+        return;
+      }
+      if (
+        next === "createTicket" &&
+        c._firstName &&
+        c._lastName &&
+        c.phone &&
+        c.email
+      ) {
         salesStep = "createTicket";
       } else {
         salesStep = next;
@@ -115,7 +141,11 @@ export function setupRealtimeVoice(io, deps) {
     function buildSalesStepHint() {
       const c = session.collected || {};
 
-      if (salesStep === null && c.leadInterest && (c._websiteCheckDone || c._websiteCheckAsked)) {
+      if (
+        salesStep === null &&
+        c.leadInterest &&
+        (c._websiteCheckDone || c._websiteCheckAsked)
+      ) {
         initSalesStepMachine();
       }
 
@@ -138,7 +168,8 @@ export function setupRealtimeVoice(io, deps) {
 
         case "createTicket": {
           const missing = [];
-          if (!c._firstName && !c.name && !c.preferredName) missing.push("name");
+          if (!c._firstName && !c.name && !c.preferredName)
+            missing.push("name");
           if (!c.phone) missing.push("phone");
           if (!c.email) missing.push("email");
           if (!c.leadInterest) missing.push("selected plan");
@@ -164,20 +195,22 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
       }
     }
 
-    // ─── FIX 3: Raw phone buffer ─────────────────────────────────
+    // --- FIX 3: Raw phone buffer ---------------------------------
     let rawPhoneBuffer = null;
     let awaitingPhoneVerification = false;
 
     // Plans-presented cooldown
-    // NOTE: We still track plansPresentedAt so we can pass the correct
-    // delay to startSilenceTimer from within the ElevenLabs isFinal handler.
     let plansPresentedAt = 0;
     const PLANS_PRESENTED_COOLDOWN_MS = 60000;
 
-    // ─── Single pending response.create gate ────────────────────
+    // --- Single pending response.create gate --------------------
     let responseCreatePending = false;
 
-    function scheduleResponseCreate(contextHint = null, delayMs = 0, force = false) {
+    function scheduleResponseCreate(
+      contextHint = null,
+      delayMs = 0,
+      force = false,
+    ) {
       if (isResponseActive && !force) {
         if (contextHint) pendingPostDoneHint = contextHint;
         pendingPostDoneCreate = true;
@@ -201,17 +234,26 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
         }
 
         const salesHint = buildSalesStepHint();
-        const combinedHint = [contextHint, salesHint].filter(Boolean).join("\n\n");
+        const combinedHint = [contextHint, salesHint]
+          .filter(Boolean)
+          .join("\n\n");
 
         if (combinedHint) {
-          openaiWs.send(JSON.stringify({
-            type: "conversation.item.create",
-            item: {
-              type: "message",
-              role: "user",
-              content: [{ type: "input_text", text: `[SYSTEM_CONTEXT]: ${combinedHint}` }],
-            },
-          }));
+          openaiWs.send(
+            JSON.stringify({
+              type: "conversation.item.create",
+              item: {
+                type: "message",
+                role: "user",
+                content: [
+                  {
+                    type: "input_text",
+                    text: `[SYSTEM_CONTEXT]: ${combinedHint}`,
+                  },
+                ],
+              },
+            }),
+          );
         }
 
         console.log("📤 Sending response.create to OpenAI");
@@ -225,56 +267,55 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
       }
     }
 
-    // ─── SILENCE TIMER ────────────────────────────────────────────
-    // IMPORTANT: startSilenceTimer() must ONLY be called from the
-    // ElevenLabs isFinal handler. Calling it anywhere else (e.g. on
-    // response.done) causes the timer to fire while audio is still
-    // playing. All other locations that previously called startSilenceTimer
-    // have been removed or replaced with comments explaining why they
-    // must not trigger the timer.
+    // --- SILENCE TIMER ------------------------------------------
     let silenceTimer = null;
-    const SILENCE_TIMEOUT_MS = 15000;        // normal responses
-    const SILENCE_TIMEOUT_PACKAGE_MS = 20000; // after package/plan presentation
+    const SILENCE_TIMEOUT_MS = 15000;
+    const SILENCE_TIMEOUT_PACKAGE_MS = 20000;
 
     function startSilenceTimer() {
       clearSilenceTimer();
 
-      // Guards — never start the timer when any of these are true
       if (awaitingStructuredInput) return;
       if (finalMessageLock || session.finalLock) return;
       if (pendingFunctionCalls > 0) return;
       if (assistantSpeaking) return;
 
-      // Choose timeout based on whether last response included plans
-      const inPlansCooldown = (Date.now() - plansPresentedAt) < PLANS_PRESENTED_COOLDOWN_MS;
-      const timeoutMs = inPlansCooldown ? SILENCE_TIMEOUT_PACKAGE_MS : SILENCE_TIMEOUT_MS;
+      const inPlansCooldown =
+        Date.now() - plansPresentedAt < PLANS_PRESENTED_COOLDOWN_MS;
+      const timeoutMs = inPlansCooldown
+        ? SILENCE_TIMEOUT_PACKAGE_MS
+        : SILENCE_TIMEOUT_MS;
 
-      console.log(`⏱️  Silence timer started: ${timeoutMs / 1000}s (${inPlansCooldown ? "package cooldown" : "normal"})`);
+      console.log(
+        `⏱️  Silence timer started: ${timeoutMs / 1000}s (${inPlansCooldown ? "package cooldown" : "normal"})`,
+      );
 
       silenceTimer = setTimeout(() => {
         silenceTimer = null;
 
-        // Re-check guards inside the callback — state may have changed
         if (awaitingStructuredInput) return;
         if (finalMessageLock || session.finalLock) return;
         if (pendingFunctionCalls > 0) return;
         if (assistantSpeaking) return;
 
-        const stillInPlansCooldown = (Date.now() - plansPresentedAt) < PLANS_PRESENTED_COOLDOWN_MS;
+        const stillInPlansCooldown =
+          Date.now() - plansPresentedAt < PLANS_PRESENTED_COOLDOWN_MS;
         const nudgeText = stillInPlansCooldown
           ? "[SILENCE_NUDGE] The user has not responded after you presented plans. Do NOT select a plan for them. Simply ask them gently which plan they'd like to go with."
           : "[SILENCE_NUDGE] The user has not responded. REPEAT your last question. Say something like: 'Sorry about that — let me just repeat my last question. [REPEAT THE EXACT SAME QUESTION]'. Do NOT move forward.";
 
         console.log(`⏰ User silent for ${timeoutMs / 1000}s — nudging AI`);
         if (openaiWs?.readyState === WebSocket.OPEN) {
-          openaiWs.send(JSON.stringify({
-            type: "conversation.item.create",
-            item: {
-              type: "message",
-              role: "user",
-              content: [{ type: "input_text", text: nudgeText }],
-            },
-          }));
+          openaiWs.send(
+            JSON.stringify({
+              type: "conversation.item.create",
+              item: {
+                type: "message",
+                role: "user",
+                content: [{ type: "input_text", text: nudgeText }],
+              },
+            }),
+          );
           scheduleResponseCreate();
         }
       }, timeoutMs);
@@ -285,6 +326,53 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
         clearTimeout(silenceTimer);
         silenceTimer = null;
       }
+    }
+
+    const TTS_DRAIN_TIMEOUT_MS = 1800;
+
+    function clearTtsDrainTimer() {
+      if (ttsDrainTimer) {
+        clearTimeout(ttsDrainTimer);
+        ttsDrainTimer = null;
+      }
+    }
+
+    function startTtsDrainTimer() {
+      clearTtsDrainTimer();
+      if (!responseTextComplete) return;
+      ttsDrainTimer = setTimeout(() => {
+        ttsDrainTimer = null;
+        if (!responseTextComplete || ttsFinalized) return;
+        const sinceLastAudio = Date.now() - lastTtsAudioAt;
+        if (sinceLastAudio >= TTS_DRAIN_TIMEOUT_MS) {
+          finalizeTtsPlayback();
+        }
+      }, TTS_DRAIN_TIMEOUT_MS);
+    }
+
+    function finalizeTtsPlayback() {
+      if (ttsFinalized) return;
+      ttsFinalized = true;
+      clearTtsDrainTimer();
+      assistantSpeaking = false;
+      lastResponseWasPackage = false;
+      socket.emit("audio_done");
+
+      if (
+        !pendingFunctionCalls &&
+        !awaitingStructuredInput &&
+        !finalMessageLock &&
+        !session.finalLock
+      ) {
+        startSilenceTimer();
+      }
+    }
+
+    function maybeFinalizeTtsPlayback() {
+      if (!responseTextComplete) return;
+      if (textBuffer.length > 0) return;
+      if (ttsChunkCount > 0) return;
+      finalizeTtsPlayback();
     }
 
     // Final message lock
@@ -335,8 +423,14 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
       const emailPatterns = [
         new RegExp(`(?:provide|share|enter|type|give)\\s+${DET}email`, "i"),
         /what(?:'?s|\s+is)\s+your\s+email/i,
-        new RegExp(`could you\\s+(?:please\\s+)?(?:provide|share|give|send|type)\\s+${DET}email`, "i"),
-        new RegExp(`(?:please|kindly)\\s+(?:provide|share|enter|type)\\s+${DET}email`, "i"),
+        new RegExp(
+          `could you\\s+(?:please\\s+)?(?:provide|share|give|send|type)\\s+${DET}email`,
+          "i",
+        ),
+        new RegExp(
+          `(?:please|kindly)\\s+(?:provide|share|enter|type)\\s+${DET}email`,
+          "i",
+        ),
         /(?:need|like)\s+your\s+email/i,
         /email\s+(?:address\s+)?(?:please|to\s+proceed)/i,
         /grab\s+your\s+email/i,
@@ -362,7 +456,8 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
               lastStructuredInputField === "email" &&
               now - lastStructuredInputTime < STRUCTURED_INPUT_COOLDOWN_MS &&
               !isRelocation
-            ) return null;
+            )
+              return null;
             lastStructuredInputField = "email";
             lastStructuredInputTime = now;
             return "email";
@@ -389,9 +484,20 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
 
     function mapOrdinalNetworkChoice(text) {
       const t = (text || "").toLowerCase().trim();
-      if (/\bnbn\b/.test(t) || /\b(opti\s*comm|opticomm)\b/.test(t)) return null;
-      if (/\b(first|1st|one|1|option\s*1|option\s*one|number\s*1|the\s*first)\b/.test(t)) return "NBN";
-      if (/\b(second|2nd|two|2|option\s*2|option\s*two|number\s*2|the\s*second|to)\b/.test(t)) return "Opticomm";
+      if (/\bnbn\b/.test(t) || /\b(opti\s*comm|opticomm)\b/.test(t))
+        return null;
+      if (
+        /\b(first|1st|one|1|option\s*1|option\s*one|number\s*1|the\s*first)\b/.test(
+          t,
+        )
+      )
+        return "NBN";
+      if (
+        /\b(second|2nd|two|2|option\s*2|option\s*two|number\s*2|the\s*second|to)\b/.test(
+          t,
+        )
+      )
+        return "Opticomm";
       return null;
     }
 
@@ -415,7 +521,8 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
     function detectBadTranscription(text) {
       if (!text) return null;
       const lower = text.toLowerCase();
-      const emailVoicePatterns = /\b(at\s+(gmail|yahoo|hotmail|outlook|icloud)|dot\s+(com|net|org|au|co)|at\s+\w+\s+dot)\b/i;
+      const emailVoicePatterns =
+        /\b(at\s+(gmail|yahoo|hotmail|outlook|icloud)|dot\s+(com|net|org|au|co)|at\s+\w+\s+dot)\b/i;
       if (emailVoicePatterns.test(lower)) return "email";
       return null;
     }
@@ -425,7 +532,9 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
       const lower = text.toLowerCase();
       return (
         (lower.includes("mbps") &&
-          (lower.includes("$") || lower.includes("per month") || lower.includes("/m"))) ||
+          (lower.includes("$") ||
+            lower.includes("per month") ||
+            lower.includes("/m"))) ||
         (lower.includes("plan") && lower.includes("available")) ||
         lower.includes("here are the plans") ||
         lower.includes("here's what's available") ||
@@ -443,20 +552,32 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
         lower.includes("had a chance to check out") ||
         lower.includes("seen the plans or pricing") ||
         lower.includes("look at the plans or pricing") ||
-        (lower.includes("website") && (lower.includes("plans") || lower.includes("pricing")))
+        (lower.includes("website") &&
+          (lower.includes("plans") || lower.includes("pricing")))
       );
     }
 
     function detectWebsiteCheckAnswer(text) {
       if (!text) return false;
       const lower = text.toLowerCase().trim();
-      if (/\b(yes|yeah|yep|yup|i have|i did|already|looked|checked|seen|saw|visited)\b/.test(lower)) return true;
-      if (/\b(no|nope|not yet|haven't|didn't|i haven't|i didn't|no i haven't)\b/.test(lower)) return true;
+      if (
+        /\b(yes|yeah|yep|yup|i have|i did|already|looked|checked|seen|saw|visited)\b/.test(
+          lower,
+        )
+      )
+        return true;
+      if (
+        /\b(no|nope|not yet|haven't|didn't|i haven't|i didn't|no i haven't)\b/.test(
+          lower,
+        )
+      )
+        return true;
       return false;
     }
 
     function detectSalesStepAnswer(text) {
-      if (!salesStep || salesStep === "done" || salesStep === "createTicket") return;
+      if (!salesStep || salesStep === "done" || salesStep === "createTicket")
+        return;
       const c = session.collected || {};
 
       if (salesStep === "firstName") {
@@ -510,15 +631,17 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
 
       elWs.on("open", () => {
         console.log(`✅ [EL] ElevenLabs WebSocket connected`);
-        elWs.send(JSON.stringify({
-          text: " ",
-          voice_settings: {
-            stability: 0.4,
-            similarity_boost: 0.75,
-            speed: 1.1,
-          },
-          xi_api_key: ELEVENLABS_API_KEY,
-        }));
+        elWs.send(
+          JSON.stringify({
+            text: " ",
+            voice_settings: {
+              stability: 0.4,
+              similarity_boost: 0.75,
+              speed: 1.1,
+            },
+            xi_api_key: ELEVENLABS_API_KEY,
+          }),
+        );
 
         if (elevenLabsWs === elWs) {
           elevenLabsReady = true;
@@ -538,37 +661,17 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
               sampleRate: PCM_SAMPLE_RATE,
               audio: msg.audio,
             });
+            lastTtsAudioAt = Date.now();
+            startTtsDrainTimer();
           }
 
-          const isFinal = msg.isFinal === true || msg.is_final === true || msg.final === true;
+          const isFinal =
+            msg.isFinal === true || msg.is_final === true || msg.final === true;
 
           if (isFinal) {
-            // ── SILENCE TIMER FIX ────────────────────────────────────
-            // This is the ONLY place startSilenceTimer() is called.
-            // isFinal fires when ElevenLabs has finished sending all
-            // audio chunks for this response, meaning TTS playback is
-            // complete on the server side (client-side buffering adds
-            // only a tiny fixed latency that doesn't affect UX).
-            //
-            // We set assistantSpeaking = false BEFORE calling
-            // startSilenceTimer so the guard inside passes correctly.
-            //
-            // lastResponseWasPackage was set in response.text.done when
-            // GPT finished generating text — we read it here to pick the
-            // right delay and then reset it.
-            // ─────────────────────────────────────────────────────────
-            console.log(`🔊 [EL] TTS playback complete (isFinal)`);
-            socket.emit("audio_done");
-            assistantSpeaking = false;
-
-            if (!pendingFunctionCalls && !awaitingStructuredInput && !finalMessageLock && !session.finalLock) {
-              // startSilenceTimer reads plansPresentedAt internally to
-              // choose between SILENCE_TIMEOUT_MS and SILENCE_TIMEOUT_PACKAGE_MS.
-              startSilenceTimer();
-            }
-
-            // Reset for the next response cycle
-            lastResponseWasPackage = false;
+            console.log(`🔊 [EL] TTS chunk complete (isFinal)`);
+            if (ttsChunkCount > 0) ttsChunkCount -= 1;
+            maybeFinalizeTtsPlayback();
           }
         } catch (err) {}
       });
@@ -597,11 +700,17 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
         console.warn("[EL] interrupt flush failed:", e.message);
       }
       try {
-        elevenLabsWs.send(JSON.stringify({
-          text: " ",
-          voice_settings: { stability: 0.4, similarity_boost: 0.75, speed: 1.1 },
-          xi_api_key: ELEVENLABS_API_KEY,
-        }));
+        elevenLabsWs.send(
+          JSON.stringify({
+            text: " ",
+            voice_settings: {
+              stability: 0.4,
+              similarity_boost: 0.75,
+              speed: 1.1,
+            },
+            xi_api_key: ELEVENLABS_API_KEY,
+          }),
+        );
         elevenLabsReady = true;
       } catch (e) {
         console.warn("[EL] re-prime failed:", e.message);
@@ -611,7 +720,10 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
 
     function sendTextToElevenLabs(text) {
       if (elevenLabsWs?.readyState === WebSocket.OPEN) {
-        elevenLabsWs.send(JSON.stringify({ text, try_trigger_generation: true }));
+        ttsChunkCount += 1;
+        elevenLabsWs.send(
+          JSON.stringify({ text, try_trigger_generation: true }),
+        );
       }
     }
 
@@ -638,7 +750,7 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
       }
     }
 
-    // ═══════════════ OpenAI Realtime API ═══════════════
+    // ══════════════════ OpenAI Realtime API ══════════════════
     function connectOpenAI() {
       return new Promise((resolve, reject) => {
         openaiWs = new WebSocket(
@@ -648,7 +760,7 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
               Authorization: `Bearer ${OPENAI_API_KEY}`,
               "OpenAI-Beta": "realtime=v1",
             },
-          }
+          },
         );
 
         openaiWs.on("open", () => {
@@ -658,23 +770,25 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
             "\n\nCRITICAL: You MUST ALWAYS respond in English only. Never respond in any other language." +
             "\n\nFIELD COLLECTION RULE: When collecting customer details (name, phone, email), you MUST ask for ONE field at a time. Wait for the customer's answer before moving to the next field. The [SYSTEM_CONTEXT] hint will tell you EXACTLY which field to ask for next. Follow it precisely.";
 
-          openaiWs.send(JSON.stringify({
-            type: "session.update",
-            session: {
-              instructions,
-              modalities: ["text"],
-              input_audio_format: "pcm16",
-              turn_detection: {
-                type: "server_vad",
-                threshold: 0.8,
-                prefix_padding_ms: 300,
-                silence_duration_ms: 1500,
+          openaiWs.send(
+            JSON.stringify({
+              type: "session.update",
+              session: {
+                instructions,
+                modalities: ["text"],
+                input_audio_format: "pcm16",
+                turn_detection: {
+                  type: "server_vad",
+                  threshold: 0.8,
+                  prefix_padding_ms: 300,
+                  silence_duration_ms: 1500,
+                },
+                tools: realtimeTools,
+                tool_choice: "auto",
+                input_audio_transcription: { model: "whisper-1" },
               },
-              tools: realtimeTools,
-              tool_choice: "auto",
-              input_audio_transcription: { model: "whisper-1" },
-            },
-          }));
+            }),
+          );
 
           openElevenLabsStream();
         });
@@ -683,7 +797,10 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
         openaiWs.on("message", (raw) => {
           try {
             const data = JSON.parse(raw.toString());
-            if (!resolved) { resolved = true; resolve(); }
+            if (!resolved) {
+              resolved = true;
+              resolve();
+            }
             handleOpenAIEvent(data);
           } catch (e) {
             console.error("[WS-1] parse error:", e.message);
@@ -692,7 +809,10 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
 
         openaiWs.on("error", (err) => {
           console.error("[WS-1] error:", err.message);
-          if (!resolved) { resolved = true; reject(err); }
+          if (!resolved) {
+            resolved = true;
+            reject(err);
+          }
         });
         openaiWs.on("close", (code) => {
           console.log(`[WS-1] closed (${code})`);
@@ -701,7 +821,7 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
       });
     }
 
-    // ═══════════════ OpenAI Event Handler ═══════════════
+    // ══════════════════ OpenAI Event Handler ══════════════════
     let lastEventLog = "";
 
     function handleOpenAIEvent(event) {
@@ -719,10 +839,17 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
           break;
 
         case "input_audio_buffer.speech_started": {
-          if (awaitingStructuredInput || pendingFunctionCalls > 0 || session.finalLock || finalMessageLock) {
+          if (
+            awaitingStructuredInput ||
+            pendingFunctionCalls > 0 ||
+            session.finalLock ||
+            finalMessageLock
+          ) {
             console.log(`🔇 Speech ignored (locked)`);
             if (openaiWs?.readyState === WebSocket.OPEN) {
-              openaiWs.send(JSON.stringify({ type: "input_audio_buffer.clear" }));
+              openaiWs.send(
+                JSON.stringify({ type: "input_audio_buffer.clear" }),
+              );
             }
             break;
           }
@@ -732,7 +859,6 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
           socket.emit("interrupt");
           socket.emit("audio_interrupt");
 
-          // Cancel the silence timer — user is speaking, no nudge needed
           clearSilenceTimer();
 
           if (isResponseActive) {
@@ -745,7 +871,11 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
           assistantTextBuffer = "";
           lastTtsText = "";
           assistantSpeaking = false;
-          lastResponseWasPackage = false; // reset on interrupt
+          responseTextComplete = false;
+          ttsChunkCount = 0;
+          ttsFinalized = false;
+          clearTtsDrainTimer();
+          lastResponseWasPackage = false;
           emptyResponseCount = 0;
           responseCreatePending = false;
           pendingPostDoneCreate = false;
@@ -772,12 +902,14 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
             break;
           }
 
-          // ── FIX 3: Capture raw phone BEFORE any LLM processing ──
+          // --- FIX 3: Capture raw phone BEFORE any LLM processing ---
           if (awaitingPhoneVerification && looksLikePhone) {
             const digits = cleaned.replace(/\D/g, "");
             if (digits.length >= 6) {
               rawPhoneBuffer = digits;
-              console.log(`📞 Raw phone captured from transcript: "${rawPhoneBuffer}"`);
+              console.log(
+                `📞 Raw phone captured from transcript: "${rawPhoneBuffer}"`,
+              );
             }
           }
 
@@ -806,14 +938,16 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
             sessions.set(session.id, session);
 
             if (openaiWs?.readyState === WebSocket.OPEN) {
-              openaiWs.send(JSON.stringify({
-                type: "conversation.item.create",
-                item: {
-                  type: "message",
-                  role: "user",
-                  content: [{ type: "input_text", text: clarified }],
-                },
-              }));
+              openaiWs.send(
+                JSON.stringify({
+                  type: "conversation.item.create",
+                  item: {
+                    type: "message",
+                    role: "user",
+                    content: [{ type: "input_text", text: clarified }],
+                  },
+                }),
+              );
               scheduleResponseCreate();
             }
             clearSilenceTimer();
@@ -827,8 +961,11 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
           ) {
             const lastAiMsg = [...(session.messages || [])]
               .reverse()
-              .find(m => m.role === "assistant");
-            if (lastAiMsg && detectWebsiteCheckQuestion(lastAiMsg.content || "")) {
+              .find((m) => m.role === "assistant");
+            if (
+              lastAiMsg &&
+              detectWebsiteCheckQuestion(lastAiMsg.content || "")
+            ) {
               session.collected._websiteCheckDone = true;
               sessions.set(session.id, session);
               console.log(`✅ Website check answered — marked DONE`);
@@ -841,7 +978,6 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
           session.messages.push({ role: "user", content: cleaned });
           sessions.set(session.id, session);
 
-          // User spoke — cancel any pending silence timer
           clearSilenceTimer();
           break;
         }
@@ -851,6 +987,11 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
           currentResponseId = event.response?.id || null;
           currentResponseHadOutput = false;
           cancelPending = false;
+          responseTextComplete = false;
+          ttsChunkCount = 0;
+          ttsFinalized = false;
+          lastTtsAudioAt = 0;
+          clearTtsDrainTimer();
           openElevenLabsStream();
           assistantSpeaking = true;
           socket.emit("status", "speaking");
@@ -872,8 +1013,14 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
         case "response.text.done":
           if (event.text) {
             currentResponseHadOutput = true;
-            const newTextNorm = event.text.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
-            const lastTextNorm = lastAssistantText.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
+            const newTextNorm = event.text
+              .toLowerCase()
+              .replace(/[^a-z0-9\s]/g, "")
+              .trim();
+            const lastTextNorm = lastAssistantText
+              .toLowerCase()
+              .replace(/[^a-z0-9\s]/g, "")
+              .trim();
             const isDuplicate =
               newTextNorm.length > 20 &&
               lastTextNorm.length > 20 &&
@@ -894,22 +1041,19 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
             socket.emit("assistant_text_done", event.text);
 
             flushElevenLabsStream();
+            responseTextComplete = true;
+            maybeFinalizeTtsPlayback();
+            startTtsDrainTimer();
 
-            // ── SILENCE TIMER FIX: Set the package flag here (GPT done) ──
-            // We cannot start the timer here because audio hasn't played yet.
-            // Instead we record whether this was a package response so the
-            // ElevenLabs isFinal handler can pick the right delay.
             if (detectPlanPresentation(event.text)) {
               plansPresentedAt = Date.now();
               lastResponseWasPackage = true;
-              console.log(`📋 Plans presented — cooldown activated (${PLANS_PRESENTED_COOLDOWN_MS / 1000}s), timer deferred to TTS completion`);
-            } else {
-              // For non-package responses we still need isFinal to fire,
-              // so we leave lastResponseWasPackage as-is (it was reset on
-              // the previous isFinal or on interrupt).
+              console.log(
+                `📋 Plans presented — cooldown activated (${PLANS_PRESENTED_COOLDOWN_MS / 1000}s), timer deferred to TTS completion`,
+              );
             }
 
-            // ── FIX 3: Detect phone verification request ──────────────
+            // --- FIX 3: Detect phone verification request ---
             if (detectPhoneVerificationRequest(event.text)) {
               awaitingPhoneVerification = true;
               rawPhoneBuffer = null;
@@ -934,7 +1078,9 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
               console.log(`📋 Structured input requested: email`);
               clearSilenceTimer();
               if (openaiWs?.readyState === WebSocket.OPEN) {
-                openaiWs.send(JSON.stringify({ type: "input_audio_buffer.clear" }));
+                openaiWs.send(
+                  JSON.stringify({ type: "input_audio_buffer.clear" }),
+                );
               }
               socket.emit("request_structured_input", {
                 field: "email",
@@ -948,20 +1094,27 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
           isResponseActive = false;
 
           const outputItems = event.response?.output || [];
-          const hasTextOutput = outputItems.some(
-            item => item.type === "message" && item.content?.some(c => c.type === "text" && c.text?.trim())
-          ) || currentResponseHadOutput;
-          const hasFunctionCall = outputItems.some(item => item.type === "function_call");
+          const hasTextOutput =
+            outputItems.some(
+              (item) =>
+                item.type === "message" &&
+                item.content?.some((c) => c.type === "text" && c.text?.trim()),
+            ) || currentResponseHadOutput;
+          const hasFunctionCall = outputItems.some(
+            (item) => item.type === "function_call",
+          );
 
-          // ── FIX 5: Proper retry logic ─────────────────────────
-          if (!hasFunctionCall && !hasTextOutput && pendingFunctionCalls === 0 && !finalMessageLock) {
+          // --- FIX 5: Proper retry logic ---
+          if (
+            !hasFunctionCall &&
+            !hasTextOutput &&
+            pendingFunctionCalls === 0 &&
+            !finalMessageLock
+          ) {
             if (cancelPending) {
               console.log(`✅ response.done (cancelled) — no retry`);
               cancelPending = false;
               socket.emit("status", "listening");
-              // NOTE: Do NOT start silence timer here — audio may still
-              // be playing from a previous partial response. The timer
-              // will start from isFinal when audio actually finishes.
 
               if (pendingPostDoneCreate) {
                 pendingPostDoneCreate = false;
@@ -976,15 +1129,15 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
             if (emptyResponseCount <= MAX_EMPTY_RETRIES) {
               const retryDelay = 150 * Math.pow(2, emptyResponseCount - 1);
               console.warn(
-                `⚠️ response.done with no output (attempt ${emptyResponseCount}/${MAX_EMPTY_RETRIES}) — retrying in ${retryDelay}ms`
+                `⚠️ response.done with no output (attempt ${emptyResponseCount}/${MAX_EMPTY_RETRIES}) — retrying in ${retryDelay}ms`,
               );
               scheduleResponseCreate(null, retryDelay, true);
             } else {
-              console.warn(`⚠️ Max retries (${MAX_EMPTY_RETRIES}) reached — stopping retry loop`);
+              console.warn(
+                `⚠️ Max retries (${MAX_EMPTY_RETRIES}) reached — stopping retry loop`,
+              );
               emptyResponseCount = 0;
               socket.emit("status", "listening");
-              // NOTE: Do NOT start silence timer here — no audio was
-              // generated. Let the user speak or wait for a future event.
             }
             break;
           }
@@ -995,8 +1148,12 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
           if (assistantTextBuffer.trim()) {
             const t = assistantTextBuffer.toLowerCase();
             const confirms = [
-              "raised", "ticket details", "details via email",
-              "agent will contact", "raised a ticket", "raised sales inquiry",
+              "raised",
+              "ticket details",
+              "details via email",
+              "agent will contact",
+              "raised a ticket",
+              "raised sales inquiry",
             ];
             const isConfirmation = confirms.some((c) => t.includes(c));
             if (isConfirmation) {
@@ -1010,27 +1167,18 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
             }
           }
 
-          // ── FIX 4: Fire any queued post-done response.create ──
+          // --- FIX 4: Fire any queued post-done response.create ---
           if (pendingPostDoneCreate && pendingFunctionCalls === 0) {
             pendingPostDoneCreate = false;
             const hint = pendingPostDoneHint;
             pendingPostDoneHint = null;
             console.log(`📤 Firing queued post-done response.create`);
             setTimeout(() => scheduleResponseCreate(hint, 0, true), 50);
-            break; // Don't fall through to silence timer — new response incoming
+            break;
           }
 
           if (!pendingFunctionCalls) {
             socket.emit("status", "listening");
-            // ── SILENCE TIMER FIX ────────────────────────────────
-            // Do NOT call startSilenceTimer() here.
-            // response.done fires when GPT finishes TEXT generation.
-            // ElevenLabs is still synthesising and streaming audio at
-            // this point. Starting the timer here would cause it to fire
-            // while the user is still listening to the AI speak.
-            // The timer is started exclusively in the ElevenLabs isFinal
-            // handler above, after audio playback is confirmed complete.
-            // ─────────────────────────────────────────────────────
           }
           assistantTextBuffer = "";
           currentResponseHadOutput = false;
@@ -1043,7 +1191,9 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
             if (fnName === "create_ticket") {
               lockFinalMessage(20000);
               if (openaiWs?.readyState === WebSocket.OPEN) {
-                openaiWs.send(JSON.stringify({ type: "input_audio_buffer.clear" }));
+                openaiWs.send(
+                  JSON.stringify({ type: "input_audio_buffer.clear" }),
+                );
               }
             }
           }
@@ -1069,46 +1219,75 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
       }
     }
 
-    // ═══════════════ Tool Execution ═══════════════
+    // ══════════════════ Tool Execution ══════════════════
     async function handleFunctionCall(item) {
       const { call_id, name: fn, arguments: argsStr } = item;
       let args = safeParseJSON(argsStr) || {};
 
-      // ── Guard: verify_phone must NEVER run in sales flow ────────
-      if (fn === "verify_phone" && !session.collected._emailVerifiedCustomerId) {
-        console.log(`⚠️  verify_phone called in SALES flow — redirecting to extract_call_fields to save phone`);
+      // --- Guard: verify_phone must NEVER run in sales flow ---
+      if (
+        fn === "verify_phone" &&
+        !session.collected._emailVerifiedCustomerId
+      ) {
+        console.log(
+          `⚠️  verify_phone called in SALES flow — redirecting to extract_call_fields to save phone`,
+        );
         const phoneToSave = args.phone || rawPhoneBuffer;
         rawPhoneBuffer = null;
         awaitingPhoneVerification = false;
         if (phoneToSave) {
-          session.collected.phone = String(phoneToSave).replace(/\D/g, "") || phoneToSave;
+          session.collected.phone =
+            String(phoneToSave).replace(/\D/g, "") || phoneToSave;
           sessions.set(session.id, session);
           if (salesStep === "phone") advanceSalesStep("phone");
           console.log(`📋 Sales phone saved: ${session.collected.phone}`);
         }
-        const fakeResult = JSON.stringify({ success: true, _redirected: true, message: "Phone number saved." });
+        const fakeResult = JSON.stringify({
+          success: true,
+          _redirected: true,
+          message: "Phone number saved.",
+        });
         if (openaiWs?.readyState === WebSocket.OPEN) {
-          openaiWs.send(JSON.stringify({
-            type: "conversation.item.create",
-            item: { type: "function_call_output", call_id, output: fakeResult },
-          }));
+          openaiWs.send(
+            JSON.stringify({
+              type: "conversation.item.create",
+              item: {
+                type: "function_call_output",
+                call_id,
+                output: fakeResult,
+              },
+            }),
+          );
         }
         pendingFunctionCalls = Math.max(0, pendingFunctionCalls - 1);
-        if (pendingFunctionCalls === 0 && openaiWs?.readyState === WebSocket.OPEN) {
+        if (
+          pendingFunctionCalls === 0 &&
+          openaiWs?.readyState === WebSocket.OPEN
+        ) {
           const salesHint = buildSalesStepHint() || "";
           const hint = `Phone number has been saved. ${salesHint}\n\nIMPORTANT: Respond immediately — proceed to the next step.`;
-          openaiWs.send(JSON.stringify({
-            type: "conversation.item.create",
-            item: { type: "message", role: "user", content: [{ type: "input_text", text: `[SYSTEM_CONTEXT]: ${hint}` }] },
-          }));
+          openaiWs.send(
+            JSON.stringify({
+              type: "conversation.item.create",
+              item: {
+                type: "message",
+                role: "user",
+                content: [
+                  { type: "input_text", text: `[SYSTEM_CONTEXT]: ${hint}` },
+                ],
+              },
+            }),
+          );
           scheduleResponseCreate();
         }
         return;
       }
 
-      // ── FIX 3: Override phone arg with raw buffer if available ──
+      // --- FIX 3: Override phone arg with raw buffer if available ---
       if (fn === "verify_phone" && rawPhoneBuffer) {
-        console.log(`📞 FIX 3: Overriding LLM phone arg "${args.phone}" with raw transcript value "${rawPhoneBuffer}"`);
+        console.log(
+          `📞 FIX 3: Overriding LLM phone arg "${args.phone}" with raw transcript value "${rawPhoneBuffer}"`,
+        );
         args = { ...args, phone: rawPhoneBuffer };
         rawPhoneBuffer = null;
         awaitingPhoneVerification = false;
@@ -1138,20 +1317,27 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
 
       clearTimeout(toolTimeout);
 
-      // ── Build system hint ────────────────────────────────────
+      // --- Build system hint ---
       let systemHint = `Current collected fields: ${JSON.stringify(
         Object.fromEntries(
-          Object.entries(session.collected || {}).filter(([k]) => k !== "_registeredPhone" && k !== "_rp")
-        )
+          Object.entries(session.collected || {}).filter(
+            ([k]) => k !== "_registeredPhone" && k !== "_rp",
+          ),
+        ),
       )}.`;
 
       if (fn === "check_address_availability") {
         let parsedResult = null;
-        try { parsedResult = JSON.parse(result); } catch (_) {}
+        try {
+          parsedResult = JSON.parse(result);
+        } catch (_) {}
         if (parsedResult) {
           const networkLabel = parsedResult.network || "the available network";
-          const planCount = Array.isArray(parsedResult.availablePlans) ? parsedResult.availablePlans.length : 0;
-          const requiresFilter = parsedResult.requiresResidentialFilter === true;
+          const planCount = Array.isArray(parsedResult.availablePlans)
+            ? parsedResult.availablePlans.length
+            : 0;
+          const requiresFilter =
+            parsedResult.requiresResidentialFilter === true;
 
           if (parsedResult.orderable === false) {
             systemHint += `\nTOOL RESULT: Address not serviceable. Tell customer empathetically and offer to take their details.`;
@@ -1171,7 +1357,9 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
 
       if (fn === "customer_lookup") {
         let parsedResult = null;
-        try { parsedResult = JSON.parse(result); } catch (_) {}
+        try {
+          parsedResult = JSON.parse(result);
+        } catch (_) {}
         if (parsedResult?.success && parsedResult?.customer) {
           systemHint += `\nTOOL RESULT: Email lookup succeeded — customer found. Say "Perfect, I can see that account." Then ask for their phone number to verify. When they give it, call verify_phone.`;
           awaitingPhoneVerification = true;
@@ -1183,7 +1371,9 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
 
       if (fn === "verify_phone") {
         let parsedResult = null;
-        try { parsedResult = JSON.parse(result); } catch (_) {}
+        try {
+          parsedResult = JSON.parse(result);
+        } catch (_) {}
         if (parsedResult?.verificationFailed) {
           awaitingPhoneVerification = true;
           rawPhoneBuffer = null;
@@ -1199,10 +1389,17 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything to the user yet
 
       if (fn === "create_ticket") {
         let parsedResult = null;
-        try { parsedResult = JSON.parse(result); } catch (_) {}
-        if (parsedResult?._blocked && parsedResult?.reason === "email_missing") {
+        try {
+          parsedResult = JSON.parse(result);
+        } catch (_) {}
+        if (
+          parsedResult?._blocked &&
+          parsedResult?.reason === "email_missing"
+        ) {
           unlockFinalMessage();
-          const emailHint = buildSalesStepHint() || "Ask for the customer email now. Tell them to use the text box on screen.";
+          const emailHint =
+            buildSalesStepHint() ||
+            "Ask for the customer email now. Tell them to use the text box on screen.";
           systemHint += `
 TOOL RESULT: create_ticket was BLOCKED because email has not been collected yet. You MUST ask for the email address NOW before submitting. ${emailHint}`;
         } else if (parsedResult?.success) {
@@ -1234,7 +1431,11 @@ TOOL RESULT: create_ticket was BLOCKED because email has not been collected yet.
         if (shouldGate) {
           systemHint += `\nCRITICAL GATE: Ask: "Just out of curiosity — have you had a chance to check out our website and seen the plans or pricing?" WAIT for their answer before collecting name/phone/email.`;
         }
-        if (c.leadInterest && c._websiteCheckRequired && (c._websiteCheckAsked || c._websiteCheckDone)) {
+        if (
+          c.leadInterest &&
+          c._websiteCheckRequired &&
+          (c._websiteCheckAsked || c._websiteCheckDone)
+        ) {
           systemHint += `\nWEBSITE CHECK DONE: Do NOT ask again. Proceed with order collection.`;
         }
 
@@ -1244,26 +1445,35 @@ TOOL RESULT: create_ticket was BLOCKED because email has not been collected yet.
 
       // Send function output to OpenAI
       if (openaiWs?.readyState === WebSocket.OPEN) {
-        openaiWs.send(JSON.stringify({
-          type: "conversation.item.create",
-          item: { type: "function_call_output", call_id, output: result },
-        }));
+        openaiWs.send(
+          JSON.stringify({
+            type: "conversation.item.create",
+            item: { type: "function_call_output", call_id, output: result },
+          }),
+        );
       }
 
       pendingFunctionCalls = Math.max(0, pendingFunctionCalls - 1);
 
-      if (pendingFunctionCalls === 0 && openaiWs?.readyState === WebSocket.OPEN) {
-        openaiWs.send(JSON.stringify({
-          type: "conversation.item.create",
-          item: {
-            type: "message",
-            role: "user",
-            content: [{
-              type: "input_text",
-              text: `[SYSTEM_CONTEXT]: ${systemHint}\n\nIMPORTANT: Respond immediately based on the tool result above.`,
-            }],
-          },
-        }));
+      if (
+        pendingFunctionCalls === 0 &&
+        openaiWs?.readyState === WebSocket.OPEN
+      ) {
+        openaiWs.send(
+          JSON.stringify({
+            type: "conversation.item.create",
+            item: {
+              type: "message",
+              role: "user",
+              content: [
+                {
+                  type: "input_text",
+                  text: `[SYSTEM_CONTEXT]: ${systemHint}\n\nIMPORTANT: Respond immediately based on the tool result above.`,
+                },
+              ],
+            },
+          }),
+        );
 
         if (fn === "create_ticket") {
           unlockFinalMessage();
@@ -1280,7 +1490,9 @@ TOOL RESULT: create_ticket was BLOCKED because email has not been collected yet.
 
         const c = session.collected || {};
         if (salesStep === "firstName" && (args.preferredName || args.name)) {
-          const firstName = (args.preferredName || args.name || "").split(" ")[0];
+          const firstName = (args.preferredName || args.name || "").split(
+            " ",
+          )[0];
           if (firstName) {
             session.collected._firstName = firstName;
             sessions.set(session.id, session);
@@ -1308,21 +1520,25 @@ TOOL RESULT: create_ticket was BLOCKED because email has not been collected yet.
         delete lookupArgs.phone;
 
         if (!lookupArgs.email && !lookupArgs.name) {
-          return JSON.stringify({ success: false, message: "Email is required for customer lookup" });
+          return JSON.stringify({
+            success: false,
+            message: "Email is required for customer lookup",
+          });
         }
 
         try {
           const result = await customerLookup(lookupArgs);
           if (result.success && result.customer) {
             session.collected._emailVerifiedCustomerId = result.customer.id;
-            session.collected._registeredPhone = result.customer.phone || result.customer.phone_mobile || null;
+            session.collected._registeredPhone =
+              result.customer.phone || result.customer.phone_mobile || null;
             session.collected._rp = session.collected._registeredPhone;
             session.collected._phoneVerified = false;
             session.collected.customer_id = result.customer.id;
             sessions.set(session.id, session);
             console.log(
               `📧 Email lookup OK — customer ${result.customer.id}. ` +
-              `Registered phone: ${session.collected._registeredPhone ? "stored (hidden)" : "NOT on record"}`
+                `Registered phone: ${session.collected._registeredPhone ? "stored (hidden)" : "NOT on record"}`,
             );
             const safeResult = { ...result };
             if (safeResult.customer) {
@@ -1343,7 +1559,11 @@ TOOL RESULT: create_ticket was BLOCKED because email has not been collected yet.
       if (fn === "verify_phone") {
         const { phone } = args || {};
         if (!phone) {
-          return JSON.stringify({ success: false, verificationFailed: true, message: "No phone number provided." });
+          return JSON.stringify({
+            success: false,
+            verificationFailed: true,
+            message: "No phone number provided.",
+          });
         }
 
         const emailCustomerId = session.collected._emailVerifiedCustomerId;
@@ -1355,24 +1575,34 @@ TOOL RESULT: create_ticket was BLOCKED because email has not been collected yet.
           });
         }
 
-        const registeredPhone = session.collected._registeredPhone || session.collected._rp;
+        const registeredPhone =
+          session.collected._registeredPhone || session.collected._rp;
         if (!registeredPhone) {
-          console.warn(`⚠️ No registered phone for customer ${emailCustomerId}`);
+          console.warn(
+            `⚠️ No registered phone for customer ${emailCustomerId}`,
+          );
           return JSON.stringify({
             success: false,
             verificationFailed: true,
-            message: "No phone number registered on this account. Please contact support via email.",
+            message:
+              "No phone number registered on this account. Please contact support via email.",
           });
         }
 
-        const normalize = (normalizePhone && typeof normalizePhone === "function")
-          ? normalizePhone
-          : (p) => String(p || "").replace(/\D/g, "").replace(/^61(\d{9})$/, "0$1");
+        const normalize =
+          normalizePhone && typeof normalizePhone === "function"
+            ? normalizePhone
+            : (p) =>
+                String(p || "")
+                  .replace(/\D/g, "")
+                  .replace(/^61(\d{9})$/, "0$1");
 
         const normalizedInput = normalize(phone);
         const normalizedRegistered = normalize(registeredPhone);
 
-        console.log(`📞 Phone verify: input="${normalizedInput}" registered="${normalizedRegistered.substring(0, 4)}****"`);
+        console.log(
+          `📞 Phone verify: input="${normalizedInput}" registered="${normalizedRegistered.substring(0, 4)}****"`,
+        );
 
         if (normalizedInput !== normalizedRegistered) {
           console.log(`❌ Phone mismatch — verification FAILED`);
@@ -1385,8 +1615,14 @@ TOOL RESULT: create_ticket was BLOCKED because email has not been collected yet.
 
         session.collected._phoneVerified = true;
         sessions.set(session.id, session);
-        console.log(`✅ Phone verification PASSED — customer ${emailCustomerId} fully verified`);
-        return JSON.stringify({ success: true, verified: true, customer_id: emailCustomerId });
+        console.log(
+          `✅ Phone verification PASSED — customer ${emailCustomerId} fully verified`,
+        );
+        return JSON.stringify({
+          success: true,
+          verified: true,
+          customer_id: emailCustomerId,
+        });
       }
 
       if (fn === "check_address_availability") {
@@ -1395,49 +1631,69 @@ TOOL RESULT: create_ticket was BLOCKED because email has not been collected yet.
           return await checkAddressAvailability(args, session);
         } catch (err) {
           console.error("check_address_availability error:", err.message);
-          return JSON.stringify({ success: false, error: err.message, address: args.address });
+          return JSON.stringify({
+            success: false,
+            error: err.message,
+            address: args.address,
+          });
         }
       }
 
       if (fn === "create_ticket") {
         let fa = { ...args };
-        if (typeof fa.message === "string") fa.message = { message: fa.message };
+        if (typeof fa.message === "string")
+          fa.message = { message: fa.message };
 
         const collected = session.collected || {};
         const hasCustomerId = !!(fa.customer_id || collected.customer_id);
         const hasLeadInterest = !!(collected.leadInterest || fa.leadInterest);
         const isSupportTicket = hasCustomerId && !hasLeadInterest;
 
-        // ── GUARD: Block sales create_ticket if email is missing ──
+        // --- GUARD: Block sales create_ticket if email is missing ---
         if (!isSupportTicket && !collected.email) {
-          console.warn('⚠️  create_ticket BLOCKED — email missing. Forcing email step.');
-          salesStep = 'email';
-          if (typeof unlockFinalMessage === 'function') unlockFinalMessage();
+          console.warn(
+            "⚠️  create_ticket BLOCKED — email missing. Forcing email step.",
+          );
+          salesStep = "email";
+          if (typeof unlockFinalMessage === "function") unlockFinalMessage();
           finalMessageLock = false;
           session.finalLock = false;
-          const emailHint = buildSalesStepHint() || 'SALES STEP [email]: Ask for the customer email now. Tell them to use the text box on screen.';
+          const emailHint =
+            buildSalesStepHint() ||
+            "SALES STEP [email]: Ask for the customer email now. Tell them to use the text box on screen.";
           return JSON.stringify({
             success: false,
             _blocked: true,
-            reason: 'email_missing',
+            reason: "email_missing",
             message: emailHint,
           });
         }
 
         const detailLines = [];
-        const fullName = [collected._firstName, collected._lastName].filter(Boolean).join(" ") || collected.name || collected.preferredName;
+        const fullName =
+          [collected._firstName, collected._lastName]
+            .filter(Boolean)
+            .join(" ") ||
+          collected.name ||
+          collected.preferredName;
         if (fullName) detailLines.push(`Name: ${fullName}`);
         if (collected.email) detailLines.push(`Email: ${collected.email}`);
         if (collected.phone) detailLines.push(`Phone: ${collected.phone}`);
-        if (collected.address) detailLines.push(`Address: ${collected.address}`);
-        if (collected.networkPreference) detailLines.push(`Network: ${collected.networkPreference}`);
-        if (collected.residentialPreference) detailLines.push(`Type: ${collected.residentialPreference}`);
+        if (collected.address)
+          detailLines.push(`Address: ${collected.address}`);
+        if (collected.networkPreference)
+          detailLines.push(`Network: ${collected.networkPreference}`);
+        if (collected.residentialPreference)
+          detailLines.push(`Type: ${collected.residentialPreference}`);
         if (collected.leadInterest || fa.leadInterest)
-          detailLines.push(`Selected Plan: ${collected.leadInterest || fa.leadInterest}`);
+          detailLines.push(
+            `Selected Plan: ${collected.leadInterest || fa.leadInterest}`,
+          );
 
-        const detailsBlock = detailLines.length > 0
-          ? `\n\n--- Customer Details ---\n${detailLines.join("\n")}`
-          : "";
+        const detailsBlock =
+          detailLines.length > 0
+            ? `\n\n--- Customer Details ---\n${detailLines.join("\n")}`
+            : "";
 
         if (fa.message?.message) {
           fa.message.message += detailsBlock;
@@ -1448,10 +1704,21 @@ TOOL RESULT: create_ticket was BLOCKED because email has not been collected yet.
         let ticketResult;
         try {
           if (isSupportTicket) {
-            console.log(`📝 Creating SUPPORT ticket: "${fa.subject}" customer_id=${fa.customer_id}`);
-            const r = await splynx.request("POST", "admin/support/tickets", objectToUrlEncoded(fa));
+            console.log(
+              `📝 Creating SUPPORT ticket: "${fa.subject}" customer_id=${fa.customer_id}`,
+            );
+            const r = await splynx.request(
+              "POST",
+              "admin/support/tickets",
+              objectToUrlEncoded(fa),
+            );
             console.log(`✅ Splynx ticket created: ID=${r.id}`);
-            const emailResult = await sendTicketEmail(r.id, fa, collected, true);
+            const emailResult = await sendTicketEmail(
+              r.id,
+              fa,
+              collected,
+              true,
+            );
             ticketResult = {
               success: true,
               ticket_id: r.id,
@@ -1462,7 +1729,12 @@ TOOL RESULT: create_ticket was BLOCKED because email has not been collected yet.
             };
           } else {
             console.log(`📧 SALES inquiry — email only: "${fa.subject}"`);
-            const emailResult = await sendTicketEmail(null, fa, collected, false);
+            const emailResult = await sendTicketEmail(
+              null,
+              fa,
+              collected,
+              false,
+            );
             ticketResult = {
               success: true,
               message: "Sales inquiry submitted successfully",
@@ -1485,16 +1757,28 @@ TOOL RESULT: create_ticket was BLOCKED because email has not been collected yet.
       }
 
       if (fn === "get_ticket_types")
-        return JSON.stringify({ success: true, types: await splynx.request("GET", "admin/support/tickets-types") });
+        return JSON.stringify({
+          success: true,
+          types: await splynx.request("GET", "admin/support/tickets-types"),
+        });
       if (fn === "get_ticket_groups")
-        return JSON.stringify({ success: true, groups: await splynx.request("GET", "admin/support/tickets-groups") });
+        return JSON.stringify({
+          success: true,
+          groups: await splynx.request("GET", "admin/support/tickets-groups"),
+        });
       if (fn === "get_ticket_statuses")
-        return JSON.stringify({ success: true, statuses: await splynx.request("GET", "admin/support/tickets-statuses") });
+        return JSON.stringify({
+          success: true,
+          statuses: await splynx.request(
+            "GET",
+            "admin/support/tickets-statuses",
+          ),
+        });
 
       return JSON.stringify({ error: `Unknown tool: ${fn}` });
     }
 
-    // ═══════════════ Client Audio → OpenAI ═══════════════
+    // ══════════════════ Client Audio → OpenAI ══════════════════
     let lastAudioLog = 0;
     socket.on("audio_chunk", (b64) => {
       const shouldSuppress =
@@ -1507,16 +1791,20 @@ TOOL RESULT: create_ticket was BLOCKED because email has not been collected yet.
 
       const now = Date.now();
       if (now - lastAudioLog > 2000) {
-        const state = ["CONNECTING", "OPEN", "CLOSING", "CLOSED"][openaiWs?.readyState] || "UNKNOWN";
+        const state =
+          ["CONNECTING", "OPEN", "CLOSING", "CLOSED"][openaiWs?.readyState] ||
+          "UNKNOWN";
         console.log(`🎤 [${socket.id}] [OpenAI: ${state}]`);
         lastAudioLog = now;
       }
       if (openaiWs?.readyState === WebSocket.OPEN) {
-        openaiWs.send(JSON.stringify({ type: "input_audio_buffer.append", audio: b64 }));
+        openaiWs.send(
+          JSON.stringify({ type: "input_audio_buffer.append", audio: b64 }),
+        );
       }
     });
 
-    // ═══════════════ Structured Input ═══════════════
+    // ══════════════════ Structured Input ══════════════════
     socket.on("structured_input", (payload) => {
       if (!payload || !payload.field || !payload.value) return;
       const { field, value } = payload;
@@ -1543,14 +1831,16 @@ TOOL RESULT: create_ticket was BLOCKED because email has not been collected yet.
       socket.emit("user_transcript", userMessage);
 
       if (openaiWs?.readyState === WebSocket.OPEN) {
-        openaiWs.send(JSON.stringify({
-          type: "conversation.item.create",
-          item: {
-            type: "message",
-            role: "user",
-            content: [{ type: "input_text", text: userMessage }],
-          },
-        }));
+        openaiWs.send(
+          JSON.stringify({
+            type: "conversation.item.create",
+            item: {
+              type: "message",
+              role: "user",
+              content: [{ type: "input_text", text: userMessage }],
+            },
+          }),
+        );
         scheduleResponseCreate();
       }
 
@@ -1558,25 +1848,30 @@ TOOL RESULT: create_ticket was BLOCKED because email has not been collected yet.
       socket.emit("status", "listening");
     });
 
-    // ═══════════════ Cleanup ═══════════════
+    // ══════════════════ Cleanup ══════════════════
     socket.on("disconnect", () => {
-      console.log(`🔌 Disconnected: ${socket.id}`);
+      console.log(`📌 Disconnected: ${socket.id}`);
       clearSilenceTimer();
       if (finalMessageTimer) {
         clearTimeout(finalMessageTimer);
         finalMessageTimer = null;
       }
       closeElevenLabsWs();
-      if (openaiWs) try { openaiWs.close(); } catch (_) {}
+      if (openaiWs)
+        try {
+          openaiWs.close();
+        } catch (_) {}
       sessions.delete(session.id);
     });
 
-    // ═══════════════ Boot ═══════════════
+    // ══════════════════ Boot ══════════════════
     (async () => {
       try {
         console.log("⏳ Connecting OpenAI Realtime...");
         await connectOpenAI();
-        console.log("✅ OpenAI connected! ElevenLabs pre-warmed. Waiting 200ms...");
+        console.log(
+          "✅ OpenAI connected! ElevenLabs pre-warmed. Waiting 200ms...",
+        );
         socket.emit("connections_ready");
         await new Promise((r) => setTimeout(r, 200));
 
