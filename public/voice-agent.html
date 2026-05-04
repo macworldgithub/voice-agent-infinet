@@ -80,104 +80,6 @@
       }
 
       /* ═══════════════════════════════════════════════════════
-           VOICE EMAIL CAPTURE UI
-           Shows while user is spelling their email aloud.
-           ═══════════════════════════════════════════════════════ */
-      #voice-email-indicator {
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%) scale(0.85);
-        opacity: 0;
-        pointer-events: none;
-        transition:
-          opacity 0.3s ease,
-          transform 0.3s ease;
-        z-index: 40;
-        background: rgba(15, 23, 42, 0.92);
-        backdrop-filter: blur(24px);
-        -webkit-backdrop-filter: blur(24px);
-        border: 1px solid rgba(0, 191, 255, 0.25);
-        border-radius: 24px;
-        padding: 28px 36px;
-        text-align: center;
-        max-width: 420px;
-        width: calc(100vw - 48px);
-        box-shadow:
-          0 24px 80px rgba(0, 0, 0, 0.6),
-          0 0 0 1px rgba(0, 191, 255, 0.1);
-      }
-
-      #voice-email-indicator.visible {
-        opacity: 1;
-        transform: translate(-50%, -50%) scale(1);
-        pointer-events: none; /* informational only */
-      }
-
-      .email-wave {
-        display: flex;
-        justify-content: center;
-        gap: 5px;
-        margin-bottom: 18px;
-      }
-
-      .email-wave span {
-        display: block;
-        width: 5px;
-        border-radius: 99px;
-        background: linear-gradient(to top, #00bfff, #67e8f9);
-        animation: email-bounce 1.1s ease-in-out infinite;
-      }
-
-      .email-wave span:nth-child(1) {
-        height: 16px;
-        animation-delay: 0s;
-      }
-      .email-wave span:nth-child(2) {
-        height: 24px;
-        animation-delay: 0.1s;
-      }
-      .email-wave span:nth-child(3) {
-        height: 32px;
-        animation-delay: 0.2s;
-      }
-      .email-wave span:nth-child(4) {
-        height: 24px;
-        animation-delay: 0.3s;
-      }
-      .email-wave span:nth-child(5) {
-        height: 16px;
-        animation-delay: 0.4s;
-      }
-
-      @keyframes email-bounce {
-        0%,
-        100% {
-          transform: scaleY(0.5);
-          opacity: 0.6;
-        }
-        50% {
-          transform: scaleY(1);
-          opacity: 1;
-        }
-      }
-
-      .email-parsed-preview {
-        font-family: "Courier New", monospace;
-        font-size: 1.1rem;
-        color: #67e8f9;
-        background: rgba(0, 191, 255, 0.08);
-        border: 1px solid rgba(0, 191, 255, 0.2);
-        border-radius: 10px;
-        padding: 10px 16px;
-        margin-top: 14px;
-        min-height: 42px;
-        letter-spacing: 0.04em;
-        transition: all 0.3s ease;
-        word-break: break-all;
-      }
-
-      /* ═══════════════════════════════════════════════════════
            FALLBACK TEXT INPUT (email only, shown after 3 failures)
            ═══════════════════════════════════════════════════════ */
       #structured-input-container {
@@ -404,30 +306,6 @@
     </div>
 
     <!-- ═══════════════════════════════════════════════════════
-         VOICE EMAIL CAPTURE INDICATOR
-         Shown while user spells their email.
-         ═══════════════════════════════════════════════════════ -->
-    <div id="voice-email-indicator">
-      <div class="email-wave">
-        <span></span><span></span><span></span><span></span><span></span>
-      </div>
-      <p class="text-slate-200 font-semibold text-base mb-1">
-        Listening for your email
-      </p>
-      <p class="text-slate-400 text-sm">
-        Say each character aloud, e.g.
-        <span class="text-cyan-400"
-          >"j for juliet, dot, at, gmail, dot, com"</span
-        >
-      </p>
-      <div
-        id="email-parsed-preview"
-        class="email-parsed-preview"
-        style="display: none"
-      ></div>
-    </div>
-
-    <!-- ═══════════════════════════════════════════════════════
          FALLBACK TEXT INPUT (email only — shown after 3 voice failures)
          ═══════════════════════════════════════════════════════ -->
     <div id="structured-input-container">
@@ -491,10 +369,6 @@
         const SAMPLE_RATE = 24000;
         const PCM_SAMPLE_RATE = 16000;
 
-        // ── NEW: Voice email capture UI state ──
-        let voiceEmailCaptureActive = false;
-        let voiceEmailConfirmationActive = false;
-
         // ──────── UI Helpers ────────
         function setStatus(msg, state) {
           const el = document.getElementById("status-text");
@@ -518,12 +392,6 @@
             btn.innerHTML =
               '<div class="flex gap-1"><div class="w-1.5 h-5 bg-white rounded animate-pulse"></div><div class="w-1.5 h-8 bg-white rounded animate-pulse" style="animation-delay:.15s"></div><div class="w-1.5 h-4 bg-white rounded animate-pulse" style="animation-delay:.3s"></div><div class="w-1.5 h-7 bg-white rounded animate-pulse" style="animation-delay:.1s"></div></div>';
             vol.classList.add("opacity-100");
-            endBtn.classList.remove("hidden");
-          } else if (state === "email_capture") {
-            // ── NEW: Special state during voice email spelling ──
-            btn.classList.add("bg-[#00bfff]", "speaking-glow");
-            btn.innerHTML = "✉️";
-            vol.classList.add("opacity-100"); // keep vol bars active
             endBtn.classList.remove("hidden");
           } else if (state === "processing") {
             btn.classList.add("thinking", "bg-violet-500");
@@ -553,35 +421,6 @@
           box.scrollTop = box.scrollHeight;
         }
 
-        // ──────── Voice Email Indicator UI ────────
-        const voiceEmailIndicator = document.getElementById(
-          "voice-email-indicator",
-        );
-        const emailParsedPreview = document.getElementById(
-          "email-parsed-preview",
-        );
-
-        function showVoiceEmailIndicator() {
-          voiceEmailCaptureActive = true;
-          voiceEmailIndicator.classList.add("visible");
-          emailParsedPreview.style.display = "none";
-          emailParsedPreview.textContent = "";
-          setStatus("Listening for your email...", "email_capture");
-        }
-
-        function updateVoiceEmailPreview(partialEmail) {
-          if (!voiceEmailCaptureActive || !partialEmail) return;
-          emailParsedPreview.style.display = "block";
-          emailParsedPreview.textContent = partialEmail;
-        }
-
-        function hideVoiceEmailIndicator() {
-          voiceEmailCaptureActive = false;
-          voiceEmailConfirmationActive = false;
-          voiceEmailIndicator.classList.remove("visible");
-          emailParsedPreview.style.display = "none";
-        }
-
         // ──────── PCM16 Audio Capture ────────
         async function startMic() {
           if (isMicOpen) return;
@@ -603,30 +442,45 @@
           micSource = audioCtx.createMediaStreamSource(micStream);
 
           const workletCode = `
-                class PCM16Processor extends AudioWorkletProcessor {
-                    process(inputs) {
-                        const ch = inputs[0]?.[0];
-                        if (ch) {
-                            const i16 = new Int16Array(ch.length);
-                            for (let i = 0; i < ch.length; i++) {
-                                const s = Math.max(-1, Math.min(1, ch[i]));
-                                i16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-                            }
-                            this.port.postMessage(i16.buffer, [i16.buffer]);
-                        }
-                        return true;
-                    }
-                }
-                registerProcessor('pcm16', PCM16Processor);
-                `;
-          const blob = new Blob([workletCode], {
-            type: "application/javascript",
-          });
-          const url = URL.createObjectURL(blob);
-          await audioCtx.audioWorklet.addModule(url);
-          URL.revokeObjectURL(url);
+class PCM16Processor extends AudioWorkletProcessor {
+  process(inputs) {
+    const input = inputs[0][0];
+    if (!input) return true;
+    const pcm16 = new Int16Array(input.length);
+    for (let i = 0; i < input.length; i++) {
+      let s = Math.max(-1, Math.min(1, input[i]));
+      pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+    }
+    this.port.postMessage(pcm16.buffer, [pcm16.buffer]);
+    return true;
+  }
+}
+registerProcessor("pcm16", PCM16Processor);
+`;
 
-          pcmWorklet = new AudioWorkletNode(audioCtx, "pcm16");
+          try {
+            const blob = new Blob([workletCode], {
+              type: "application/javascript",
+            });
+            await audioCtx.audioWorklet.addModule(URL.createObjectURL(blob));
+            pcmWorklet = new AudioWorkletNode(audioCtx, "pcm16");
+          } catch (e) {
+            const bufferSize = 4096;
+            const processor = audioCtx.createScriptProcessor(bufferSize, 1, 1);
+            processor.port = { onmessage: null };
+            processor.onaudioprocess = (ev) => {
+              const input = ev.inputBuffer.getChannelData(0);
+              const pcm16 = new Int16Array(input.length);
+              for (let i = 0; i < input.length; i++) {
+                let s = Math.max(-1, Math.min(1, input[i]));
+                pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+              }
+              if (processor.port?.onmessage) {
+                processor.port.onmessage({ data: pcm16.buffer });
+              }
+            };
+            pcmWorklet = processor;
+          }
           pcmWorklet.port.onmessage = (e) => {
             if (socket?.connected && !micMutedForInput) {
               const bytes = new Uint8Array(e.data);
@@ -810,13 +664,10 @@
         function showFallbackInput(field, prompt) {
           if (field !== "email") {
             console.log(
-              `⏭️ Ignoring fallback input for field: ${field} (voice only)`,
+              ` Ignoring fallback input for field: ${field} (voice only)`,
             );
             return;
           }
-
-          // Hide voice email indicator if showing
-          hideVoiceEmailIndicator();
 
           siInput.type = "email";
           siInput.placeholder = prompt || "your.email@example.com";
@@ -916,36 +767,18 @@
             if (micMutedForInput && st === "listening") return;
 
             if (st === "user_speaking") {
-              // During email capture, don't override the email_capture status
-              if (!voiceEmailCaptureActive)
-                setStatus("Listening...", "listening");
+              setStatus("Listening...", "listening");
             } else if (st === "processing") {
               setStatus("Thinking...", "processing");
             } else if (st === "speaking") {
-              // If we were in email capture, hide the indicator while AI speaks
-              if (voiceEmailCaptureActive && !voiceEmailConfirmationActive) {
-                // AI is about to say the confirmation — keep indicator but update status
-              }
               setStatus("AI is speaking...", "speaking");
             } else if (st === "listening") {
-              if (isReady) {
-                if (voiceEmailCaptureActive) {
-                  setStatus("Listening for your email...", "email_capture");
-                } else {
-                  setStatus("Listening... Speak now", "listening");
-                }
-              }
+              if (isReady) setStatus("Listening... Speak now", "listening");
             }
           });
 
           socket.on("user_transcript", (text) => {
             appendTranscript("user", text);
-
-            // ── NEW: Show partial parsed email in indicator ──
-            if (voiceEmailCaptureActive) {
-              const preview = liveParseEmailPreview(text);
-              if (preview) updateVoiceEmailPreview(preview);
-            }
           });
 
           socket.on("assistant_text_delta", (delta) => {
@@ -955,9 +788,6 @@
           socket.on("assistant_text_done", (text) => {
             assistantFullText = "";
             appendTranscript("assistant", text);
-
-            // ── NEW: Detect voice email state from AI messages ──
-            handleAITextForEmailState(text);
           });
 
           // ── CHANGED: Only email field triggers fallback input ──
@@ -969,7 +799,6 @@
 
           socket.on("structured_input_accepted", (payload) => {
             console.log("✅ Input accepted:", payload);
-            hideVoiceEmailIndicator();
           });
 
           socket.on("audio_chunk_pcm", (payload) => {
@@ -979,9 +808,7 @@
 
           socket.on("audio_done", () => {
             console.log("✅ Audio done");
-            if (voiceEmailCaptureActive) {
-              setStatus("Listening for your email...", "email_capture");
-            } else if (isReady && isMicOpen && !micMutedForInput) {
+            if (isReady && isMicOpen && !micMutedForInput) {
               setStatus("Listening... Speak now", "listening");
             } else if (isReady) {
               setStatus("Ready • Tap mic to speak", "idle");
@@ -990,18 +817,14 @@
 
           socket.on("interrupt", () => {
             interruptPlayback();
-            if (voiceEmailCaptureActive) {
-              setStatus("Listening for your email...", "email_capture");
-            } else if (isReady && isMicOpen && !micMutedForInput) {
+            if (isReady && isMicOpen && !micMutedForInput) {
               setStatus("Listening... Speak now", "listening");
             }
           });
 
           socket.on("audio_interrupt", () => {
             stopPcmPlayback();
-            if (voiceEmailCaptureActive) {
-              setStatus("Listening for your email...", "email_capture");
-            } else if (isReady && isMicOpen && !micMutedForInput) {
+            if (isReady && isMicOpen && !micMutedForInput) {
               setStatus("Listening... Speak now", "listening");
             }
           });
@@ -1014,125 +837,8 @@
           socket.on("disconnect", () => {
             isReady = false;
             hideFallbackInput();
-            hideVoiceEmailIndicator();
             setStatus("Reconnecting to server...", "processing");
           });
-        }
-
-        // ──────── NEW: Voice email state detection from AI text ────────
-        /**
-         * Detect from the AI's text whether we should show/hide
-         * the voice email capture UI elements.
-         */
-        function handleAITextForEmailState(text) {
-          if (!text) return;
-          const lower = text.toLowerCase();
-
-          // AI is asking for email via phonetic spelling → show indicator
-          const isAskingForEmail =
-            lower.includes("letter by letter") ||
-            lower.includes("spell") ||
-            lower.includes("phonetic") ||
-            lower.includes("juliet") ||
-            lower.includes("oscar") ||
-            (lower.includes("email") && lower.includes("say"));
-
-          // AI is confirming what it heard → update to confirmation mode
-          const isConfirming =
-            lower.includes("i've got your email as") ||
-            lower.includes("i heard your email as") ||
-            lower.includes("i got your email as") ||
-            (lower.includes("email as") &&
-              (lower.includes("correct") || lower.includes("is that")));
-
-          // AI confirmed email successfully
-          const isConfirmed =
-            lower.includes("email has been saved") ||
-            lower.includes("email is saved") ||
-            lower.includes("great, i've got") ||
-            (lower.includes("confirmed") && lower.includes("email"));
-
-          if (isConfirmed) {
-            hideVoiceEmailIndicator();
-          } else if (isConfirming) {
-            // Keep indicator visible but switch to confirmation mode
-            voiceEmailConfirmationActive = true;
-            if (!voiceEmailCaptureActive) showVoiceEmailIndicator();
-            setStatus("Say YES or NO to confirm", "email_capture");
-          } else if (isAskingForEmail) {
-            showVoiceEmailIndicator();
-          }
-        }
-
-        /**
-         * Quick client-side heuristic to show a partial email preview
-         * while the user is spelling.  Uses simple word substitution
-         * (same logic as server-side parser, lightweight version).
-         */
-        function liveParseEmailPreview(transcript) {
-          const t = transcript.toLowerCase();
-
-          const phoneticMap = {
-            alpha: "a",
-            bravo: "b",
-            charlie: "c",
-            delta: "d",
-            echo: "e",
-            foxtrot: "f",
-            golf: "g",
-            hotel: "h",
-            india: "i",
-            juliet: "j",
-            kilo: "k",
-            lima: "l",
-            mike: "m",
-            november: "n",
-            oscar: "o",
-            papa: "p",
-            quebec: "q",
-            romeo: "r",
-            sierra: "s",
-            tango: "t",
-            uniform: "u",
-            victor: "v",
-            whiskey: "w",
-            xray: "x",
-            yankee: "y",
-            zulu: "z",
-            dot: ".",
-            at: "@",
-            underscore: "_",
-            dash: "-",
-            zero: "0",
-            one: "1",
-            two: "2",
-            three: "3",
-            four: "4",
-            five: "5",
-            six: "6",
-            seven: "7",
-            eight: "8",
-            nine: "9",
-          };
-
-          const tokens = t.split(/\s+/);
-          const chars = [];
-          for (const token of tokens) {
-            if (phoneticMap[token] !== undefined) {
-              chars.push(phoneticMap[token]);
-            } else if (/^[a-z0-9@._\-+]$/.test(token)) {
-              chars.push(token);
-            } else if (token.length > 2 && /^[a-z]+$/.test(token)) {
-              // Common domain words — pass through
-              chars.push(token);
-            }
-          }
-
-          const preview = chars
-            .join("")
-            .replace(/\.{2,}/g, ".")
-            .replace(/@{2,}/g, "@");
-          return preview.length >= 2 ? preview : null;
         }
 
         // ──────── Controls ────────
@@ -1163,7 +869,6 @@
           stopMic();
           interruptPlayback();
           hideFallbackInput();
-          hideVoiceEmailIndicator();
           micMutedForInput = false;
           if (socket) {
             socket.disconnect();
@@ -1186,12 +891,9 @@
           stopMic();
           interruptPlayback();
           hideFallbackInput();
-          hideVoiceEmailIndicator();
           micMutedForInput = false;
           isReady = false;
           assistantFullText = "";
-          voiceEmailCaptureActive = false;
-          voiceEmailConfirmationActive = false;
           document.getElementById("transcript-content").innerHTML = "";
           document.getElementById("transcript-box").classList.add("hidden");
           document.getElementById("mic-button").disabled = false;

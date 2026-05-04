@@ -2035,19 +2035,18 @@ function buildEmailCaptureHint(attemptNumber) {
 You are now collecting the customer's email address BY VOICE — NOT via a text box.
 
 Instructions for the AI:
-1. Ask the customer to spell their email address OUT LOUD, character by character.
-2. Tell them to use the NATO phonetic alphabet or simple words (e.g. "j for juliet", "o for oscar").
-3. Tell them to say the following for special characters:
-   • "at"          → @
-   • "dot"         → .
-   • "underscore"  → _
-   • "dash"        → -
-4. Give a clear example before you ask, like:
-   "For example, if your email is john.doe@gmail.com, you'd say:
-    j for juliet — o for oscar — h for hotel — n for november — dot — d for delta — o for oscar — e for echo — at — gmail — dot — com"
-5. Then ask them to go ahead when ready.
-6. IMPORTANT: Do NOT rush them. Extend your silence window — they will be spelling slowly.
-7. IMPORTANT: Do NOT say anything about a text box or typing.`;
+1. Ask the customer to spell their email address OUT LOUD, letter by letter.
+2. Tell them to say the following for special characters:
+  • "at"          → @
+  • "dot"         → .
+  • "underscore"  → _
+  • "dash"        → -
+3. Give a clear example before you ask, like:
+  "For example, if your email is john.doe@gmail.com, you'd say:
+   j — o — h — n — dot — d — o — e — at — gmail — dot — com"
+4. Then ask them to go ahead when ready.
+5. IMPORTANT: Do NOT rush them. Extend your silence window — they will be spelling slowly.
+6. IMPORTANT: Do NOT say anything about a text box or typing.`;
 }
 
 /** Build the confirmation hint after a parse attempt */
@@ -2395,8 +2394,8 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything first. CALL THE
     //  Silence timer
     // ─────────────────────────────────────────────────────────────────
     let silenceTimer = null;
-    const SILENCE_TIMEOUT_MS = 15000;
-    const SILENCE_TIMEOUT_PACKAGE_MS = 20000;
+    const SILENCE_TIMEOUT_MS = 25000;
+    const SILENCE_TIMEOUT_PACKAGE_MS = 60000;
 
     function startSilenceTimer() {
       clearSilenceTimer();
@@ -3096,7 +3095,7 @@ Remind them to say "at" for @, "dot" for ., and to use phonetic words like "a fo
           const instructions =
             SYSTEM_PROMPT +
             "\n\nCRITICAL: You MUST ALWAYS respond in English only." +
-            "\n\nEMAIL COLLECTION RULE: You NEVER ask for email via a text box. Email is collected by voice — the system will guide the customer to spell it phonetically. When [SYSTEM_CONTEXT] tells you to collect email, follow the phonetic spelling instructions exactly." +
+            "\n\nEMAIL COLLECTION RULE: You NEVER ask for email via a text box. Email is collected by voice — the system will guide the customer to spell it letter by letter. When [SYSTEM_CONTEXT] tells you to collect email, follow the letter-by-letter instructions exactly." +
             "\n\nFIELD COLLECTION RULE: Collect ONE field per turn. Follow [SYSTEM_CONTEXT] hints precisely.";
 
           openaiWs.send(
@@ -3553,7 +3552,9 @@ Remind them to say "at" for @, "dot" for ., and to use phonetic words like "a fo
             lower.includes("could i") ||
             lower.includes("can i") ||
             lower.includes("what's your") ||
-            lower.includes("what is your")))
+            lower.includes("what is your") ||
+            lower.includes("email address") ||
+            lower.includes("best email")))
       );
     }
 
@@ -3721,8 +3722,22 @@ Remind them to say "at" for @, "dot" for ., and to use phonetic words like "a fo
           // Trigger voice email capture
           salesStep = "email";
           emailCapture.reset();
+
+          if (openaiWs?.readyState === WebSocket.OPEN) {
+            openaiWs.send(
+              JSON.stringify({
+                type: "conversation.item.create",
+                item: {
+                  type: "function_call_output",
+                  call_id,
+                  output: result,
+                },
+              }),
+            );
+          }
+          pendingFunctionCalls = Math.max(0, pendingFunctionCalls - 1);
           beginEmailCapture();
-          return; // don't send further — beginEmailCapture handles the response
+          return; // beginEmailCapture handles the response
         } else if (parsedResult?.success) {
           salesStep = "done";
           const ticketId = parsedResult.ticket_id;
