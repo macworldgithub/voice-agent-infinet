@@ -2045,8 +2045,10 @@ Instructions for the AI:
   "For example, if your email is john.doe@gmail.com, you'd say:
    j — o — h — n — dot — d — o — e — at — gmail — dot — com"
 4. Then ask them to go ahead when ready.
-5. IMPORTANT: Do NOT rush them. Extend your silence window — they will be spelling slowly.
-6. IMPORTANT: Do NOT say anything about a text box or typing.`;
+5. Start your next response with a direct prompt like:
+   "Please spell your email letter by letter. For example: j — o — h — n — dot — d — o — e — at — gmail — dot — com. Go ahead whenever you're ready."
+6. IMPORTANT: Do NOT rush them. Extend your silence window — they will be spelling slowly.
+7. IMPORTANT: Do NOT say anything about a text box or typing.`;
 }
 
 /** Build the confirmation hint after a parse attempt */
@@ -2068,16 +2070,6 @@ If they say NO → you'll ask them to spell it again.`;
 function buildEmailConfirmedHint(email) {
   return `VOICE EMAIL CONFIRMED: The customer confirmed their email address is "${email}".
 The email has been saved to their session. Continue with the next step of the conversation normally.`;
-}
-
-/** Build the hint when falling back to text input */
-function buildEmailFallbackHint() {
-  return `VOICE EMAIL FALLBACK:
-After ${MAX_EMAIL_ATTEMPTS} attempts, the voice email capture was unsuccessful.
-A text input box has appeared on the customer's screen.
-Tell the customer:
-"No worries at all — I've popped up a text box on your screen so you can type your email in directly. Take your time!"
-Wait for them to submit the form.`;
 }
 
 /** Detect a YES/NO answer for the confirmation loop */
@@ -2568,24 +2560,6 @@ YOU MUST NOW CALL create_ticket IMMEDIATELY. Do NOT say anything first. CALL THE
       console.log("🔓 Final message lock released");
     }
 
-    // ─────────────────────────────────────────────────────────────────
-    //  Structured Input detection — CHANGED: email excluded from normal flow
-    // ─────────────────────────────────────────────────────────────────
-    let lastStructuredInputField = null;
-    let lastStructuredInputTime = 0;
-    const STRUCTURED_INPUT_COOLDOWN_MS = 30000;
-
-    function detectStructuredInputRequest(text) {
-      // ── CHANGED: email is now handled by voice capture.
-      //    We ONLY emit request_structured_input for email when the
-      //    fallback has been triggered (emailCapture.fallbackTriggered).
-      //    Phone and address remain voice-only always.
-      if (!text) return null;
-      // No fields trigger structured input in normal flow anymore.
-      // Fallback is handled explicitly in triggerEmailFallback().
-      return null;
-    }
-
     function detectPhoneVerificationRequest(text) {
       if (!text) return false;
       const lower = text.toLowerCase();
@@ -2861,24 +2835,9 @@ Remind them to say "at" for @, "dot" for ., and to use phonetic words like "a fo
      * Trigger the text-input fallback after too many failed attempts.
      */
     function triggerEmailFallback() {
-      console.log(
-        `📧 Email capture exhausted — triggering text input fallback`,
-      );
-      emailCapture.fallbackTriggered = true;
-      emailCapture.active = false;
-      emailCapture.awaitingConfirmation = false;
-
-      // Show text input overlay on the frontend
-      awaitingStructuredInput = true;
-      structuredInputField = "email";
-      socket.emit("request_structured_input", {
-        field: "email",
-        prompt: "Enter your email address",
-      });
-
-      // Tell AI to prompt for text-box
-      const hint = buildEmailFallbackHint();
-      injectHintAndRespond(hint);
+      console.log(`📧 Email capture exhausted — restarting voice-only capture`);
+      emailCapture.reset();
+      beginEmailCapture();
     }
 
     /**
@@ -3412,19 +3371,6 @@ Remind them to say "at" for @, "dot" for ., and to use phonetic words like "a fo
               session.collected._websiteCheckAsked = true;
               sessions.set(session.id, session);
               console.log(`📋 Website check question detected`);
-            }
-
-            // ── CHANGED: No longer trigger structured input for email ──
-            // (detectStructuredInputRequest always returns null now)
-            const detectedField = detectStructuredInputRequest(event.text);
-            if (detectedField) {
-              awaitingStructuredInput = true;
-              structuredInputField = detectedField;
-              clearSilenceTimer();
-              socket.emit("request_structured_input", {
-                field: detectedField,
-                prompt: "Enter your details",
-              });
             }
           }
           break;
@@ -4153,70 +4099,6 @@ Remind them to say "at" for @, "dot" for ., and to use phonetic words like "a fo
           JSON.stringify({ type: "input_audio_buffer.append", audio: b64 }),
         );
       }
-    });
-
-    // ─────────────────────────────────────────────────────────────────
-    //  Structured input (now EMAIL FALLBACK ONLY)
-    // ─────────────────────────────────────────────────────────────────
-    socket.on("structured_input", (payload) => {
-      if (!payload || !payload.field || !payload.value) return;
-      const { field, value } = payload;
-      console.log(
-        `📋 Structured input (fallback) received: ${field} = "${value}"`,
-      );
-
-      clearSilenceTimer();
-      awaitingStructuredInput = false;
-      structuredInputField = null;
-
-      if (field !== "email") return;
-
-      // Validate and save
-      const trimmed = value.trim().toLowerCase();
-      if (!validateEmail(trimmed)) {
-        console.warn(`📧 Fallback email invalid: "${trimmed}"`);
-        // Re-show the input
-        awaitingStructuredInput = true;
-        structuredInputField = "email";
-        socket.emit("request_structured_input", {
-          field: "email",
-          prompt: "Please enter a valid email address",
-        });
-        return;
-      }
-
-      session.collected.email = trimmed;
-      sessions.set(session.id, session);
-
-      // Mark email capture as done
-      emailCapture.confirmedEmail = trimmed;
-      emailCapture.active = false;
-      emailCapture.awaitingConfirmation = false;
-
-      if (salesStep === "email") advanceSalesStep("email");
-
-      const userMessage = `My email is ${trimmed}`;
-      session.messages.push({ role: "user", content: userMessage });
-      sessions.set(session.id, session);
-
-      socket.emit("user_transcript", userMessage);
-
-      if (openaiWs?.readyState === WebSocket.OPEN) {
-        openaiWs.send(
-          JSON.stringify({
-            type: "conversation.item.create",
-            item: {
-              type: "message",
-              role: "user",
-              content: [{ type: "input_text", text: userMessage }],
-            },
-          }),
-        );
-        scheduleResponseCreate();
-      }
-
-      socket.emit("structured_input_accepted", { field, value: trimmed });
-      socket.emit("status", "listening");
     });
 
     // ─────────────────────────────────────────────────────────────────

@@ -78,153 +78,6 @@
         background: #334155;
         border-radius: 4px;
       }
-
-      /* ═══════════════════════════════════════════════════════
-           FALLBACK TEXT INPUT (email only, shown after 3 failures)
-           ═══════════════════════════════════════════════════════ */
-      #structured-input-container {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        z-index: 50;
-        transform: translateY(100%);
-        opacity: 0;
-        transition:
-          transform 0.45s cubic-bezier(0.4, 0, 0.2, 1),
-          opacity 0.35s ease;
-        pointer-events: none;
-      }
-
-      #structured-input-container.visible {
-        transform: translateY(0);
-        opacity: 1;
-        pointer-events: auto;
-      }
-
-      .si-backdrop {
-        background: rgba(15, 23, 42, 0.92);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border-top: 1px solid rgba(100, 116, 139, 0.25);
-        box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.5);
-      }
-
-      .si-input {
-        background: rgba(30, 41, 59, 0.9);
-        border: 1.5px solid rgba(100, 116, 139, 0.35);
-        border-radius: 14px;
-        color: #f1f5f9;
-        font-size: 1.05rem;
-        padding: 14px 18px;
-        width: 100%;
-        outline: none;
-        transition:
-          border-color 0.3s ease,
-          box-shadow 0.3s ease;
-        font-family: "Inter", system-ui, sans-serif;
-      }
-
-      .si-input:focus {
-        border-color: #00bfff;
-        box-shadow:
-          0 0 0 3px rgba(0, 191, 255, 0.15),
-          0 0 20px rgba(0, 191, 255, 0.1);
-      }
-
-      .si-input::placeholder {
-        color: rgba(148, 163, 184, 0.7);
-      }
-
-      .si-submit {
-        background: linear-gradient(135deg, #00bfff 0%, #0ea5e9 100%);
-        color: white;
-        border: none;
-        border-radius: 14px;
-        padding: 14px 28px;
-        font-size: 0.95rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        font-family: "Inter", system-ui, sans-serif;
-        white-space: nowrap;
-      }
-
-      .si-submit:hover {
-        background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
-        transform: translateY(-1px);
-        box-shadow: 0 4px 20px rgba(0, 191, 255, 0.3);
-      }
-
-      .si-submit:active {
-        transform: translateY(0);
-      }
-      .si-submit:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-        transform: none;
-      }
-
-      .si-label {
-        color: #94a3b8;
-        font-size: 0.8rem;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        font-weight: 600;
-        margin-bottom: 8px;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-      }
-
-      .mic-muted-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        background: rgba(239, 68, 68, 0.15);
-        color: #f87171;
-        font-size: 0.7rem;
-        padding: 3px 10px;
-        border-radius: 20px;
-        font-weight: 500;
-      }
-
-      /* Fallback badge — shows it's a last-resort input */
-      .fallback-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        background: rgba(234, 179, 8, 0.15);
-        color: #fbbf24;
-        font-size: 0.7rem;
-        padding: 3px 10px;
-        border-radius: 20px;
-        font-weight: 500;
-        margin-left: 8px;
-      }
-
-      @keyframes si-shake {
-        0%,
-        100% {
-          transform: translateX(0);
-        }
-        20% {
-          transform: translateX(-6px);
-        }
-        40% {
-          transform: translateX(6px);
-        }
-        60% {
-          transform: translateX(-4px);
-        }
-        80% {
-          transform: translateX(4px);
-        }
-      }
-
-      .si-shake {
-        animation: si-shake 0.5s ease;
-      }
     </style>
   </head>
 
@@ -305,42 +158,6 @@
       </button>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════════
-         FALLBACK TEXT INPUT (email only — shown after 3 voice failures)
-         ═══════════════════════════════════════════════════════ -->
-    <div id="structured-input-container">
-      <div class="si-backdrop px-6 py-6">
-        <div class="max-w-md mx-auto">
-          <div class="flex items-center justify-between mb-3">
-            <div class="si-label">
-              <span id="si-icon">📧</span>
-              <span id="si-label-text">Enter your email</span>
-              <span class="fallback-badge">⚠ Type instead</span>
-            </div>
-            <div class="mic-muted-badge"><span>🔇</span> Mic paused</div>
-          </div>
-          <form id="si-form" class="flex gap-3" autocomplete="off">
-            <input
-              id="si-input"
-              class="si-input flex-1"
-              type="email"
-              placeholder="your.email@example.com"
-              required
-              autocomplete="off"
-              spellcheck="false"
-              inputmode="email"
-            />
-            <button type="submit" id="si-submit" class="si-submit">
-              Submit
-            </button>
-          </form>
-          <p class="text-slate-500 text-xs mt-2" id="si-hint">
-            Voice capture unavailable — type your email and press Submit
-          </p>
-        </div>
-      </div>
-    </div>
-
     <!-- Footer -->
     <div class="py-6 text-center text-xs text-slate-500">
       Powered by InfiNET Broadband
@@ -357,7 +174,6 @@
         let isMicOpen = false;
         let isReady = false;
         let volumeInterval = null;
-        let micMutedForInput = false;
 
         // Playback
         let playbackCtx = null;
@@ -647,102 +463,6 @@ registerProcessor("pcm16", PCM16Processor);
           };
         }
 
-        // ──────── Fallback Structured Input UI (EMAIL ONLY) ────────
-        const siContainer = document.getElementById(
-          "structured-input-container",
-        );
-        const siForm = document.getElementById("si-form");
-        const siInput = document.getElementById("si-input");
-        const siSubmit = document.getElementById("si-submit");
-        const siHint = document.getElementById("si-hint");
-
-        /**
-         * Show the fallback text input.
-         * ONLY called by request_structured_input socket event.
-         * ONLY for field === "email" after 3 failed voice attempts.
-         */
-        function showFallbackInput(field, prompt) {
-          if (field !== "email") {
-            console.log(
-              ` Ignoring fallback input for field: ${field} (voice only)`,
-            );
-            return;
-          }
-
-          siInput.type = "email";
-          siInput.placeholder = prompt || "your.email@example.com";
-          siInput.inputMode = "email";
-          siInput.value = "";
-          siSubmit.disabled = false;
-          siSubmit.textContent = "Submit";
-          siHint.textContent =
-            "Voice capture unavailable — type your email and press Submit";
-          siHint.style.color = "";
-          siContainer.dataset.field = field;
-          siInput.setAttribute("required", "");
-
-          micMutedForInput = true;
-          console.log("🔇 Mic muted for fallback email input");
-
-          requestAnimationFrame(() => {
-            siContainer.classList.add("visible");
-            setTimeout(() => siInput.focus(), 400);
-          });
-        }
-
-        function hideFallbackInput() {
-          siContainer.classList.remove("visible");
-          siInput.value = "";
-          siContainer.dataset.field = "";
-          micMutedForInput = false;
-          console.log("🔊 Mic unmuted after fallback input");
-        }
-
-        siForm.addEventListener("submit", (e) => {
-          e.preventDefault();
-          const field = siContainer.dataset.field;
-          const value = siInput.value.trim();
-
-          if (!value) {
-            siInput.classList.add("si-shake");
-            setTimeout(() => siInput.classList.remove("si-shake"), 600);
-            return;
-          }
-
-          if (field === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-            siInput.classList.add("si-shake");
-            siHint.textContent =
-              "Please enter a valid email address (e.g. name@domain.com)";
-            siHint.style.color = "#f87171";
-            setTimeout(() => {
-              siInput.classList.remove("si-shake");
-              siHint.style.color = "";
-            }, 2000);
-            return;
-          }
-
-          siSubmit.disabled = true;
-          siSubmit.textContent = "Sending...";
-
-          if (socket?.connected) {
-            socket.emit("structured_input", {
-              type: "structured_input",
-              field,
-              value: value.toLowerCase(),
-            });
-          }
-
-          setTimeout(() => {
-            hideFallbackInput();
-            siSubmit.textContent = "Submit";
-          }, 500);
-        });
-
-        // Prevent escape from closing the fallback input
-        siInput.addEventListener("keydown", (e) => {
-          if (e.key === "Escape") e.preventDefault();
-        });
-
         // ──────── Socket.IO ────────
         function connectSocket() {
           socket = io(window.location.origin, { transports: ["websocket"] });
@@ -764,8 +484,6 @@ registerProcessor("pcm16", PCM16Processor);
           });
 
           socket.on("status", (st) => {
-            if (micMutedForInput && st === "listening") return;
-
             if (st === "user_speaking") {
               setStatus("Listening...", "listening");
             } else if (st === "processing") {
@@ -790,17 +508,6 @@ registerProcessor("pcm16", PCM16Processor);
             appendTranscript("assistant", text);
           });
 
-          // ── CHANGED: Only email field triggers fallback input ──
-          socket.on("request_structured_input", (payload) => {
-            console.log("📋 Fallback input requested:", payload);
-            // This now ONLY fires for email after 3 failed voice attempts
-            showFallbackInput(payload.field, payload.prompt);
-          });
-
-          socket.on("structured_input_accepted", (payload) => {
-            console.log("✅ Input accepted:", payload);
-          });
-
           socket.on("audio_chunk_pcm", (payload) => {
             setStatus("AI is speaking...", "speaking");
             pushPcm16Chunk(payload?.audio, payload?.sampleRate);
@@ -808,7 +515,7 @@ registerProcessor("pcm16", PCM16Processor);
 
           socket.on("audio_done", () => {
             console.log("✅ Audio done");
-            if (isReady && isMicOpen && !micMutedForInput) {
+            if (isReady && isMicOpen) {
               setStatus("Listening... Speak now", "listening");
             } else if (isReady) {
               setStatus("Ready • Tap mic to speak", "idle");
@@ -817,14 +524,14 @@ registerProcessor("pcm16", PCM16Processor);
 
           socket.on("interrupt", () => {
             interruptPlayback();
-            if (isReady && isMicOpen && !micMutedForInput) {
+            if (isReady && isMicOpen) {
               setStatus("Listening... Speak now", "listening");
             }
           });
 
           socket.on("audio_interrupt", () => {
             stopPcmPlayback();
-            if (isReady && isMicOpen && !micMutedForInput) {
+            if (isReady && isMicOpen) {
               setStatus("Listening... Speak now", "listening");
             }
           });
@@ -836,7 +543,6 @@ registerProcessor("pcm16", PCM16Processor);
 
           socket.on("disconnect", () => {
             isReady = false;
-            hideFallbackInput();
             setStatus("Reconnecting to server...", "processing");
           });
         }
@@ -868,8 +574,6 @@ registerProcessor("pcm16", PCM16Processor);
         window.endCall = function () {
           stopMic();
           interruptPlayback();
-          hideFallbackInput();
-          micMutedForInput = false;
           if (socket) {
             socket.disconnect();
             socket = null;
@@ -890,8 +594,6 @@ registerProcessor("pcm16", PCM16Processor);
           }
           stopMic();
           interruptPlayback();
-          hideFallbackInput();
-          micMutedForInput = false;
           isReady = false;
           assistantFullText = "";
           document.getElementById("transcript-content").innerHTML = "";
