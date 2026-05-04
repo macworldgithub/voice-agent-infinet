@@ -172,6 +172,7 @@ const OPTICOMM_RESIDENTIAL_PLANS = [
       "Streaming HD Video + 1080p",
       "Web browsing & Social Media",
     ],
+    voice_description: "Our entry-level OptiComm plan gives you 25 megabits down and 10 up - perfect for everyday browsing, HD streaming, and video calls. It's just 64 dollars a month for the first three months, then 69 dollars ongoing. No contracts, unlimited data, and you can cancel anytime.",
   },
   {
     title: "OptiComm 50/20Mbps Residential",
@@ -193,6 +194,7 @@ const OPTICOMM_RESIDENTIAL_PLANS = [
       "Web browsing & Social Media",
       "Some Gaming Applications",
     ],
+    voice_description: "Our standard OptiComm plan with 50 megabits down and 20 up. Great for households that stream on a few devices, work from home occasionally, and do some light gaming. Seventy four dollars for the first three months, then seventy nine dollars. Unlimited data, no contract lock-ins.",
   },
   {
     title: "OptiComm 100/20Mbps Residential",
@@ -217,6 +219,7 @@ const OPTICOMM_RESIDENTIAL_PLANS = [
       "Gaming",
       "Low latency",
     ],
+    voice_description: "Our fast OptiComm plan with 100 megabits down and 20 up. Ideal for busy families streaming 4K, gaming online, and downloading large files. Eighty four dollars for the first three months, then eighty nine dollars. Perfect for communities where 100 megabits is the top speed available.",
   },
   {
     title: "OptiComm 500/50Mbps Faster Residential",
@@ -240,6 +243,7 @@ const OPTICOMM_RESIDENTIAL_PLANS = [
       "All Gaming Applications",
       "Low latency",
     ],
+    voice_description: "This is our popular mid-range option with 500 megabits download and 50 up. Great for busy households - you can stream 4K on multiple devices, download large files in seconds, and game online without lag. Just 79 dollars for the first three months, then 89 dollars. Same deal - unlimited data, no lock-in contracts.",
   },
   {
     title: "OptiComm 750/50Mbps Residential",
@@ -263,6 +267,7 @@ const OPTICOMM_RESIDENTIAL_PLANS = [
       "All Gaming Applications",
       "Low latency",
     ],
+    voice_description: "Our high-speed OptiComm plan with 750 megabits down and 50 up. Built for power users - multiple 4K streams, competitive gaming, and huge downloads all at once. Eighty nine dollars for three months, then ninety nine dollars. No contracts, unlimited data.",
   },
   {
     title: "OptiComm 1000/100Mbps Residential",
@@ -286,6 +291,7 @@ const OPTICOMM_RESIDENTIAL_PLANS = [
       "All Gaming Applications",
       "Low latency",
     ],
+    voice_description: "Our ultra-fast OptiComm plan with 1000 megabits down and 100 up. This is our flagship residential plan - handles anything from 4K streaming on many devices to pro-level gaming and massive file transfers. Ninety nine dollars for three months, then one hundred nine dollars. Unlimited data, cancel anytime.",
   },
 ];
 
@@ -311,6 +317,7 @@ const OPTICOMM_BUSINESS_PLANS = [
       "Some Gaming Applications",
       "Low latency",
     ],
+    voice_description: "Our entry-level OptiComm business plan with 50 megabits down and 20 up. Perfect for small offices, VoIP phones, and video conferencing. Seventy nine dollars for three months, then eighty nine dollars. Includes a static IP address, unlimited data, no contracts.",
   },
   {
     title: "OptiComm 100/40Mbps Business",
@@ -335,6 +342,7 @@ const OPTICOMM_BUSINESS_PLANS = [
       "All Gaming Applications",
       "Low latency",
     ],
+    voice_description: "Our standard business plan with 100 megabits down and 40 up. Great for offices with multiple staff, cloud backups, and regular video meetings. Ninety nine dollars for three months, then one hundred nine dollars. Includes static IP, unlimited data, no lock-in contracts.",
   },
   {
     title: "OptiComm 250/100Mbps Business",
@@ -359,6 +367,7 @@ const OPTICOMM_BUSINESS_PLANS = [
       "All Gaming Applications",
       "Low latency",
     ],
+    voice_description: "Our fast business plan with 250 megabits down and 100 up. Excellent for growing businesses with heavy file sharing, video conferencing, and cloud applications. One hundred thirty nine dollars for three months, then one hundred forty nine dollars. Static IP included, unlimited data.",
   },
   {
     title: "OptiComm 500/200Mbps Business",
@@ -383,6 +392,7 @@ const OPTICOMM_BUSINESS_PLANS = [
       "All Gaming Applications",
       "Low latency",
     ],
+    voice_description: "Our high-speed business plan with 500 megabits down and 200 up. Built for demanding offices - large file transfers, multiple HD video streams, and serious cloud workloads. One hundred sixty nine dollars for three months, then one hundred seventy nine dollars. Static IP, unlimited data, no contracts.",
   },
   {
     title: "OptiComm 1000/400Mbps Business",
@@ -407,6 +417,7 @@ const OPTICOMM_BUSINESS_PLANS = [
       "All Gaming Applications",
       "Low latency",
     ],
+    voice_description: "Our flagship business plan with 1000 megabits down and 400 up. The ultimate package for data-heavy businesses - massive uploads, unlimited video calls, and enterprise-grade performance. One hundred eighty nine dollars for three months, then one hundred ninety nine dollars. Static IP included, unlimited data, no lock-in contracts.",
   },
 ];
 
@@ -425,6 +436,7 @@ const NBN_RESIDENTIAL_PLANS = [
       "Streaming HD Video + 1080p",
       "Web browsing & Social Media",
     ],
+    voice_description: "Our basic NBN plan with 25 megabits down and 10 up. Perfect for everyday browsing, emails, and HD streaming. Fifty nine dollars for the first three months, then sixty four dollars. Unlimited data, no contracts, month-to-month flexibility.",
   },
   {
     title: "NBN 50/20Mbps Standard",
@@ -439,6 +451,7 @@ const NBN_RESIDENTIAL_PLANS = [
       "Streaming HD Video + 1080p",
       "Web browsing & Social Media",
     ],
+    voice_description: "Our standard NBN plan with 50 megabits down and 20 up. Great for households streaming on multiple devices and working from home. Seventy four dollars for three months, then seventy nine dollars. Unlimited data, no lock-in contracts.",
   },
   {
     title: "NBN 100/20Mbps Fast",
@@ -455,6 +468,7 @@ const NBN_RESIDENTIAL_PLANS = [
       "Fast Downloading",
       "Gaming",
     ],
+    voice_description: "Our fast NBN plan with 100 megabits down and 20 up. Ideal for busy families with 4K streaming, gaming, and multiple users online at once. Eighty four dollars for three months, then eighty nine dollars. Unlimited data, cancel anytime.",
   },
   {
     title: "NBN 500/50Mbps Faster",
@@ -471,6 +485,7 @@ const NBN_RESIDENTIAL_PLANS = [
       "All Gaming Applications",
       "Low latency",
     ],
+    voice_description: "Our faster NBN plan with 500 megabits down and 50 up. Excellent for heavy usage - 4K streaming, large downloads, competitive gaming, and busy households. Eighty four dollars for three months, then eighty nine dollars. Unlimited data, no contracts.",
   },
   {
     title: "NBN 750/50Mbps Superfast",
@@ -487,6 +502,7 @@ const NBN_RESIDENTIAL_PLANS = [
       "All Gaming Applications",
       "Low latency",
     ],
+    voice_description: "Our super-fast NBN plan with 750 megabits down and 50 up. Built for power users - multiple 4K streams, serious gaming, and huge downloads. Eighty nine dollars for three months, then ninety nine dollars. Unlimited data, no lock-in contracts.",
   },
   {
     title: "NBN 1000/100Mbps Ultrafast",
@@ -503,6 +519,7 @@ const NBN_RESIDENTIAL_PLANS = [
       "All Gaming Applications",
       "Low latency",
     ],
+    voice_description: "Our ultra-fast NBN plan with 1000 megabits down and 100 up. The top-tier NBN option - handles anything from 4K streaming on many devices to pro-level gaming and massive file transfers. Ninety nine dollars for three months, then one hundred nine dollars. Unlimited data, no contracts.",
   },
 ];
 
@@ -521,6 +538,7 @@ const NBN_BUSINESS_PLANS = [
       "Streaming HD + 4K",
       "Web browsing & Social Media",
     ],
+    voice_description: "Our basic NBN business plan with 50 megabits down and 20 up. Perfect for small offices, VoIP phones, and video conferencing. Eighty nine dollars per month, flat rate. Includes static IP address, unlimited data, no contracts.",
   },
   {
     title: "NBN Business 100/40Mbps Fast",
@@ -537,6 +555,7 @@ const NBN_BUSINESS_PLANS = [
       "Moderate Uploads/Downloads",
       "All Gaming",
     ],
+    voice_description: "Our standard business plan with 100 megabits down and 40 up. Great for offices with multiple staff, cloud backups, and regular video meetings. Ninety nine dollars per month. Includes static IP, unlimited data, no lock-in contracts.",
   },
   {
     title: "NBN Business 250/100Mbps Faster",
@@ -553,6 +572,7 @@ const NBN_BUSINESS_PLANS = [
       "Super Fast Uploads/Downloads",
       "All Gaming",
     ],
+    voice_description: "Our fast business plan with 250 megabits down and 100 up. Excellent for growing businesses with heavy file sharing, video conferencing, and cloud applications. One hundred forty nine dollars per month. Static IP included, unlimited data.",
   },
   {
     title: "NBN Business 500/200Mbps Superfast",
@@ -569,6 +589,7 @@ const NBN_BUSINESS_PLANS = [
       "Super Fast Uploads/Downloads",
       "All Gaming",
     ],
+    voice_description: "Our high-speed business plan with 500 megabits down and 200 up. Built for demanding offices - large file transfers, multiple HD video streams, and serious cloud workloads. One hundred eighty nine dollars per month. Static IP, unlimited data, no contracts.",
   },
   {
     title: "NBN Business 1000/400Mbps Ultrafast",
@@ -585,6 +606,7 @@ const NBN_BUSINESS_PLANS = [
       "Super Fast Uploads/Downloads",
       "All Gaming",
     ],
+    voice_description: "Our flagship NBN business plan with 1000 megabits down and 400 up. The ultimate package for data-heavy businesses - massive uploads, unlimited video calls, and enterprise-grade performance. Two hundred thirty nine dollars per month. Static IP included, unlimited data, no lock-in contracts.",
   },
 ];
 
@@ -608,6 +630,7 @@ const NBN_FIXED_WIRELESS_PLANS = [
       "Streaming HD Video + 1080p",
       "Emails, Web browsing & Social Media",
     ],
+    voice_description: "Our standard Fixed Wireless plan with 25 megabits down and 5 up. Ideal for rural areas with wireless tower coverage. Great for everyday browsing, emails, and HD streaming. Fifty nine dollars per month, free NBN setup included. Unlimited data, no contracts.",
   },
   {
     title: "NBN 100/20Mbps Fixed Wireless Plus",
@@ -629,6 +652,7 @@ const NBN_FIXED_WIRELESS_PLANS = [
       "Fast Downloading",
       "All Gaming Applications",
     ],
+    voice_description: "Our plus Fixed Wireless plan with 100 megabits down and 20 up. Excellent for rural households streaming 4K, gaming online, and working from home. Eighty nine dollars per month, free NBN setup. Unlimited data, no lock-in contracts.",
   },
   {
     title: "NBN 200/20Mbps Fixed Wireless HomeFast",
@@ -650,6 +674,7 @@ const NBN_FIXED_WIRELESS_PLANS = [
       "Fast Downloading",
       "All Gaming Applications",
     ],
+    voice_description: "Our home fast Fixed Wireless plan with 200 megabits down and 20 up. Great for busy rural households with multiple devices streaming, gaming, and downloading. Ninety nine dollars per month, free NBN setup included. Unlimited data, no contracts.",
   },
   {
     title: "NBN 400/40Mbps Fixed Wireless SuperFast",
@@ -672,6 +697,7 @@ const NBN_FIXED_WIRELESS_PLANS = [
       "All Gaming Applications",
     ],
     note: "Available in eligible areas only",
+    voice_description: "Our super-fast Fixed Wireless plan with 400 megabits down and 40 up. Our fastest wireless option for eligible rural areas - handles 4K streaming, competitive gaming, and large downloads. One hundred nine dollars per month, free NBN setup. Unlimited data, no contracts.",
   },
 ];
 
@@ -696,6 +722,7 @@ const NBN_SKYMUSTER_PLANS = [
       "Web browsing & Social Media",
     ],
     note: "Typical latency 500-600ms",
+    voice_description: "Our basic Sky Muster satellite plan with 25 megabits down and 5 up. Designed for remote areas with no other coverage. Great for browsing, emails, and HD streaming. Fifty nine dollars per month, free satellite installation. Please note - typical latency is 500 to 600 milliseconds due to satellite distance. Unlimited data, no contracts.",
   },
   {
     title: "NBN Sky Muster Plus 50/5Mbps Fast",
@@ -717,6 +744,7 @@ const NBN_SKYMUSTER_PLANS = [
       "Some Gaming Applications",
     ],
     note: "Typical latency 500-600ms",
+    voice_description: "Our fast Sky Muster satellite plan with 50 megabits down and 5 up. Better for remote households that stream and need more bandwidth. Sixty nine dollars per month, free satellite installation. Typical latency is 500 to 600 milliseconds. Unlimited data, no contracts.",
   },
   {
     title: "NBN Sky Muster Plus 100/5Mbps Ultra",
@@ -739,6 +767,7 @@ const NBN_SKYMUSTER_PLANS = [
       "All Gaming Applications",
     ],
     note: "Typical latency 500-600ms",
+    voice_description: "Our ultra Sky Muster satellite plan with 100 megabits down and 5 up. The fastest satellite option for remote areas - handles 4K streaming and gaming. Ninety nine dollars per month, free installation. Please note typical latency of 500 to 600 milliseconds due to satellite distance. Unlimited data, no contracts.",
   },
 ];
 
@@ -753,6 +782,7 @@ const HIR_RESIDENTIAL_PLANS = [
     discount: "$15 off for 3 months",
     features: ["Unlimited Data", "No Contract", "Month to Month"],
     suitable_for: ["General browsing", "Video Calls", "HD Streaming"],
+    voice_description: "Our basic Hope Island Resort plan with 25 megabits down and 10 up. Perfect for everyday browsing, video calls, and HD streaming. Forty four dollars for three months, then fifty nine dollars. Huge savings compared to regular NBN. Unlimited data, no contracts.",
   },
   {
     title: "HIR 50/20Mbps Standard",
@@ -763,6 +793,7 @@ const HIR_RESIDENTIAL_PLANS = [
     discount: "$15 off for 3 months",
     features: ["Unlimited Data", "No Contract", "Month to Month"],
     suitable_for: ["Video Calls", "HD Streaming", "Web browsing"],
+    voice_description: "Our standard Hope Island Resort plan with 50 megabits down and 20 up. Great for streaming on multiple devices and working from home. Forty nine dollars for three months, then sixty four dollars. Exclusive resort pricing. Unlimited data, no lock-in contracts.",
   },
   {
     title: "HIR 250/50Mbps Fast",
@@ -773,6 +804,7 @@ const HIR_RESIDENTIAL_PLANS = [
     discount: "$15 off for 3 months",
     features: ["Unlimited Data", "No Contract", "Month to Month"],
     suitable_for: ["Video Calls", "4K Streaming", "Fast Downloading", "Gaming"],
+    voice_description: "Our fast Hope Island Resort plan with 250 megabits down and 50 up. Excellent for 4K streaming, gaming, and busy households. Sixty four dollars for three months, then seventy nine dollars. Free modem upgrade if needed. Unlimited data, no contracts.",
   },
   {
     title: "HIR 500/50Mbps Home Fast",
@@ -793,6 +825,7 @@ const HIR_RESIDENTIAL_PLANS = [
       "Super Fast Downloading",
       "All Gaming",
     ],
+    voice_description: "Our home fast Hope Island Resort plan with 500 megabits down and 50 up. Built for power users - multiple 4K streams, competitive gaming, and huge downloads. Sixty four dollars for three months, then seventy nine dollars. Free modem upgrade included. Unlimited data, no contracts.",
   },
   {
     title: "HIR 750/50Mbps Superfast",
@@ -814,6 +847,7 @@ const HIR_RESIDENTIAL_PLANS = [
       "All Gaming",
       "Low latency",
     ],
+    voice_description: "Our super-fast Hope Island Resort plan with 750 megabits down and 50 up. Handles multiple 4K streams, serious gaming, and heavy usage with ease. Seventy four dollars for three months, then eighty nine dollars. Free modem upgrade if needed. Unlimited data, no contracts.",
   },
   {
     title: "HIR 1000/100Mbps Ultrafast",
@@ -835,6 +869,7 @@ const HIR_RESIDENTIAL_PLANS = [
       "All Gaming",
       "Low latency",
     ],
+    voice_description: "Our ultra-fast Hope Island Resort plan with 1000 megabits down and 100 up. The flagship resort plan - handles anything from many 4K devices to pro-level gaming and massive transfers. Eighty four dollars for three months, then ninety nine dollars. Free modem upgrade included. Unlimited data, no contracts.",
   },
 ];
 
@@ -854,6 +889,7 @@ const HIR_BUSINESS_PLANS = [
       "4K Streaming",
       "Fast Uploads/Downloads",
     ],
+    voice_description: "Our business plan for Hope Island Resort with 250 megabits down and 100 up. Perfect for small offices, VoIP phones, and video conferencing. One hundred nine dollars per month flat rate. Unlimited data, no contracts, exclusive resort pricing.",
   },
   {
     title: "HIR Business 500/200Mbps",
@@ -869,6 +905,7 @@ const HIR_BUSINESS_PLANS = [
       "4K Streaming",
       "Super Fast Uploads/Downloads",
     ],
+    voice_description: "Our fast business plan for Hope Island Resort with 500 megabits down and 200 up. Excellent for growing businesses with heavy file sharing and video conferencing. One hundred nineteen dollars per month. Unlimited data, no lock-in contracts.",
   },
   {
     title: "HIR Business 1000/400Mbps",
@@ -885,6 +922,7 @@ const HIR_BUSINESS_PLANS = [
       "Ultra Fast Uploads/Downloads",
       "All Gaming",
     ],
+    voice_description: "Our flagship business plan for Hope Island Resort with 1000 megabits down and 400 up. Ultimate package for data-heavy businesses - massive uploads, unlimited video calls, enterprise performance. One hundred thirty nine dollars per month. Unlimited data, no contracts, exclusive resort pricing.",
   },
 ];
 
@@ -1460,7 +1498,7 @@ CONVERSATION FLOW:
 - When the user answers a question, always acknowledge meaningfully before moving on.
 - Accept partial answers and save them without asking again.
 - On [SILENCE_NUDGE]: REPEAT your last question. Do NOT move forward or assume anything.
-- EMAIL COLLECTION: When asking for email, ALWAYS collect it by voice. Ask the customer to spell it letter by letter. Tell them to say "at" for @ and "dot" for .
+- EMAIL COLLECTION: When asking for email, ALWAYS show the text input box and tell the user about it.
 - After EVERY user answer, say something before the next question. Never go question -> question.
 
 CRITICAL PLAN SELECTION RULE:
@@ -1484,10 +1522,10 @@ INITIAL FLOW - SALES CALL FLOW (MUST FOLLOW EXACTLY):
 3. If EXISTING: Route to support/accounts/relocation flow
 
 SUPPORT FLOW:
-- Collect email -> call customer_lookup -> ask phone -> call verify_phone -> collect issue -> create_ticket
+- Collect email using VOICE SPELLING MODE: "To get started, could you please tell me the email address on your account? Spell it out for me one letter at a time - say 'at' for the at symbol, and 'dot' for a full stop. You can use NATO phonetics like Alpha for A, Bravo for B. Take your time, I'm listening." -> call customer_lookup -> ask phone -> call verify_phone -> collect issue -> create_ticket
 
 ACCOUNTS FLOW:
-- Collect email -> call customer_lookup -> ask phone -> call verify_phone -> resolve account query
+- Collect email using VOICE SPELLING MODE: "To look up your account, I'll need your email address. Please spell it out for me one letter at a time - say 'at' for the at symbol, and 'dot' for a full stop. You can use NATO phonetics if you like. Take your time." -> call customer_lookup -> ask phone -> call verify_phone -> resolve account query
 - ACCOUNTS RESOLUTION PATHS:
   1. UPDATE PAYMENT DETAILS: Portal link + https://www.infinetbroadband.com.au/set-up-a-payment-method/
   2. PAY OUTSTANDING INVOICE: Portal link + https://www.infinetbroadband.com.au/manually-paying-an-invoice/
@@ -1502,7 +1540,7 @@ SERVICE LISTING RULE: When asked "what services are on my account?" or similar:
 - Stop after listing. Ask: "Is there anything specific you'd like help with today?"
 
 RELOCATION FLOW:
-- Collect email -> call customer_lookup -> ask phone -> call verify_phone -> list services -> collect new address -> check availability -> show plans -> create_ticket
+- Collect email using VOICE SPELLING MODE: "To help with your move, I'll need to verify your account. Could you please spell out your email address one letter at a time - say 'at' for @, and 'dot' for a full stop. Use NATO phonetics if you prefer. I'm listening." -> call customer_lookup -> ask phone -> call verify_phone -> list services -> collect new address -> check availability -> show plans -> create_ticket
 
 TOOL USAGE:
 - extract_call_fields for all personal info.
@@ -1515,7 +1553,7 @@ After the customer selects a plan AND the website check is done, collect details
   STEP 1 -> Ask for FIRST NAME only. "Could I start with your first name?"
   STEP 2 -> Ask for LAST NAME only. "And your last name?"
   STEP 3 -> Ask for PHONE only. "What's the best mobile number for you?"
-  STEP 4 -> Ask for EMAIL only. Ask them to spell it out letter by letter ("at" for @, "dot" for .).
+  STEP 4 -> Ask for EMAIL only. Tell them there's a text box to type it into.
   STEP 5 -> ALL fields collected? CALL create_ticket IMMEDIATELY. Do NOT say "you're all set" before calling the tool.
 Do NOT batch questions. ONE field per message. Wait for the customer to answer before asking the next.
 If [SYSTEM_CONTEXT] specifies which field to ask next, follow it EXACTLY.
@@ -1552,7 +1590,11 @@ const extractFunction = {
       terminationDate: { type: "string" },
       connectionDate: { type: "string" },
       serviceToTerminate: { type: "string" },
-      customerType: { type: "string", enum: ["new", "existing"] },
+      customerType: {
+        type: "string",
+        enum: ["new", "existing"],
+        description: "Set to 'existing' if user says they're an existing customer, already part of the family, current customer, or have an account. Set to 'new' if they say they're new, not a customer yet, looking to connect, or want to sign up.",
+      },
       residentialPreference: {
         type: "string",
         enum: ["residential", "business"],
@@ -1998,6 +2040,7 @@ async function checkAddressAvailability(args, session) {
         upload: p.upload,
         features: p.features,
         suitable_for: p.suitable_for,
+        voice_description: p.voice_description,
         ...(p.note ? { note: p.note } : {}),
       })),
     };
@@ -2249,6 +2292,7 @@ async function checkAddressAvailability(args, session) {
       title: p.title,
       price: p.intro_price || p.price,
       ongoing_price: p.ongoing_price || p.price,
+      voice_description: p.voice_description,
       discount: p.discount || null,
       download: p.download,
       upload: p.upload,
