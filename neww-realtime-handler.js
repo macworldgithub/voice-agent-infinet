@@ -1,7 +1,9 @@
 import WebSocket from "ws";
+
 // ═══════════════════════════════════════════════════════════════════════════
 //  VOICE EMAIL CAPTURE — NATO PHONETIC PARSER + ASSEMBLER
 // ═══════════════════════════════════════════════════════════════════════════
+
 const NATO_MAP = {
   alpha: "a",
   alfa: "a",
@@ -275,9 +277,6 @@ export function setupRealtimeVoice(io, deps) {
   io.on("connection", (socket) => {
     console.log(`🔌 Voice client connected: ${socket.id}`);
     console.log(`📊 [DEBUG] New connection - initializing handlers`);
-
-    const session = mkSession();
-
     let openaiWs = null;
 
     // ─── ElevenLabs state ─────────────────────────────────────────
@@ -314,17 +313,19 @@ export function setupRealtimeVoice(io, deps) {
     let lastResponseWasPackage = false;
 
     // ═══════════════════════════════════════════════════════════════
-    //  UNIFIED EMAIL STATE
+    //  FIX 1 (Issue 1): UNIFIED EMAIL STATE — single source of truth.
+    //  All writes go through setEmailValue() which hard-overwrites
+    //  and resets confirmation state on every new input.
     // ═══════════════════════════════════════════════════════════════
     const email_state = {
-      value: "",
-      is_confirmed: false,
+      value: "", // always the LATEST parsed/typed email
+      is_confirmed: false, // true ONLY after explicit user YES
     };
 
     function setEmailValue(newEmail) {
       const prev = email_state.value;
       email_state.value = newEmail;
-      email_state.is_confirmed = false;
+      email_state.is_confirmed = false; // reset confirmation on ANY new input
       console.log(
         `[FLOW: ${session?.collected?.intent || "unknown"}][STEP: email_capture][STATUS: overwrite][DATA: prev="${prev}" next="${newEmail}" confirmed=false]`,
       );
@@ -332,6 +333,7 @@ export function setupRealtimeVoice(io, deps) {
 
     function confirmEmail() {
       email_state.is_confirmed = true;
+      // FIX (Issue 4): Always sync email_state.value → session
       session.collected.email = email_state.value;
       sessions.set(session.id, session);
       console.log(
@@ -353,21 +355,13 @@ export function setupRealtimeVoice(io, deps) {
       socket.emit("fsm_state", newState);
     }
 
-    function debugState() {
-      const c = session.collected || {};
-      console.log(
-        `[DEBUG_STATE] fsm=${fsmState} salesStep=${salesStep} emailMode=${emailCaptureMode} ` +
-        `emailConfirmAsked=${emailCaptureConfirmAsked} emailValue="${email_state.value}" ` +
-        `emailConfirmed=${email_state.is_confirmed} ticketBlocked=${createTicketBlockedForEmail} ` +
-        `pendingFn=${pendingFunctionCalls} responseActive=${isResponseActive} ` +
-        `speaking=${assistantSpeaking} elStreaming=${elevenLabsStreaming} ` +
-        `intent=${c.intent || "none"} leadInterest=${c.leadInterest || "none"} ` +
-        `websiteCheckDone=${c._websiteCheckDone || false}`,
-      );
-    }
-
     // ═══════════════════════════════════════════════════════════════
     //  CENTRAL TIMER MANAGER
+    //
+    //  FIX (Issue 1 / Fix P5): Silence timer starts ONLY from audio_done
+    //  (client signals TTS playback finished). Never from response.done or
+    //  isFinal. This prevents the timer from firing while audio is still
+    //  being played to the user.
     // ═══════════════════════════════════════════════════════════════
     const TimerManager = (() => {
       let _silenceTimer = null;
@@ -375,10 +369,11 @@ export function setupRealtimeVoice(io, deps) {
       let _finalMessageTimer = null;
       let _watchdogTimer = null;
 
+      // 15s normal, 20s after package presentation
       const SILENCE_NORMAL_MS = 15000;
       const SILENCE_PACKAGE_MS = 20000;
       const EMAIL_CONFIRM_MS = 30000;
-      const WATCHDOG_MS = 8000;
+      const WATCHDOG_MS = 8000; // max wait before recovery response
 
       function _clearSilence() {
         if (_silenceTimer) {
@@ -408,12 +403,14 @@ export function setupRealtimeVoice(io, deps) {
       }
 
       return {
+        // FIX (P5): ONLY called from audio_done. Duration determined by isPackage flag.
         startSilence(isPackage = false) {
           _clearSilence();
           console.log(
             `⏱️  [TMgr] startSilence called - isPackage=${isPackage}`,
           );
 
+          // Guard: suppress in non-LISTENING states
           if (
             fsmState === FSM_STATE.EMAIL_CAPTURE ||
             fsmState === FSM_STATE.EMAIL_CONFIRMATION ||
@@ -448,6 +445,7 @@ export function setupRealtimeVoice(io, deps) {
 
           _silenceTimer = setTimeout(() => {
             _silenceTimer = null;
+            // Re-check guards at fire time
             if (emailCaptureMode) return;
             if (fsmState === FSM_STATE.EMAIL_CAPTURE) return;
             if (fsmState === FSM_STATE.EMAIL_CONFIRMATION) return;
@@ -522,6 +520,7 @@ export function setupRealtimeVoice(io, deps) {
 
         clearEmailConfirm: _clearEmailConfirm,
 
+        // Watchdog — if no response within WATCHDOG_MS after a response.create, recover
         startWatchdog() {
           _clearWatchdog();
           _watchdogTimer = setTimeout(() => {
@@ -599,6 +598,15 @@ export function setupRealtimeVoice(io, deps) {
 
     // ═══════════════════════════════════════════════════════════════
     //  EMAIL CAPTURE STATE
+    //
+    //  KEY INVARIANTS (FIX Issue 1 / P1):
+    //  - email_state.value is ALWAYS the latest parsed email.
+    //  - On any new input, setEmailValue() hard-overwrites it AND
+    //    resets is_confirmed=false.
+    //  - emailCaptureBuffer is FULLY cleared on every retry/correction
+    //    so stale fragments never bleed into the next parse cycle.
+    //  - createTicketBlockedForEmail stays true until confirmEmail()
+    //    is called (is_confirmed=true). (FIX Issue 4 / P4)
     // ═══════════════════════════════════════════════════════════════
     let emailCaptureMode = false;
     let emailCaptureBuffer = [];
@@ -607,6 +615,7 @@ export function setupRealtimeVoice(io, deps) {
     let emailCaptureConfirmPending = null;
     let emailCaptureConfirmAsked = false;
 
+    // FIX (Issue 4 / P4): Block create_ticket until email_state.is_confirmed === true
     let createTicketBlockedForEmail = false;
 
     function startEmailCapture() {
@@ -614,7 +623,7 @@ export function setupRealtimeVoice(io, deps) {
         console.log(
           `[FLOW: sales][STEP: email_capture][STATUS: skipped][DATA: reason=already_active]`,
         );
-        return;
+        return; // idempotent
       }
       console.log(
         `[FLOW: sales][STEP: email_capture][STATUS: starting][DATA: attempt=1 maxAttempts=${EMAIL_MAX_ATTEMPTS}]`,
@@ -624,12 +633,9 @@ export function setupRealtimeVoice(io, deps) {
       emailCaptureAttempt = 0;
       emailCaptureConfirmPending = null;
       emailCaptureConfirmAsked = false;
-      // FIX: Only reset email_state if it doesn't already have a valid value
-      // (LLM may have already extracted it via extract_call_fields)
-      if (!email_state.value) {
-        email_state.value = "";
-        email_state.is_confirmed = false;
-      }
+      // Reset email_state on every fresh capture start
+      email_state.value = "";
+      email_state.is_confirmed = false;
       createTicketBlockedForEmail = true;
 
       TimerManager.clearSilence();
@@ -637,7 +643,7 @@ export function setupRealtimeVoice(io, deps) {
 
       transitionFSM(FSM_STATE.EMAIL_CAPTURE);
       console.log(
-        `[FLOW: sales][STEP: email_capture][STATUS: active][DATA: buffer=[] blocked=true emailValue="${email_state.value}"]`,
+        `[FLOW: sales][STEP: email_capture][STATUS: active][DATA: buffer=[] blocked=true]`,
       );
       socket.emit("email_spelling_mode", { active: true, attempt: 1 });
     }
@@ -701,13 +707,16 @@ export function setupRealtimeVoice(io, deps) {
             `[FLOW: sales][STEP: email_confirmation][STATUS: success][DATA: email="${confirmedEmail}" userSaid="yes"]`,
           );
 
+          // FIX (Issue 1 / P1+P4): Hard overwrite then confirm — this is the ONLY place
+          // is_confirmed becomes true, so ticket creation is only unblocked here.
           setEmailValue(confirmedEmail);
-          confirmEmail();
+          confirmEmail(); // sets is_confirmed=true AND syncs to session.collected.email
 
           console.log(
             `[FLOW: sales][STEP: email_confirmed][STATUS: locked][DATA: email="${confirmedEmail}" is_confirmed=true createTicketBlocked=false]`,
           );
 
+          // FIX (Issue 4 / P4): Unblock create_ticket ONLY after email_state.is_confirmed=true
           createTicketBlockedForEmail = false;
 
           if (salesStep === "email") advanceSalesStep("email");
@@ -760,10 +769,11 @@ export function setupRealtimeVoice(io, deps) {
           emailCaptureConfirmPending = null;
           emailCaptureConfirmAsked = false;
 
+          // FIX (P1): FULL reset — discard ALL state from previous attempt
           emailCaptureBuffer = [];
           email_state.value = "";
           email_state.is_confirmed = false;
-          createTicketBlockedForEmail = true;
+          createTicketBlockedForEmail = true; // re-block until re-confirmed
           console.log(
             `[FLOW: sales][STEP: email_capture][STATUS: retry][DATA: attempt=${emailCaptureAttempt}/${EMAIL_MAX_ATTEMPTS} bufferCleared=true confirmed=false]`,
           );
@@ -843,6 +853,7 @@ export function setupRealtimeVoice(io, deps) {
         console.log(
           `[FLOW: sales][STEP: email_capture][STATUS: domain_correction][DATA: bufferCleared=true]`,
         );
+        // Full reset on domain correction
         emailCaptureBuffer = [];
         emailCaptureConfirmPending = null;
         emailCaptureConfirmAsked = false;
@@ -889,10 +900,12 @@ export function setupRealtimeVoice(io, deps) {
           );
           scheduleResponseCreate();
         }
+        // Clear buffer so the next attempt starts fresh
         emailCaptureBuffer = [];
         return true;
       }
 
+      // Hard overwrite — latest parsed email is always the truth
       setEmailValue(parsed);
       emailCaptureConfirmPending = parsed;
       emailCaptureConfirmAsked = true;
@@ -932,6 +945,7 @@ export function setupRealtimeVoice(io, deps) {
       if (salesStep !== null) return;
       const c = session.collected || {};
 
+      // Website check must be DONE before initialising step machine
       if (c.leadInterest && c._websiteCheckDone) {
         if (!c._firstName) salesStep = "firstName";
         else if (!c._lastName) salesStep = "lastName";
@@ -998,6 +1012,7 @@ export function setupRealtimeVoice(io, deps) {
     function buildSalesStepHint() {
       const c = session.collected || {};
 
+      // FIX (Issue 2): Website check gate — ALWAYS inject before any detail collection
       if (c.leadInterest && c._websiteCheckRequired && !c._websiteCheckDone) {
         if (!c._websiteCheckAsked) {
           console.log(
@@ -1035,6 +1050,7 @@ export function setupRealtimeVoice(io, deps) {
           return `[FLOW: sales][STEP: phone][STATUS: pending] You have their name (${name}). Ask ONLY for their mobile phone number. Say something like "What's the best mobile number for you?"`;
 
         case "email":
+          // If email already confirmed, skip
           if (email_state.value && email_state.is_confirmed) {
             console.log(
               `[FLOW: sales][STEP: email][STATUS: already_confirmed][DATA: email="${email_state.value}" skipping=true]`,
@@ -1042,12 +1058,15 @@ export function setupRealtimeVoice(io, deps) {
             advanceSalesStep("email");
             return buildSalesStepHint();
           }
+          // If capture already active, don't re-ask
           if (emailCaptureMode) {
             return `[FLOW: sales][STEP: email][STATUS: capture_active] Email capture is already in progress. Do NOT ask for email again. Wait for the customer to finish spelling their email. emailCaptureMode=true confirmAsked=${emailCaptureConfirmAsked}`;
           }
-          return `[FLOW: sales][STEP: email][STATUS: pending] Ask for email: "Could I grab your email address? Please spell it letter by letter — for @ say 'at', for dots say 'dot'. Example: s-h-a-u-n at b-e-l-e dot a-i. Take your time." Then STOP and wait.`;
+          // FIX (Issue 2): No mention of text input box — voice only
+          return `[FLOW: sales][STEP: email][STATUS: pending] Ask for email using VOICE SPELLING MODE. Say EXACTLY: "And finally, could I grab your email address? Please spell it out for me one letter at a time — for @ use 'at', for . use 'dot'. You can use NATO phonetics if you like — Alpha for A, Bravo for B, and so on. Take your time, I'm listening." Then STOP and wait.`;
 
         case "createTicket": {
+          // FIX (Issue 4 / P4): Never trigger if email not confirmed
           if (createTicketBlockedForEmail) {
             console.log(
               `[FLOW: sales][STEP: create_ticket][STATUS: blocked][DATA: reason=email_not_confirmed is_confirmed=${email_state.is_confirmed}]`,
@@ -1082,8 +1101,7 @@ export function setupRealtimeVoice(io, deps) {
 - Address: ${c.address || "provided earlier"}
 - email_state.is_confirmed: true
 
-STEP 1: Call extract_call_fields to save any recently collected details.
-STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user first. CALL THE TOOLS.`;
+YOU MUST CALL create_ticket IMMEDIATELY. Do NOT say anything to the user first. CALL THE TOOL.`;
         }
 
         default:
@@ -1151,6 +1169,7 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
         console.log("📤 Sending response.create to OpenAI");
         openaiWs.send(JSON.stringify({ type: "response.create" }));
 
+        // Start watchdog ONLY after the actual send
         TimerManager.startWatchdog();
       };
 
@@ -1259,6 +1278,7 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
       return false;
     }
 
+    // FIX (Issue 2): detectEmailSpellingRequest used with restrictive guard
     function detectEmailSpellingRequest(text) {
       if (!text) return false;
       const lower = text.toLowerCase();
@@ -1367,12 +1387,14 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
             msg.isFinal === true || msg.is_final === true || msg.final === true;
 
           if (isFinal) {
+            // FIX (P5): isFinal = ElevenLabs finished GENERATING chunks.
+            // Do NOT start silence timer here. Wait for client audio_done.
             console.log(
               `🔊 [EL] TTS generation complete (isFinal) — waiting for client audio_done`,
             );
             elevenLabsStreaming = false;
-            // FIX: Do NOT clear assistantSpeaking here — wait for audio_done
-            // (was: assistantSpeaking = false; which is removed)
+            assistantSpeaking = false;
+            // Emit for frontend — frontend fires audio_done when playback finishes
             socket.emit("audio_stream_complete");
 
             if (emailCaptureMode && !emailCaptureConfirmAsked) {
@@ -1481,19 +1503,23 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
             SYSTEM_PROMPT +
             "\n\nCRITICAL: Always respond in English only." +
             "\n\nFIELD COLLECTION RULE: Collect ONE field per turn. Wait for answer before moving on." +
+            // FIX (Issue 1 / P1+P2): Explicit email mutability rules in system prompt
             "\n\nEMAIL — ABSOLUTE RULES:" +
             "\n1. Email is ALWAYS mutable. Any new email input DISCARDS the previous one completely." +
-            "\n2. After parsing, you MUST read back the EXACT parsed email (the local part before @) using ONLY individual letters separated by hyphens." +
-            "\n3. CRITICAL: Use the ACTUAL letters from the parsed email. If parsed email is aun@bele.ai, say 'a-u-n' NOT 's-h-a-u-n'. NEVER hallucinate different letters." +
-            "\n4. NEVER say 'double X' for repeated letters. Always say each letter separately: l-l not double-l." +
-            "\n5. If user corrects ANY part, reconstruct the ENTIRE email from scratch. Never partial-edit." +
-            "\n6. Only call any tool with email AFTER the user explicitly says YES to the readback." +
+            "\n2. After parsing, ALWAYS read it back letter-by-letter with hyphens: e.g. s-h-a-u-n at b-e-l-e dot a-i" +
+            "\n3. NEVER say 'double X' for repeated letters. Always say each letter separately: l-l not double-l." +
+            "\n4. If user corrects ANY part, reconstruct the ENTIRE email from scratch. Never partial-edit." +
+            "\n5. Only call any tool with email AFTER the user explicitly says YES to the readback." +
+            // FIX (Issue 2): Guard against re-triggering email capture — voice only, no text box
             "\n\nEMAIL COLLECTION — VOICE ONLY: Collect email by voice spelling only. Do NOT mention any text input box. Do NOT say 'you can also type it'. Voice spelling is the ONLY method." +
             "\n\nEMAIL DUPLICATE PREVENTION: If [SYSTEM_CONTEXT] shows emailCaptureMode=true or email_state.value is already set, do NOT ask for email again." +
+            // FIX (Issue 4 / P4): Explicit create_ticket guard
             "\n\nCREATE_TICKET RULE: NEVER call create_ticket if createTicketBlockedForEmail=true in [SYSTEM_CONTEXT]. Only call it when email_state.is_confirmed=true is explicitly shown." +
-            "\n\nFIELD EXTRACTION RULE: Before calling create_ticket, you MUST first call extract_call_fields to save any name, phone, or other details the customer just provided. create_ticket does NOT save fields automatically — extract_call_fields must be called first." +
+            // FIX (Issue 2): Explicit website check rule in instructions
             "\n\nWEBSITE CHECK RULE: In sales flow, ALWAYS ask 'have you had a chance to check out our website and seen the plans or pricing?' AFTER plan is selected and BEFORE collecting any personal details (name/phone/email). Never skip this step." +
+            // FIX (Issue 3): Block customer_lookup in sales flow
             "\n\nCUSTOMER_LOOKUP RULE: NEVER call customer_lookup for a new sales lead. customer_lookup is ONLY for existing customers in support/accounts/relocation flows. If the customer is new (has leadInterest, no customer_id), proceed directly to collect name/phone/email and then call create_ticket." +
+            // FIX: Email spelling instructions for ALL flows (sales and support)
             "\n\nEMAIL SPELLING INSTRUCTIONS (ALL FLOWS): When asking for email, say: 'Please spell your email address letter by letter. For the @ symbol, say 'at'. For dots, say 'dot'. For example: s-h-a-u-n at b-e-l-e dot a-i.' Always read back the email using the same format to confirm.";
 
           openaiWs.send(
@@ -1585,6 +1611,7 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           socket.emit("interrupt");
           socket.emit("audio_interrupt");
 
+          // FIX (P5): User speaks → cancel/reset ALL timers immediately
           TimerManager.resetSilence();
           TimerManager.clearEmailConfirm();
           TimerManager.clearWatchdog();
@@ -1602,6 +1629,8 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           lastResponseWasPackage = false;
           emptyResponseCount = 0;
           responseCreatePending = false;
+          // Only reset pendingPostDone if NOT in email confirmation phase
+          // (user interrupting to say "yes" must not lose confirmation state)
           if (!emailCaptureConfirmAsked) {
             pendingPostDoneCreate = false;
             pendingPostDoneHint = null;
@@ -1623,75 +1652,73 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
             `📊 [TRANSCRIPT] raw="${event.transcript}" cleaned="${cleaned}"`,
           );
 
+          // Cancel watchdog — got a transcript, agent is not stuck
           TimerManager.clearWatchdog();
 
           const looksLikeEmail = /\b[^\s@]+@[^\s@]+\.[^\s@]+\b/i.test(cleaned);
           const digitCount = (cleaned.match(/\d/g) || []).length;
           const looksLikePhone = digitCount >= 6;
 
-          const isPurePhoneNumber = looksLikePhone && !looksLikeEmail && !looksLikeVoiceEmailSpelling(cleaned);
-
+          // ─────────────────────────────────────────────────────────
+          // FIX (Issue 1 — THE CORE FIX): Allow email confirmation YES/NO
+          // through even during assistantSpeaking. Without this fix the
+          // "yes" the user says to confirm the email is dropped and the
+          // system loops forever asking for email.
+          //
+          // isEmailConfirmResponse is true when:
+          //   - emailCaptureMode is true (we are in email capture)
+          //   - emailCaptureConfirmAsked is true (AI has already read
+          //     back the parsed email and is waiting for yes/no)
+          //
+          // The race condition in the original code was that
+          // emailCaptureConfirmAsked was checked AFTER the guard that
+          // dropped the transcript. Now we evaluate it FIRST and use it
+          // as a bypass condition for the assistantSpeaking gate.
+          // ─────────────────────────────────────────────────────────
           const isEmailConfirmResponse =
             emailCaptureMode && emailCaptureConfirmAsked;
+          // Also allow email spelling through — the user may be spelling while AI is still starting TTS
           const isEmailSpelling =
             emailCaptureMode &&
             !emailCaptureConfirmAsked &&
             looksLikeVoiceEmailSpelling(cleaned);
 
-          // ═══════════════════════════════════════════════════════════
-          // FIX (CRITICAL — Root Cause #1 & #2):
-          //
-          // The original guard `if (assistantSpeaking && ...)` was dropping
-          // ALL transcripts that arrived while assistantSpeaking=true.
-          //
-          // The problem: OpenAI's VAD detects user speech, commits the audio
-          // buffer, and sends the transcript via this event. But the transcript
-          // often arrives AFTER response.done but BEFORE the client emits
-          // audio_done (which is the only place assistantSpeaking was reset
-          // to false in the original code).
-          //
-          // This means: user says "I am a new customer" → VAD commits it →
-          // transcript arrives → but assistantSpeaking is still true from the
-          // greeting → transcript DROPPED → flow stalls.
-          //
-          // The fix: If the transcript arrived via OpenAI's committed audio
-          // (speech_started → speech_stopped → committed → transcription),
-          // it is ALWAYS a legitimate user turn. OpenAI's VAD already validated
-          // it. We should NEVER drop it.
-          //
-          // We keep the guard ONLY for cases where we truly want to suppress:
-          // - Tool execution in progress
-          // - Final message lock active
-          //
-          // The `assistantSpeaking` guard is REMOVED for transcripts because
-          // the speech_started handler already cancels the response and
-          // interrupts ElevenLabs. By the time the transcript arrives, the
-          // user has already taken the floor.
-          // ═══════════════════════════════════════════════════════════
-          if (pendingFunctionCalls > 0 || finalMessageLock || session.finalLock) {
+          if (
+            assistantSpeaking &&
+            !(looksLikeEmail || looksLikePhone) &&
+            !isEmailConfirmResponse &&
+            !isEmailSpelling
+          ) {
             console.log(
-              `🔇 Ignoring transcript (locked: pendingFn=${pendingFunctionCalls} finalLock=${finalMessageLock})`,
+              `🔇 Ignoring transcript during assistant speech (not email confirm or spelling)`,
             );
             break;
           }
-
-          // FIX: Since we no longer drop transcripts during assistantSpeaking,
-          // we need to ensure assistantSpeaking is cleared when processing
-          // a legitimate user transcript (the user has taken the floor).
-          if (assistantSpeaking) {
-            console.log(`🔄 [FIX] User transcript received while assistantSpeaking=true — clearing assistantSpeaking (user took the floor)`);
-            assistantSpeaking = false;
+          if (
+            !isPurePhoneNumber &&
+            (emailCaptureMode ||
+              (salesStep === "email" &&
+                (looksLikeEmail || looksLikeVoiceEmailSpelling(cleaned))))
+          ) {
+            if (!emailCaptureMode) {
+              startEmailCapture();
+            }
+            const consumed = handleEmailCaptureTranscript(cleaned);
+            if (consumed) {
+              socket.emit("user_transcript", cleaned);
+              TimerManager.clearSilence();
+              break;
+            }
           }
-
           if (isEmailSpelling) {
             console.log(
-              `[FLOW: sales][STEP: email_capture][STATUS: allowing_through][DATA: input="${cleaned}"]`,
+              `[FLOW: sales][STEP: email_capture][STATUS: allowing_through_during_speech][DATA: input="${cleaned}"]`,
             );
           }
 
           if (isEmailConfirmResponse) {
             console.log(
-              `[FLOW: sales][STEP: email_confirmation][STATUS: processing][DATA: input="${cleaned}"]`,
+              `[FLOW: sales][STEP: email_confirmation][STATUS: processing][DATA: input="${cleaned}" allowedDuringAssistantSpeech=true]`,
             );
           }
 
@@ -1706,14 +1733,14 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           }
 
           console.log(
-            `[FLOW: ${session?.collected?.intent || "unknown"}][STEP: transcript][STATUS: ok][DATA: emailMode=${emailCaptureMode} salesStep=${salesStep} looksEmail=${looksLikeEmail} looksSpelling=${looksLikeVoiceEmailSpelling(cleaned)} isPurePhone=${isPurePhoneNumber}]`,
+            `[FLOW: ${session?.collected?.intent || "unknown"}][STEP: transcript][STATUS: ok][DATA: emailMode=${emailCaptureMode} salesStep=${salesStep} looksEmail=${looksLikeEmail} looksSpelling=${looksLikeVoiceEmailSpelling(cleaned)}]`,
           );
 
+          // FIX (Issue 1 / P1): Email capture — latest input always hard-overwrites
           if (
-            !isPurePhoneNumber &&
-            (emailCaptureMode ||
-              (salesStep === "email" &&
-                (looksLikeEmail || looksLikeVoiceEmailSpelling(cleaned))))
+            emailCaptureMode ||
+            (salesStep === "email" &&
+              (looksLikeEmail || looksLikeVoiceEmailSpelling(cleaned)))
           ) {
             if (!emailCaptureMode) {
               startEmailCapture();
@@ -1778,6 +1805,7 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           session.messages.push({ role: "user", content: cleaned });
           sessions.set(session.id, session);
 
+          // FIX (P5): Reset silence timer on user input
           TimerManager.resetSilence();
           break;
         }
@@ -1789,6 +1817,8 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           cancelPending = false;
           elevenLabsStreaming = true;
           openElevenLabsStream();
+          // Do NOT set assistantSpeaking=true if we're waiting for email confirmation YES/NO
+          // This prevents the user's "yes" from being dropped by the assistantSpeaking guard
           if (!(emailCaptureMode && emailCaptureConfirmAsked)) {
             assistantSpeaking = true;
           }
@@ -1853,6 +1883,11 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
               rawPhoneBuffer = null;
             }
 
+            // FIX (Issue 2 / P2): Only activate email capture if:
+            // 1. AI asked for email spelling
+            // 2. salesStep is "email"
+            // 3. NOT already in capture mode
+            // 4. NOT already in confirmation phase
             if (
               detectEmailSpellingRequest(event.text) &&
               salesStep === "email" &&
@@ -1866,6 +1901,7 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
               startEmailCapture();
             }
 
+            // FIX (Issue 2): Track website check question asked
             if (
               session.collected.leadInterest &&
               session.collected._websiteCheckRequired &&
@@ -1883,9 +1919,9 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
 
         case "response.done": {
           isResponseActive = false;
+          // Clear watchdog on response done
           TimerManager.clearWatchdog();
           console.log(`🔊 [FSM] speech_end`);
-          debugState();
 
           const outputItems = event.response?.output || [];
           const hasTextOutput =
@@ -1898,23 +1934,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
             (item) => item.type === "function_call",
           );
 
-          // ═══════════════════════════════════════════════════════════
-          // FIX (Root Cause #2 — assistantSpeaking lifecycle):
-          //
-          // When response.done fires and there are NO pending function
-          // calls and we have text output, the AI has finished generating.
-          // If ElevenLabs is NOT streaming (no audio to play), we should
-          // clear assistantSpeaking immediately. Otherwise the next
-          // transcript will be dropped.
-          //
-          // For cases where ElevenLabs IS streaming, audio_done will
-          // handle clearing assistantSpeaking.
-          // ═══════════════════════════════════════════════════════════
-          if (!hasFunctionCall && pendingFunctionCalls === 0 && !elevenLabsStreaming) {
-            assistantSpeaking = false;
-            console.log(`🔄 [FIX] response.done: No EL streaming, cleared assistantSpeaking`);
-          }
-
           if (
             !hasFunctionCall &&
             !hasTextOutput &&
@@ -1924,7 +1943,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
             if (cancelPending) {
               console.log(`✅ response.done (cancelled) — no retry`);
               cancelPending = false;
-              assistantSpeaking = false; // FIX: Clear on cancel too
               transitionFSM(FSM_STATE.LISTENING);
               socket.emit("status", "listening");
               if (pendingPostDoneCreate) {
@@ -1942,15 +1960,12 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
             );
             if (emptyResponseCount <= MAX_EMPTY_RETRIES) {
               const retryDelay = 150 * Math.pow(2, emptyResponseCount - 1);
-              // FIX: Clear assistantSpeaking before retry so transcripts aren't dropped
-              assistantSpeaking = false;
               scheduleResponseCreate(null, retryDelay, true);
             } else {
               console.warn(
                 `⚠️ Max retries (${MAX_EMPTY_RETRIES}) reached — stopping retry loop`,
               );
               emptyResponseCount = 0;
-              assistantSpeaking = false; // FIX: Clear on max retries
               transitionFSM(FSM_STATE.LISTENING);
               socket.emit("status", "listening");
             }
@@ -1959,7 +1974,11 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
 
           emptyResponseCount = 0;
 
+          // FIX (Issue 5 / P5): Debounce create_ticket — pendingPostDoneCreate
+          // must NEVER fire if createTicketBlockedForEmail=true
           if (pendingPostDoneCreate && pendingFunctionCalls === 0) {
+            // Guard: if we have a pending post-done and email is still blocked,
+            // inject the email capture hint instead of firing immediately
             if (createTicketBlockedForEmail) {
               console.log(
                 `[FLOW: sales][STEP: response_done][STATUS: post_done_blocked][DATA: reason=email_not_confirmed createTicketBlockedForEmail=true]`,
@@ -1979,6 +1998,8 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           }
 
           if (!pendingFunctionCalls) {
+            // FIX (P5): Do NOT call TimerManager.startSilence() here.
+            // Silence timer ONLY starts from audio_done event.
             if (
               fsmState !== FSM_STATE.EMAIL_CAPTURE &&
               fsmState !== FSM_STATE.EMAIL_CONFIRMATION
@@ -1996,6 +2017,7 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           if (event.item?.type === "function_call") {
             const fnName = event.item.name || event.item.function_call?.name;
             if (fnName === "create_ticket") {
+              // FIX (Issue 5 / P5): Only start final lock if email is NOT blocked
               if (!createTicketBlockedForEmail) {
                 TimerManager.startFinalLock(20000);
               }
@@ -2025,7 +2047,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           responseCreatePending = false;
           pendingPostDoneCreate = false;
           elevenLabsStreaming = false;
-          assistantSpeaking = false; // FIX: Clear on error
           TimerManager.clearWatchdog();
           transitionFSM(FSM_STATE.LISTENING);
           socket.emit("status", "listening");
@@ -2038,6 +2059,7 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
       const { call_id, name: fn, arguments: argsStr } = item;
       let args = safeParseJSON(argsStr) || {};
 
+      // Guard: verify_phone must NEVER run in sales flow
       if (
         fn === "verify_phone" &&
         !session.collected._emailVerifiedCustomerId
@@ -2146,6 +2168,7 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
 
       clearTimeout(toolTimeout);
 
+      // FIX (Issue 4 / P4): Build system hint with explicit email_state context in EVERY tool response
       let systemHint = `[FLOW: ${session.collected?.intent || "unknown"}] Current collected fields: ${JSON.stringify(
         Object.fromEntries(
           Object.entries(session.collected || {}).filter(
@@ -2187,16 +2210,18 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           parsedResult = JSON.parse(result);
         } catch (_) {}
 
+        // FIX (Issue 3): If blocked (sales flow), instruct AI to treat as new customer
         if (parsedResult?._blocked && parsedResult?.reason === "sales_flow") {
           console.log(
             `[FLOW: sales][STEP: customer_lookup][STATUS: blocked_hint][DATA: reason=sales_flow]`,
           );
           systemHint += `\nTOOL RESULT: customer_lookup blocked — this is a new sales lead. Do NOT retry customer_lookup. Treat as a new customer. Collect name, phone, email one at a time, then call create_ticket.`;
         } else if (parsedResult?._invalidEmail) {
+          // FIX: Handle invalid email format (missing @) in support flow
           console.log(
             `[FLOW: support][STEP: customer_lookup][STATUS: invalid_email_hint][DATA: email_parse_failed=true]`,
           );
-          systemHint += `\nTOOL RESULT: Email format invalid — missing '@' symbol. Ask customer to spell email again: 'Please spell your email letter by letter, saying 'at' for @ and 'dot' for dots.'`;
+          systemHint += `\nTOOL RESULT: Email format invalid — missing '@' symbol. Ask customer to spell email again: 'Please spell your email letter by letter. For @ say 'at', for dots say 'dot'. Example: s-h-a-u-n at b-e-l-e dot a-i.'`;
         } else if (parsedResult?.success && parsedResult?.customer) {
           systemHint += `\nTOOL RESULT: Email lookup succeeded. Say "Perfect, I can see that account." Then ask for their phone number. When they give it, call verify_phone.`;
           awaitingPhoneVerification = true;
@@ -2234,6 +2259,8 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           parsedResult?._blocked &&
           parsedResult?.reason === "email_missing"
         ) {
+          // FIX (Issue 1+4 / P4): Ticket blocked — force salesStep=email BEFORE scheduling
+          // response so AI doesn't try create_ticket again immediately
           TimerManager.releaseFinalLock();
           salesStep = "email";
           createTicketBlockedForEmail = true;
@@ -2247,7 +2274,7 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           console.log(
             `[FLOW: sales][STEP: create_ticket][STATUS: blocked][DATA: reason=email_not_confirmed salesStep_forced_to=email captureStarted=true]`,
           );
-          systemHint += `\nTOOL RESULT: create_ticket BLOCKED — email not confirmed. salesStep is now "email". Ask for email NOW: "Could I grab your email address? Please spell it letter by letter — for @ say 'at', for dots say 'dot'. Example: s-h-a-u-n at b-e-l-e dot a-i." Do NOT call create_ticket again until email_state.is_confirmed=true.`;
+          systemHint += `\nTOOL RESULT: create_ticket BLOCKED — email not confirmed. salesStep is now "email". Ask for email NOW using VOICE SPELLING MODE. Say: "I still need your email address. Please spell it out one letter at a time — for @ use 'at', for . use 'dot'. Take your time." Do NOT call create_ticket again until email_state.is_confirmed=true.`;
         } else if (parsedResult?.success) {
           salesStep = "done";
           createTicketBlockedForEmail = false;
@@ -2278,6 +2305,7 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
 
       if (fn === "extract_call_fields") {
         const c = session.collected || {};
+        // FIX (Issue 2): Website check gate in extract_call_fields hint too
         const shouldGate =
           c.leadInterest &&
           c._websiteCheckRequired &&
@@ -2351,6 +2379,7 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
 
     async function execTool(fn, args) {
       if (fn === "extract_call_fields") {
+        // FIX: Parse/normalize email in ALL flows using parseVoiceEmail
         if (args.email && typeof args.email === "string") {
           const parsed = parseVoiceEmail(args.email);
           if (parsed) {
@@ -2384,6 +2413,7 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
         }
         if (salesStep === "phone" && args.phone) advanceSalesStep("phone");
 
+        // If LLM extracts email via extract_call_fields, use setEmailValue (hard overwrite)
         if (args.email) {
           setEmailValue(args.email);
           session.collected.email = args.email;
@@ -2398,6 +2428,11 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
       }
 
       if (fn === "customer_lookup") {
+        // ─────────────────────────────────────────────────────────
+        // FIX (Issue 3): Block customer_lookup in sales flow.
+        // Sales = has leadInterest but no _emailVerifiedCustomerId
+        // (i.e. not a returning existing customer doing support).
+        // ─────────────────────────────────────────────────────────
         const isSalesFlow =
           !!session.collected?.leadInterest &&
           !session.collected?._emailVerifiedCustomerId;
@@ -2423,6 +2458,7 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           });
         }
 
+        // FIX: Parse/normalize email before lookup using parseVoiceEmail
         if (lookupArgs.email && typeof lookupArgs.email === "string") {
           const parsed = parseVoiceEmail(lookupArgs.email);
           if (parsed) {
@@ -2434,6 +2470,7 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
             console.log(
               `[FLOW: support][STEP: customer_lookup][STATUS: parse_failed][DATA: email="${lookupArgs.email}"]`,
             );
+            // Return invalid email error if parse fails
             return JSON.stringify({
               success: false,
               _invalidEmail: true,
@@ -2469,6 +2506,7 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
             }
             return JSON.stringify(safeResult);
           }
+          // Clear email state on lookup failure so re-capture starts fresh
           delete session.collected.email;
           delete session.collected._emailVerifiedCustomerId;
           email_state.value = "";
@@ -2565,6 +2603,8 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
         const hasLeadInterest = !!(collected.leadInterest || fa.leadInterest);
         const isSupportTicket = hasCustomerId && !hasLeadInterest;
 
+        // FIX (Issue 1+4 / P4): Block create_ticket if email not confirmed in sales flow
+        // Check BOTH session.collected.email AND email_state.is_confirmed
         if (
           !isSupportTicket &&
           (!collected.email || !email_state.is_confirmed)
@@ -2572,11 +2612,14 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           console.warn(
             `[FLOW: sales][STEP: create_ticket][STATUS: blocked][DATA: email="${collected.email}" is_confirmed=${email_state.is_confirmed} reason=email_not_confirmed]`,
           );
+          // Force salesStep back to email immediately so next response re-asks
           salesStep = "email";
           createTicketBlockedForEmail = true;
           TimerManager.releaseFinalLock();
           finalMessageLock = false;
           session.finalLock = false;
+          // Only start capture if not already in confirmation phase
+          // (re-starting resets emailCaptureConfirmAsked which kills in-flight confirmations)
           if (!emailCaptureMode && !emailCaptureConfirmAsked) {
             startEmailCapture();
           } else if (emailCaptureMode) {
@@ -2728,6 +2771,17 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
       }
     });
 
+    // ═══════════════════════════════════════════════════════════════
+    //  FIX (P5): audio_done — THE ONLY PLACE silence timer starts.
+    //
+    //  Frontend emits this after browser has finished playing ALL
+    //  PCM audio chunks (TTS playback complete). Timer starts here,
+    //  AFTER the user has fully heard the AI response.
+    //
+    //  Duration: 15s normal, 20s after package presentation.
+    //  This is the ONLY call to TimerManager.startSilence() in the
+    //  entire codebase. There is no call in response.done or isFinal.
+    // ═══════════════════════════════════════════════════════════════
     socket.on("audio_done", () => {
       console.log(`🔊 [FSM] Client audio_done — browser playback complete`);
       assistantSpeaking = false;
@@ -2740,6 +2794,7 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
         transitionFSM(FSM_STATE.LISTENING);
       }
 
+      // Read isPackage flag at playback-complete time, then reset it
       const isPackage = lastResponseWasPackage;
       lastResponseWasPackage = false;
       console.log(
@@ -2757,9 +2812,11 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
         console.log(
           `[FLOW: sales][STEP: email_capture][STATUS: structured_input][DATA: email="${value}"]`,
         );
+        // Hard overwrite then confirm
         setEmailValue(value);
-        confirmEmail();
+        confirmEmail(); // sets is_confirmed=true AND syncs to session.collected.email
         if (salesStep === "email") advanceSalesStep("email");
+        // FIX (Issue 4 / P4): Unblock ONLY after confirmEmail() (is_confirmed=true)
         createTicketBlockedForEmail = false;
         resetEmailCapture();
         awaitingStructuredInput = false;
@@ -2849,6 +2906,9 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
     });
 
     // ═══════════════ Boot ════════════════
+    // Session must be created HERE so it's available in all closures above
+    const session = mkSession();
+
     (async () => {
       try {
         console.log("⏳ Connecting OpenAI Realtime...");
