@@ -58,10 +58,18 @@ async function sendTicketEmail(
   collectedFields,
   isSupportTicket = false,
 ) {
-  console.log(`📧 [sendTicketEmail] Starting email send - ticketId=${ticketId}, type=${isSupportTicket ? 'Support' : 'Sales'}`);
-  console.log(`📧 [DEBUG] collectedFields:`, JSON.stringify(collectedFields).substring(0, 200));
-  console.log(`📧 [DEBUG] ticketArgs:`, JSON.stringify(ticketArgs).substring(0, 200));
-  
+  console.log(
+    `📧 [sendTicketEmail] Starting email send - ticketId=${ticketId}, type=${isSupportTicket ? "Support" : "Sales"}`,
+  );
+  console.log(
+    `📧 [DEBUG] collectedFields:`,
+    JSON.stringify(collectedFields).substring(0, 200),
+  );
+  console.log(
+    `📧 [DEBUG] ticketArgs:`,
+    JSON.stringify(ticketArgs).substring(0, 200),
+  );
+
   if (!process.env.SMTP_PASS) {
     console.warn("⚠️ SMTP_PASS not set - skipping email");
     console.log(`📧 [DEBUG] SMTP_PASS is empty/undefined`);
@@ -116,7 +124,7 @@ async function sendTicketEmail(
     );
     console.log(`📧 [DEBUG] Email subject: "${subject}"`);
     console.log(`📧 [DEBUG] Recipients: ${recipients.length} addresses`);
-    console.log(`📧 [DEBUG] Reply-To: ${userEmail || 'NONE'}`);
+    console.log(`📧 [DEBUG] Reply-To: ${userEmail || "NONE"}`);
     await transporter.sendMail({
       from: '"InfiNET AI Assistant" <noreply@infinetbroadband.com.au>',
       to: recipients,
@@ -136,7 +144,9 @@ async function sendTicketEmail(
       err.code || "",
       err.response || "",
     );
-    console.error(`📧 [DEBUG] Email error details - code: ${err.code}, response: ${JSON.stringify(err.response).substring(0, 100)}`);
+    console.error(
+      `📧 [DEBUG] Email error details - code: ${err.code}, response: ${JSON.stringify(err.response).substring(0, 100)}`,
+    );
     return { sent: false, reason: err.message };
   }
 }
@@ -236,7 +246,8 @@ const OPTICOMM_RESIDENTIAL_PLANS = [
       "Our fast OptiComm plan with 100 megabits down and 20 up. Ideal for busy families streaming 4K, gaming online, and downloading large files. Eighty four dollars for the first three months, then eighty nine dollars. Perfect for communities where 100 megabits is the top speed available.",
   },
   {
-    title: "OptiComm five hundred by fifty Megabits per second Faster Residential",
+    title:
+      "OptiComm five hundred by fifty Megabits per second Faster Residential",
     price: 79,
     download: "500 Megabits per second",
     upload: "50 Megabits per second",
@@ -261,7 +272,8 @@ const OPTICOMM_RESIDENTIAL_PLANS = [
       "This is our popular mid-range option with 500 megabits download and 50 up. Great for busy households - you can stream 4K on multiple devices, download large files in seconds, and game online without lag. Just 79 dollars for the first three months, then 89 dollars. Same deal - unlimited data, no lock-in contracts.",
   },
   {
-    title: "OptiComm seven hundred fifty by fifty Megabits per second Residential",
+    title:
+      "OptiComm seven hundred fifty by fifty Megabits per second Residential",
     price: 89,
     download: "750 Megabits per second",
     upload: "50 Megabits per second",
@@ -286,7 +298,8 @@ const OPTICOMM_RESIDENTIAL_PLANS = [
       "Our high-speed OptiComm plan with 750 megabits down and 50 up. Built for power users - multiple 4K streams, competitive gaming, and huge downloads all at once. Eighty nine dollars for three months, then ninety nine dollars. No contracts, unlimited data.",
   },
   {
-    title: "OptiComm one thousand by one hundred Megabits per second Residential",
+    title:
+      "OptiComm one thousand by one hundred Megabits per second Residential",
     price: 99,
     download: "1000 Megabits per second",
     upload: "100 Megabits per second",
@@ -364,7 +377,8 @@ const OPTICOMM_BUSINESS_PLANS = [
       "Our standard business plan with 100 megabits down and 40 up. Great for offices with multiple staff, cloud backups, and regular video meetings. Ninety nine dollars for three months, then one hundred nine dollars. Includes static IP, unlimited data, no lock-in contracts.",
   },
   {
-    title: "OptiComm two hundred fifty by one hundred Megabits per second Business",
+    title:
+      "OptiComm two hundred fifty by one hundred Megabits per second Business",
     price: 139,
     download: "250 Megabits per second",
     upload: "100 Megabits per second",
@@ -588,7 +602,8 @@ const NBN_BUSINESS_PLANS = [
       "Our standard business plan with 100 megabits down and 40 up. Great for offices with multiple staff, cloud backups, and regular video meetings. Ninety nine dollars per month. Includes static IP, unlimited data, no lock-in contracts.",
   },
   {
-    title: "NBN Business two hundred fifty by one hundred Megabits per second Faster",
+    title:
+      "NBN Business two hundred fifty by one hundred Megabits per second Faster",
     download: "250 Megabits per second",
     upload: "100 Megabits per second",
     price: 149,
@@ -606,7 +621,8 @@ const NBN_BUSINESS_PLANS = [
       "Our fast business plan with 250 megabits down and 100 up. Excellent for growing businesses with heavy file sharing, video conferencing, and cloud applications. One hundred forty nine dollars per month. Static IP included, unlimited data.",
   },
   {
-    title: "NBN Business five hundred by two hundred Megabits per second Superfast",
+    title:
+      "NBN Business five hundred by two hundred Megabits per second Superfast",
     download: "500 Megabits per second",
     upload: "200 Megabits per second",
     price: 189,
@@ -624,7 +640,8 @@ const NBN_BUSINESS_PLANS = [
       "Our high-speed business plan with 500 megabits down and 200 up. Built for demanding offices - large file transfers, multiple HD video streams, and serious cloud workloads. One hundred eighty nine dollars per month. Static IP, unlimited data, no contracts.",
   },
   {
-    title: "NBN Business one thousand by four hundred Megabits per second Ultrafast",
+    title:
+      "NBN Business one thousand by four hundred Megabits per second Ultrafast",
     download: "1000 Megabits per second",
     upload: "400 Megabits per second",
     price: 239,
@@ -646,7 +663,8 @@ const NBN_BUSINESS_PLANS = [
 // ==================== NBN FIXED WIRELESS PLANS ====================
 const NBN_FIXED_WIRELESS_PLANS = [
   {
-    title: "NBN twenty-five by five Megabits per second Fixed Wireless Standard",
+    title:
+      "NBN twenty-five by five Megabits per second Fixed Wireless Standard",
     download: "25 Megabits per second",
     upload: "5 Megabits per second",
     price: 59,
@@ -690,7 +708,8 @@ const NBN_FIXED_WIRELESS_PLANS = [
       "Our plus Fixed Wireless plan with 100 megabits down and 20 up. Excellent for rural households streaming 4K, gaming online, and working from home. Eighty nine dollars per month, free NBN setup. Unlimited data, no lock-in contracts.",
   },
   {
-    title: "NBN two hundred by twenty Megabits per second Fixed Wireless HomeFast",
+    title:
+      "NBN two hundred by twenty Megabits per second Fixed Wireless HomeFast",
     download: "200 Megabits per second",
     upload: "20 Megabits per second",
     price: 99,
@@ -713,7 +732,8 @@ const NBN_FIXED_WIRELESS_PLANS = [
       "Our home fast Fixed Wireless plan with 200 megabits down and 20 up. Great for busy rural households with multiple devices streaming, gaming, and downloading. Ninety nine dollars per month, free NBN setup included. Unlimited data, no contracts.",
   },
   {
-    title: "NBN four hundred by forty Megabits per second Fixed Wireless SuperFast",
+    title:
+      "NBN four hundred by forty Megabits per second Fixed Wireless SuperFast",
     download: "400 Megabits per second",
     upload: "40 Megabits per second",
     price: 109,
@@ -1053,7 +1073,18 @@ function filterTariffsByMarsAvailability(
 
 function requiresInstallVisit(serviceabilityClass) {
   const installRequired = new Set([
-    "1","2","5","8","21","22","23","31","32","33","11","12",
+    "1",
+    "2",
+    "5",
+    "8",
+    "21",
+    "22",
+    "23",
+    "31",
+    "32",
+    "33",
+    "11",
+    "12",
   ]);
   return installRequired.has(String(serviceabilityClass));
 }
@@ -1612,7 +1643,10 @@ const extractFunction = {
   parameters: {
     type: "object",
     properties: {
-      intent: { type: "string", enum: ["support", "sales", "general", "account"] },
+      intent: {
+        type: "string",
+        enum: ["support", "sales", "general", "account"],
+      },
       issueSummary: { type: "string" },
       preferredName: { type: "string" },
       email: { type: "string" },
@@ -1628,7 +1662,10 @@ const extractFunction = {
       connectionDate: { type: "string" },
       serviceToTerminate: { type: "string" },
       customerType: { type: "string", enum: ["new", "existing"] },
-      residentialPreference: { type: "string", enum: ["residential", "business"] },
+      residentialPreference: {
+        type: "string",
+        enum: ["residential", "business"],
+      },
       networkPreference: { type: "string", enum: ["NBN", "Opticomm"] },
       paymentDate: { type: "string" },
     },
@@ -1638,7 +1675,8 @@ const extractFunction = {
 
 const getPlansTool = {
   name: "get_internet_plans",
-  description: "Fetch the latest live internet tariff plans from Splynx. Use as fallback when check_address_availability is not applicable.",
+  description:
+    "Fetch the latest live internet tariff plans from Splynx. Use as fallback when check_address_availability is not applicable.",
   parameters: { type: "object", properties: {}, required: [] },
 };
 
@@ -1649,9 +1687,20 @@ const checkAvailabilityTool = {
   parameters: {
     type: "object",
     properties: {
-      address: { type: "string", description: "Full address including street, suburb, state and postcode" },
-      networkPreference: { type: "string", description: "Only pass this if user explicitly said they want 'NBN' or 'OptiComm'." },
-      residentialPreference: { type: "string", description: "Plan type: 'residential' or 'business'" },
+      address: {
+        type: "string",
+        description:
+          "Full address including street, suburb, state and postcode",
+      },
+      networkPreference: {
+        type: "string",
+        description:
+          "Only pass this if user explicitly said they want 'NBN' or 'OptiComm'.",
+      },
+      residentialPreference: {
+        type: "string",
+        description: "Plan type: 'residential' or 'business'",
+      },
     },
     required: ["address"],
   },
@@ -1659,12 +1708,16 @@ const checkAvailabilityTool = {
 
 const customerLookupTool = {
   name: "customer_lookup",
-  description: "Lookup customer by email ONLY (step 1 of verification). ONLY call this with email.",
+  description:
+    "Lookup customer by email ONLY (step 1 of verification). ONLY call this with email.",
   parameters: {
     type: "object",
     properties: {
       name: { type: "string" },
-      email: { type: "string", description: "Email address to look up the customer account" },
+      email: {
+        type: "string",
+        description: "Email address to look up the customer account",
+      },
     },
     required: [],
   },
@@ -1672,11 +1725,15 @@ const customerLookupTool = {
 
 const verifyPhoneTool = {
   name: "verify_phone",
-  description: "Verify a customer's phone number against their registered number on file. Call this AFTER customer_lookup succeeds and the user has provided their phone number verbally.",
+  description:
+    "Verify a customer's phone number against their registered number on file. Call this AFTER customer_lookup succeeds and the user has provided their phone number verbally.",
   parameters: {
     type: "object",
     properties: {
-      phone: { type: "string", description: "The phone number provided by the customer" },
+      phone: {
+        type: "string",
+        description: "The phone number provided by the customer",
+      },
     },
     required: ["phone"],
   },
@@ -1689,7 +1746,10 @@ const createTicketTool = {
     type: "object",
     properties: {
       customer_id: { type: "number" },
-      reporter_type: { type: "string", enum: ["admin", "customer", "api", "incoming", "none"] },
+      reporter_type: {
+        type: "string",
+        enum: ["admin", "customer", "api", "incoming", "none"],
+      },
       subject: { type: "string" },
       priority: { type: "string", enum: ["low", "medium", "high", "urgent"] },
       type_id: { type: "number" },
@@ -1725,11 +1785,15 @@ const getTicketStatusesTool = {
 
 const sendPortalLoginEmailTool = {
   name: "send_portal_login_email",
-  description: "Send email to support for customer unable to login to portal. No ticket created.",
+  description:
+    "Send email to support for customer unable to login to portal. No ticket created.",
   parameters: {
     type: "object",
     properties: {
-      message: { type: "string", description: "Optional additional message from customer" },
+      message: {
+        type: "string",
+        description: "Optional additional message from customer",
+      },
     },
     required: [],
   },
@@ -1787,8 +1851,18 @@ function normalizePhone(phone) {
 function mapOrdinalNetworkChoice(text) {
   const t = (text || "").toLowerCase().trim();
   if (/\bnbn\b/.test(t) || /\b(opti\s*comm|opticomm)\b/.test(t)) return null;
-  if (/\b(first|1st|one|1|option\s*1|option\s*one|number\s*1|the\s*first)\b/.test(t)) return "NBN";
-  if (/\b(second|2nd|two|2|to|option\s*2|option\s*two|number\s*2|the\s*second)\b/.test(t)) return "Opticomm";
+  if (
+    /\b(first|1st|one|1|option\s*1|option\s*one|number\s*1|the\s*first)\b/.test(
+      t,
+    )
+  )
+    return "NBN";
+  if (
+    /\b(second|2nd|two|2|to|option\s*2|option\s*two|number\s*2|the\s*second)\b/.test(
+      t,
+    )
+  )
+    return "Opticomm";
   return null;
 }
 
@@ -1834,7 +1908,9 @@ function applyExtractionToSession(session, parsed) {
     if (session.collected._websiteCheckDone === undefined) {
       session.collected._websiteCheckDone = false;
     }
-    console.log(`Plan selected: ${session.collected.leadInterest} - website check REQUIRED`);
+    console.log(
+      `Plan selected: ${session.collected.leadInterest} - website check REQUIRED`,
+    );
   }
 
   session.lastSeen = new Date().toISOString();
@@ -1845,10 +1921,15 @@ function applyExtractionToSession(session, parsed) {
 function classifyInterruption(text) {
   const t = (text || "").trim().toLowerCase();
   if (!t || t.length < 2) return { isValid: false, isListeningCue: false };
-  const listeningCues = /^(yeah|yes|yep|yup|mm|mmm|hmm|uh|uh huh|ok|okay|sure|right|gotcha|got it|i see|alright|cool)\.?$/;
+  const listeningCues =
+    /^(yeah|yes|yep|yup|mm|mmm|hmm|uh|uh huh|ok|okay|sure|right|gotcha|got it|i see|alright|cool)\.?$/;
   if (listeningCues.test(t)) return { isValid: false, isListeningCue: true };
-  if (t.replace(/[^a-z]/g, "").length < 3) return { isValid: false, isListeningCue: false };
-  const hasIntent = /\b(what|how|why|when|where|which|who|can|do|is|are|i want|i need|i have|i'd like|please|could you|would you|tell me|help|the|my|a |an )\b/.test(t);
+  if (t.replace(/[^a-z]/g, "").length < 3)
+    return { isValid: false, isListeningCue: false };
+  const hasIntent =
+    /\b(what|how|why|when|where|which|who|can|do|is|are|i want|i need|i have|i'd like|please|could you|would you|tell me|help|the|my|a |an )\b/.test(
+      t,
+    );
   if (hasIntent) return { isValid: true, isListeningCue: false };
   const wordCount = t.split(/\s+/).filter((w) => w.length > 1).length;
   if (wordCount >= 3) return { isValid: true, isListeningCue: false };
@@ -1878,9 +1959,15 @@ async function customerLookup({ name, email, phone }) {
   const customer = customers[0];
   let services = { internet: [], voice: [], recurring: [] };
   try {
-    services.internet = (await splynx.getCustomerInternetServices(customer.id)).filter((s) => s.status === "active");
-    services.voice = (await splynx.getCustomerVoiceServices(customer.id)).filter((s) => s.status === "active");
-    services.recurring = (await splynx.getCustomerRecurringServices(customer.id)).filter((s) => s.status === "active");
+    services.internet = (
+      await splynx.getCustomerInternetServices(customer.id)
+    ).filter((s) => s.status === "active");
+    services.voice = (
+      await splynx.getCustomerVoiceServices(customer.id)
+    ).filter((s) => s.status === "active");
+    services.recurring = (
+      await splynx.getCustomerRecurringServices(customer.id)
+    ).filter((s) => s.status === "active");
   } catch (e) {
     console.error("Failed to get services:", e);
   }
@@ -1940,15 +2027,21 @@ async function checkAddressAvailability(args, session) {
   const { address, networkPreference, residentialPreference } = args;
   if (!address) return JSON.stringify({ error: "Address is required" });
 
-  const netPref = (networkPreference || session.collected?.networkPreference || "").toLowerCase();
+  const netPref = (
+    networkPreference ||
+    session.collected?.networkPreference ||
+    ""
+  ).toLowerCase();
   const isOpticomm = netPref === "opticomm" || netPref === "opti comm";
   const isNBN = netPref === "nbn";
   const noPreference = !isOpticomm && !isNBN;
 
-  const rawResPref = residentialPreference || session.collected?.residentialPreference;
+  const rawResPref =
+    residentialPreference || session.collected?.residentialPreference;
   const resPref = rawResPref ? rawResPref.toLowerCase() : null;
   const isBusiness = resPref === "business";
-  const hasExplicitPreference = resPref === "business" || resPref === "residential";
+  const hasExplicitPreference =
+    resPref === "business" || resPref === "residential";
 
   const getOpticommResult = () => {
     let plans;
@@ -1970,7 +2063,8 @@ async function checkAddressAvailability(args, session) {
       serviceType: "opticomm",
       requiresInstall: false,
       requiresResidentialFilter: requiresResFilter,
-      readinessDescription: "OptiComm Fibre is available at this address. Activation is typically within 1-2 business days for fully installed premises.",
+      readinessDescription:
+        "OptiComm Fibre is available at this address. Activation is typically within 1-2 business days for fully installed premises.",
       notes: [],
       availablePlans: plans.map((p) => ({
         title: p.title,
@@ -1997,7 +2091,10 @@ async function checkAddressAvailability(args, session) {
       marsCandidates = await marsAddressSearch(address);
     } catch (marsSearchErr) {
       if (noPreference) {
-        console.warn(`MARS address search failed, falling back to OptiComm:`, marsSearchErr.message);
+        console.warn(
+          `MARS address search failed, falling back to OptiComm:`,
+          marsSearchErr.message,
+        );
         return JSON.stringify(getOpticommResult());
       }
       throw marsSearchErr;
@@ -2011,7 +2108,10 @@ async function checkAddressAvailability(args, session) {
         marsSq = await marsServiceQualification(locId);
       } catch (marsSqErr) {
         if (noPreference) {
-          console.warn(`MARS SQ failed, falling back to OptiComm:`, marsSqErr.message);
+          console.warn(
+            `MARS SQ failed, falling back to OptiComm:`,
+            marsSqErr.message,
+          );
           return JSON.stringify(getOpticommResult());
         }
         marsSq = null;
@@ -2022,17 +2122,26 @@ async function checkAddressAvailability(args, session) {
       return JSON.stringify(getOpticommResult());
     }
 
-    const serviceabilityStatus = marsSq?.siteRestriction?.serviceabilityStatus || null;
-    const serviceabilityClass = marsSq?.siteRestriction?.supportingTechnology?.serviceabilityClass || null;
-    const primaryAccessTechnology = marsSq?.siteRestriction?.supportingTechnology?.primaryAccessTechnology || null;
+    const serviceabilityStatus =
+      marsSq?.siteRestriction?.serviceabilityStatus || null;
+    const serviceabilityClass =
+      marsSq?.siteRestriction?.supportingTechnology?.serviceabilityClass ||
+      null;
+    const primaryAccessTechnology =
+      marsSq?.siteRestriction?.supportingTechnology?.primaryAccessTechnology ||
+      null;
     const serviceType = marsSq?.serviceType || null;
     const virtutelSpeeds = marsSq?.virtutelSpeedsAvailable || [];
     const marsNotes = marsSq?.siteRestriction?.notes || [];
-    const serviceabilityClassReason = marsSq?.siteRestriction?.supportingTechnology?.serviceabilityClassReason || null;
+    const serviceabilityClassReason =
+      marsSq?.siteRestriction?.supportingTechnology
+        ?.serviceabilityClassReason || null;
 
     if (serviceabilityStatus === "Rejected") {
       if (isNBN) {
-        const reason = serviceabilityClassReason || "This address is planned to be serviced in the future but is not yet orderable.";
+        const reason =
+          serviceabilityClassReason ||
+          "This address is planned to be serviced in the future but is not yet orderable.";
         return JSON.stringify({
           success: true,
           orderable: false,
@@ -2044,7 +2153,13 @@ async function checkAddressAvailability(args, session) {
           serviceType,
           message: reason,
           availablePlans: [],
-          mars: { candidates: marsCandidates, virtutelSpeedsAvailable: virtutelSpeeds, serviceType, supportingTechnology: marsSq?.siteRestriction?.supportingTechnology || null },
+          mars: {
+            candidates: marsCandidates,
+            virtutelSpeedsAvailable: virtutelSpeeds,
+            serviceType,
+            supportingTechnology:
+              marsSq?.siteRestriction?.supportingTechnology || null,
+          },
         });
       }
       return JSON.stringify(getOpticommResult());
@@ -2061,7 +2176,11 @@ async function checkAddressAvailability(args, session) {
     }
 
     const needsInstall = requiresInstallVisit(serviceabilityClass);
-    const readinessDescription = getServiceabilityDescription(primaryAccessTechnology, serviceabilityClass, serviceabilityStatus);
+    const readinessDescription = getServiceabilityDescription(
+      primaryAccessTechnology,
+      serviceabilityClass,
+      serviceabilityStatus,
+    );
     const techLower = (primaryAccessTechnology || "").toLowerCase();
     const svcTypeLower = (serviceType || "").toLowerCase();
 
@@ -2070,7 +2189,10 @@ async function checkAddressAvailability(args, session) {
     let techCategory = "";
     let requiresResFilter = false;
 
-    if (address.toLowerCase().includes("hope island") || locId?.includes("HIR")) {
+    if (
+      address.toLowerCase().includes("hope island") ||
+      locId?.includes("HIR")
+    ) {
       techCategory = "HIR";
       networkName = "HIR";
       if (hasExplicitPreference) {
@@ -2085,7 +2207,11 @@ async function checkAddressAvailability(args, session) {
       networkName = "NBN SkyMuster";
       plansToReturn = NBN_SKYMUSTER_PLANS;
       requiresResFilter = false;
-    } else if (svcTypeLower === "nwas" || techLower === "wireless" || techLower === "fixed wireless") {
+    } else if (
+      svcTypeLower === "nwas" ||
+      techLower === "wireless" ||
+      techLower === "fixed wireless"
+    ) {
       techCategory = "FixedWireless";
       networkName = "NBN Fixed Wireless";
       plansToReturn = NBN_FIXED_WIRELESS_PLANS;
@@ -2093,29 +2219,47 @@ async function checkAddressAvailability(args, session) {
     } else if (svcTypeLower === "nfas" || svcTypeLower.startsWith("nf")) {
       techCategory = "NBNFibre";
       networkName = "NBN";
-      const isFttnFttbFttc = techLower.includes("fibre to the node") || techLower.includes("fibre to the building") || techLower.includes("fibre to the curb") || techLower.includes("fttn") || techLower.includes("fttb") || techLower.includes("fttc");
+      const isFttnFttbFttc =
+        techLower.includes("fibre to the node") ||
+        techLower.includes("fibre to the building") ||
+        techLower.includes("fibre to the curb") ||
+        techLower.includes("fttn") ||
+        techLower.includes("fttb") ||
+        techLower.includes("fttc");
       if (isFttnFttbFttc) {
         techCategory = "NBN_FTTN";
         if (hasExplicitPreference) {
-          const nbnPlans = isBusiness ? NBN_BUSINESS_PLANS : NBN_RESIDENTIAL_PLANS;
+          const nbnPlans = isBusiness
+            ? NBN_BUSINESS_PLANS
+            : NBN_RESIDENTIAL_PLANS;
           plansToReturn = nbnPlans.filter((p) => parseInt(p.download) <= 100);
           requiresResFilter = false;
         } else {
-          const residentialPlans = NBN_RESIDENTIAL_PLANS.filter((p) => parseInt(p.download) <= 100);
-          const businessPlans = NBN_BUSINESS_PLANS.filter((p) => parseInt(p.download) <= 100);
+          const residentialPlans = NBN_RESIDENTIAL_PLANS.filter(
+            (p) => parseInt(p.download) <= 100,
+          );
+          const businessPlans = NBN_BUSINESS_PLANS.filter(
+            (p) => parseInt(p.download) <= 100,
+          );
           plansToReturn = [...residentialPlans, ...businessPlans];
           requiresResFilter = true;
         }
       } else {
         if (hasExplicitPreference) {
-          const nbnPlans = isBusiness ? NBN_BUSINESS_PLANS : NBN_RESIDENTIAL_PLANS;
+          const nbnPlans = isBusiness
+            ? NBN_BUSINESS_PLANS
+            : NBN_RESIDENTIAL_PLANS;
           if (virtutelSpeeds.length > 0) {
             const availableSpeeds = new Set();
             for (const code of virtutelSpeeds) {
               const mapped = MARS_SPEED_MAP[code];
               if (mapped) availableSpeeds.add(`${mapped.dl}/${mapped.ul}`);
             }
-            plansToReturn = nbnPlans.filter((p) => availableSpeeds.has(`${parseInt(p.download)}/${parseInt(p.upload)}`));
+            plansToReturn = nbnPlans.filter((p) =>
+              availableSpeeds.has(
+                `${parseInt(p.download)}/${parseInt(p.upload)}`,
+              ),
+            );
           } else {
             plansToReturn = nbnPlans;
           }
@@ -2129,8 +2273,16 @@ async function checkAddressAvailability(args, session) {
               const mapped = MARS_SPEED_MAP[code];
               if (mapped) availableSpeeds.add(`${mapped.dl}/${mapped.ul}`);
             }
-            residentialPlans = residentialPlans.filter((p) => availableSpeeds.has(`${parseInt(p.download)}/${parseInt(p.upload)}`));
-            businessPlans = businessPlans.filter((p) => availableSpeeds.has(`${parseInt(p.download)}/${parseInt(p.upload)}`));
+            residentialPlans = residentialPlans.filter((p) =>
+              availableSpeeds.has(
+                `${parseInt(p.download)}/${parseInt(p.upload)}`,
+              ),
+            );
+            businessPlans = businessPlans.filter((p) =>
+              availableSpeeds.has(
+                `${parseInt(p.download)}/${parseInt(p.upload)}`,
+              ),
+            );
           }
           plansToReturn = [...residentialPlans, ...businessPlans];
           requiresResFilter = true;
@@ -2139,7 +2291,11 @@ async function checkAddressAvailability(args, session) {
     } else {
       techCategory = "NBN_Other";
       networkName = "NBN";
-      plansToReturn = filterTariffsByMarsAvailability(allTariffs, virtutelSpeeds, serviceType);
+      plansToReturn = filterTariffsByMarsAvailability(
+        allTariffs,
+        virtutelSpeeds,
+        serviceType,
+      );
       requiresResFilter = true;
     }
 
@@ -2178,11 +2334,20 @@ async function checkAddressAvailability(args, session) {
       technologyCategory: techCategory,
       network: networkName,
       availablePlans: formattedPlans,
-      mars: { candidates: marsCandidates, virtutelSpeedsAvailable: virtutelSpeeds, serviceType, supportingTechnology: marsSq?.siteRestriction?.supportingTechnology || null },
+      mars: {
+        candidates: marsCandidates,
+        virtutelSpeedsAvailable: virtutelSpeeds,
+        serviceType,
+        supportingTechnology:
+          marsSq?.siteRestriction?.supportingTechnology || null,
+      },
     });
   } catch (err) {
     if (noPreference) {
-      console.warn(`NBN lookup catch-all at ${address}, falling back to OptiComm:`, err.message);
+      console.warn(
+        `NBN lookup catch-all at ${address}, falling back to OptiComm:`,
+        err.message,
+      );
       return JSON.stringify(getOpticommResult());
     }
     return JSON.stringify({ success: false, error: err.message, address });
@@ -2201,12 +2366,16 @@ async function handleToolCall(session, funcName, args) {
       const lookupArgs = { ...(args || {}) };
       delete lookupArgs.phone;
       if (!lookupArgs.email && !lookupArgs.name) {
-        return JSON.stringify({ success: false, message: "Email is required for customer lookup" });
+        return JSON.stringify({
+          success: false,
+          message: "Email is required for customer lookup",
+        });
       }
       const result = await customerLookup(lookupArgs);
       if (result.success && result.customer) {
         session.collected._emailVerifiedCustomerId = result.customer.id;
-        session.collected._registeredPhone = result.customer.phone || result.customer.phone_mobile || null;
+        session.collected._registeredPhone =
+          result.customer.phone || result.customer.phone_mobile || null;
         session.collected._phoneVerified = false;
         session.collected.customer_id = result.customer.id;
         sessions.set(session.id, session);
@@ -2232,24 +2401,47 @@ async function handleToolCall(session, funcName, args) {
     try {
       const emailCustomerId = session.collected._emailVerifiedCustomerId;
       if (!emailCustomerId) {
-        return JSON.stringify({ success: false, verificationFailed: true, message: "Email verification must be completed first." });
+        return JSON.stringify({
+          success: false,
+          verificationFailed: true,
+          message: "Email verification must be completed first.",
+        });
       }
       const userProvidedPhone = session.collected.phone || args?.phone;
       if (!userProvidedPhone) {
-        return JSON.stringify({ success: false, verificationFailed: true, message: "No phone number provided." });
+        return JSON.stringify({
+          success: false,
+          verificationFailed: true,
+          message: "No phone number provided.",
+        });
       }
       const registeredPhone = session.collected._registeredPhone;
       if (!registeredPhone) {
-        return JSON.stringify({ success: false, verificationFailed: true, message: "No phone number is registered on this account. Please contact support via email." });
+        return JSON.stringify({
+          success: false,
+          verificationFailed: true,
+          message:
+            "No phone number is registered on this account. Please contact support via email.",
+        });
       }
       const normalizedInput = normalizePhone(userProvidedPhone);
       const normalizedRegistered = normalizePhone(registeredPhone);
       if (normalizedInput !== normalizedRegistered) {
-        return JSON.stringify({ success: false, verificationFailed: true, message: "Phone number does not match the registered number on this account." });
+        return JSON.stringify({
+          success: false,
+          verificationFailed: true,
+          message:
+            "Phone number does not match the registered number on this account.",
+        });
       }
       session.collected._phoneVerified = true;
       sessions.set(session.id, session);
-      return JSON.stringify({ success: true, verified: true, customer_id: emailCustomerId, message: "Phone number verified successfully." });
+      return JSON.stringify({
+        success: true,
+        verified: true,
+        customer_id: emailCustomerId,
+        message: "Phone number verified successfully.",
+      });
     } catch (e) {
       return JSON.stringify({ success: false, error: e.message });
     }
@@ -2285,35 +2477,66 @@ async function handleToolCall(session, funcName, args) {
     const collected = session.collected || {};
     const hasCustomerId = !!(fa.customer_id || collected.customer_id);
     const hasLeadInterest = !!collected.leadInterest;
-    const hasPaymentExtension = !!(collected.paymentDate || (fa.subject && fa.subject.toLowerCase().includes("payment extension")));
-    const isSupportTicket = (hasCustomerId && !hasLeadInterest) || hasPaymentExtension;
+    const hasPaymentExtension = !!(
+      collected.paymentDate ||
+      (fa.subject && fa.subject.toLowerCase().includes("payment extension"))
+    );
+    const isSupportTicket =
+      (hasCustomerId && !hasLeadInterest) || hasPaymentExtension;
 
     const detailLines = [];
-    if (collected.preferredName || collected.name) detailLines.push(`Name: ${collected.preferredName || collected.name}`);
+    if (collected.preferredName || collected.name)
+      detailLines.push(`Name: ${collected.preferredName || collected.name}`);
     if (collected.email) detailLines.push(`Email: ${collected.email}`);
     if (collected.phone) detailLines.push(`Phone: ${collected.phone}`);
     if (collected.address) detailLines.push(`Address: ${collected.address}`);
-    if (collected.networkPreference) detailLines.push(`Network: ${collected.networkPreference}`);
-    if (collected.residentialPreference) detailLines.push(`Type: ${collected.residentialPreference}`);
-    if (collected.leadInterest) detailLines.push(`Selected Plan: ${collected.leadInterest}`);
-    if (collected.paymentDate) detailLines.push(`Customer requested payment extension until: ${collected.paymentDate}`);
+    if (collected.networkPreference)
+      detailLines.push(`Network: ${collected.networkPreference}`);
+    if (collected.residentialPreference)
+      detailLines.push(`Type: ${collected.residentialPreference}`);
+    if (collected.leadInterest)
+      detailLines.push(`Selected Plan: ${collected.leadInterest}`);
+    if (collected.paymentDate)
+      detailLines.push(
+        `Customer requested payment extension until: ${collected.paymentDate}`,
+      );
 
-    const detailsBlock = detailLines.length > 0 ? `\n\n--- Customer Details ---\n${detailLines.join("\n")}` : "";
+    const detailsBlock =
+      detailLines.length > 0
+        ? `\n\n--- Customer Details ---\n${detailLines.join("\n")}`
+        : "";
     if (fa.message?.message) fa.message.message += detailsBlock;
     else if (detailsBlock) fa.message = { message: detailsBlock.trim() };
 
     let ticketResult;
     try {
       if (isSupportTicket) {
-        const r = await splynx.request("POST", "admin/support/tickets", objectToUrlEncoded(fa));
+        const r = await splynx.request(
+          "POST",
+          "admin/support/tickets",
+          objectToUrlEncoded(fa),
+        );
         const emailResult = await sendTicketEmail(r.id, fa, collected, true);
-        ticketResult = { success: true, ticket_id: r.id, email_sent: emailResult.sent, email_error: emailResult.reason || null };
+        ticketResult = {
+          success: true,
+          ticket_id: r.id,
+          email_sent: emailResult.sent,
+          email_error: emailResult.reason || null,
+        };
       } else {
         const emailResult = await sendTicketEmail(null, fa, collected, false);
-        ticketResult = { success: true, message: "Sales inquiry submitted successfully", email_sent: emailResult.sent, email_error: emailResult.reason || null };
+        ticketResult = {
+          success: true,
+          message: "Sales inquiry submitted successfully",
+          email_sent: emailResult.sent,
+          email_error: emailResult.reason || null,
+        };
       }
     } catch (err) {
-      ticketResult = { success: false, error: err.message || "Failed to process request" };
+      ticketResult = {
+        success: false,
+        error: err.message || "Failed to process request",
+      };
     }
     ticketResult._ticketCompleted = true;
     ticketResult._isSalesTicket = !isSupportTicket;
@@ -2323,28 +2546,58 @@ async function handleToolCall(session, funcName, args) {
   if (funcName === "send_portal_login_email") {
     const collected = session.collected || {};
     const detailLines = [];
-    if (collected.preferredName || collected.name) detailLines.push(`Name: ${collected.preferredName || collected.name}`);
+    if (collected.preferredName || collected.name)
+      detailLines.push(`Name: ${collected.preferredName || collected.name}`);
     if (collected.email) detailLines.push(`Email: ${collected.email}`);
     if (collected.phone) detailLines.push(`Phone: ${collected.phone}`);
-    if (collected.customer_id) detailLines.push(`Customer ID: ${collected.customer_id}`);
-    detailLines.push("Issue: Customer unable to login to portal - please provide login credentials or reset access");
+    if (collected.customer_id)
+      detailLines.push(`Customer ID: ${collected.customer_id}`);
+    detailLines.push(
+      "Issue: Customer unable to login to portal - please provide login credentials or reset access",
+    );
     const detailsBlock = `\n\n--- Customer Details ---\n${detailLines.join("\n")}`;
     const messageBody = `${args.message || "Customer requested assistance with portal login"}${detailsBlock}`;
-    const emailArgs = { subject: "Support - Portal Login Assistance", priority: "medium", message: { message: messageBody }, customer_id: collected.customer_id || null };
+    const emailArgs = {
+      subject: "Support - Portal Login Assistance",
+      priority: "medium",
+      message: { message: messageBody },
+      customer_id: collected.customer_id || null,
+    };
     try {
-      const emailResult = await sendTicketEmail(null, emailArgs, collected, true);
-      return JSON.stringify({ success: true, email_sent: emailResult.sent, email_error: emailResult.reason || null });
+      const emailResult = await sendTicketEmail(
+        null,
+        emailArgs,
+        collected,
+        true,
+      );
+      return JSON.stringify({
+        success: true,
+        email_sent: emailResult.sent,
+        email_error: emailResult.reason || null,
+      });
     } catch (err) {
-      return JSON.stringify({ success: false, error: err.message || "Failed to send email" });
+      return JSON.stringify({
+        success: false,
+        error: err.message || "Failed to send email",
+      });
     }
   }
 
   if (funcName === "get_ticket_types")
-    return JSON.stringify({ success: true, types: await splynx.request("GET", "admin/support/tickets-types") });
+    return JSON.stringify({
+      success: true,
+      types: await splynx.request("GET", "admin/support/tickets-types"),
+    });
   if (funcName === "get_ticket_groups")
-    return JSON.stringify({ success: true, groups: await splynx.request("GET", "admin/support/tickets-groups") });
+    return JSON.stringify({
+      success: true,
+      groups: await splynx.request("GET", "admin/support/tickets-groups"),
+    });
   if (funcName === "get_ticket_statuses")
-    return JSON.stringify({ success: true, statuses: await splynx.request("GET", "admin/support/tickets-statuses") });
+    return JSON.stringify({
+      success: true,
+      statuses: await splynx.request("GET", "admin/support/tickets-statuses"),
+    });
   return JSON.stringify({ error: `Unknown tool: ${funcName}` });
 }
 
@@ -2384,7 +2637,9 @@ async function processWithTools(session) {
       temperature: 0.0,
       max_tokens: 700,
     });
-    const text = finalResp.choices?.[0]?.message?.content?.trim() || "Thanks - I have your details.";
+    const text =
+      finalResp.choices?.[0]?.message?.content?.trim() ||
+      "Thanks - I have your details.";
     session.messages.push({ role: "assistant", content: text });
     return text;
   } else if (msg?.content) {
@@ -2398,41 +2653,68 @@ async function processWithTools(session) {
 app.post("/api/voice-chat/init", async (req, res) => {
   try {
     const session = mkSession();
-    const greeting = "Welcome to InfiNET Broadband! Are you a new customer looking to get connected with us, or are you already part of the InfiNET family?";
+    const greeting =
+      "Welcome to InfiNET Broadband! Are you a new customer looking to get connected with us, or are you already part of the InfiNET family?";
     session.messages.push({ role: "assistant", content: greeting });
     sessions.set(session.id, session);
     const ttsBuf = await makeTTS(greeting);
-    return res.json({ sessionId: session.id, text: greeting, audioBase64: ttsBuf ? ttsBuf.toString("base64") : null });
+    return res.json({
+      sessionId: session.id,
+      text: greeting,
+      audioBase64: ttsBuf ? ttsBuf.toString("base64") : null,
+    });
   } catch (e) {
     return res.status(500).json({ error: e?.message });
   }
 });
 
 app.post("/api/voice", upload.single("audio"), async (req, res) => {
-  const sid = req.body?.sessionId || req.query.sessionId || req.headers["x-session-id"] || null;
+  const sid =
+    req.body?.sessionId ||
+    req.query.sessionId ||
+    req.headers["x-session-id"] ||
+    null;
   if (!req.file) return res.status(400).json({ error: "Missing audio" });
   const up = path.resolve(req.file.path);
   let cp = null;
   try {
-    const session = sid && sessions.has(sid) ? sessions.get(sid) : mkSession(sid);
+    const session =
+      sid && sessions.has(sid) ? sessions.get(sid) : mkSession(sid);
     const orig = (req.file.originalname || "").toLowerCase();
     const mime = (req.file.mimetype || "").toLowerCase();
-    const isWav = orig.endsWith(".wav") || mime === "audio/wav" || mime === "audio/wave";
+    const isWav =
+      orig.endsWith(".wav") || mime === "audio/wav" || mime === "audio/wave";
     cp = isWav ? up : await convertToWav(up);
-    const tr = await openai.audio.transcriptions.create({ file: fs.createReadStream(cp), model: "whisper-1" });
+    const tr = await openai.audio.transcriptions.create({
+      file: fs.createReadStream(cp),
+      model: "whisper-1",
+    });
     let userText = normalizeText(tr?.text || "");
 
-    const lastAssistantMsg = [...session.messages].reverse().find((m) => m.role === "assistant");
+    const lastAssistantMsg = [...session.messages]
+      .reverse()
+      .find((m) => m.role === "assistant");
     if (lastAssistantMsg && userText) {
       const { isValid, isListeningCue } = classifyInterruption(userText);
       if (isListeningCue) {
         const repeatMsg = "Sorry, I didn't catch that - please go ahead.";
-        return res.json({ sessionId: session.id, text: repeatMsg, audioBase64: (await makeTTS(repeatMsg))?.toString("base64") || null, userText });
+        return res.json({
+          sessionId: session.id,
+          text: repeatMsg,
+          audioBase64: (await makeTTS(repeatMsg))?.toString("base64") || null,
+          userText,
+        });
       }
       if (!isValid && userText.split(/\s+/).length < 3) {
-        const repeatPrefix = "Oh sorry, I think there might have been a little hiccup - let me just repeat that. ";
+        const repeatPrefix =
+          "Oh sorry, I think there might have been a little hiccup - let me just repeat that. ";
         const repeatText = repeatPrefix + lastAssistantMsg.content;
-        return res.json({ sessionId: session.id, text: repeatText, audioBase64: (await makeTTS(repeatText))?.toString("base64") || null, userText });
+        return res.json({
+          sessionId: session.id,
+          text: repeatText,
+          audioBase64: (await makeTTS(repeatText))?.toString("base64") || null,
+          userText,
+        });
       }
     }
 
@@ -2440,38 +2722,63 @@ app.post("/api/voice", upload.single("audio"), async (req, res) => {
     if (mapped) userText = mapped;
     if (!userText) {
       const p = "Sorry, I didn't catch that - could you please repeat?";
-      return res.json({ sessionId: session.id, text: p, audioBase64: (await makeTTS(p))?.toString("base64") || null, userText: null });
+      return res.json({
+        sessionId: session.id,
+        text: p,
+        audioBase64: (await makeTTS(p))?.toString("base64") || null,
+        userText: null,
+      });
     }
     session.messages.push({ role: "user", content: userText });
     const assistantText = await processWithTools(session);
     const ttsBuf = await makeTTS(assistantText);
     session.lastSeen = new Date().toISOString();
     sessions.set(session.id, session);
-    return res.json({ sessionId: session.id, text: assistantText, audioBase64: ttsBuf ? ttsBuf.toString("base64") : null, userText });
+    return res.json({
+      sessionId: session.id,
+      text: assistantText,
+      audioBase64: ttsBuf ? ttsBuf.toString("base64") : null,
+      userText,
+    });
   } catch (e) {
     console.error("voice error:", e);
     return res.status(500).json({ error: e?.message });
   } finally {
-    try { if (up && fs.existsSync(up)) fs.unlinkSync(up); } catch (_) {}
-    try { if (cp && cp !== up && fs.existsSync(cp)) fs.unlinkSync(cp); } catch (_) {}
+    try {
+      if (up && fs.existsSync(up)) fs.unlinkSync(up);
+    } catch (_) {}
+    try {
+      if (cp && cp !== up && fs.existsSync(cp)) fs.unlinkSync(cp);
+    } catch (_) {}
   }
 });
 
 app.post("/api/voice/structured-input", async (req, res) => {
   try {
     const { sessionId, field, value } = req.body || {};
-    if (!sessionId || !field || !value) return res.status(400).json({ error: "Missing params" });
-    if (!["email", "phone"].includes(field)) return res.status(400).json({ error: "Invalid field" });
+    if (!sessionId || !field || !value)
+      return res.status(400).json({ error: "Missing params" });
+    if (!["email", "phone"].includes(field))
+      return res.status(400).json({ error: "Invalid field" });
     const session = sessions.get(sessionId);
     if (!session) return res.status(404).json({ error: "Session not found" });
     session.collected[field] = value;
-    const userMsg = field === "email" ? `My email is ${value}` : `My phone number is ${value}`;
+    const userMsg =
+      field === "email"
+        ? `My email is ${value}`
+        : `My phone number is ${value}`;
     session.messages.push({ role: "user", content: userMsg });
     const assistantText = await processWithTools(session);
     const ttsBuf = await makeTTS(assistantText);
     session.lastSeen = new Date().toISOString();
     sessions.set(session.id, session);
-    return res.json({ sessionId: session.id, text: assistantText, audioBase64: ttsBuf ? ttsBuf.toString("base64") : null, userText: userMsg, collected: session.collected });
+    return res.json({
+      sessionId: session.id,
+      text: assistantText,
+      audioBase64: ttsBuf ? ttsBuf.toString("base64") : null,
+      userText: userMsg,
+      collected: session.collected,
+    });
   } catch (e) {
     console.error("structured-input error:", e);
     return res.status(500).json({ error: e?.message });
@@ -2479,7 +2786,9 @@ app.post("/api/voice/structured-input", async (req, res) => {
 });
 
 app.get("/", (req, res) => {
-  res.send(`<h1 style="text-align:center;margin-top:100px;font-family:sans-serif;color:#00bfff">✅ InfiNET AI Backend is running!</h1>`);
+  res.send(
+    `<h1 style="text-align:center;margin-top:100px;font-family:sans-serif;color:#00bfff">✅ InfiNET AI Backend is running!</h1>`,
+  );
 });
 
 // ==================== SERVER ====================
