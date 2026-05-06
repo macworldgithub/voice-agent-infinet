@@ -1,3335 +1,3 @@
-// import WebSocket from "ws";
-
-// // ═══════════════════════════════════════════════════════════════════════════
-// //  DEBUG LOGGER — structured, timestamped, flow-aware
-// // ═══════════════════════════════════════════════════════════════════════════
-// function dbg(flow, step, status, data = {}) {
-//   const ts = new Date().toISOString();
-//   const dataParts = Object.entries(data)
-//     .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
-//     .join(" ");
-//   console.log(
-//     `[${ts}][FLOW:${flow}][STEP:${step}][STATUS:${status}] ${dataParts}`,
-//   );
-// }
-
-// // ═══════════════════════════════════════════════════════════════════════════
-// //  VOICE EMAIL CAPTURE — NATO PHONETIC PARSER + ASSEMBLER
-// // ═══════════════════════════════════════════════════════════════════════════
-// const NATO_MAP = {
-//   alpha: "a",
-//   alfa: "a",
-//   bravo: "b",
-//   charlie: "c",
-//   delta: "d",
-//   echo: "e",
-//   foxtrot: "f",
-//   golf: "g",
-//   hotel: "h",
-//   india: "i",
-//   juliet: "j",
-//   juliett: "j",
-//   kilo: "k",
-//   lima: "l",
-//   mike: "m",
-//   november: "n",
-//   oscar: "o",
-//   papa: "p",
-//   quebec: "q",
-//   romeo: "r",
-//   sierra: "s",
-//   tango: "t",
-//   uniform: "u",
-//   victor: "v",
-//   whiskey: "w",
-//   xray: "x",
-//   "x-ray": "x",
-//   yankee: "y",
-//   zulu: "z",
-//   ay: "a",
-//   bee: "b",
-//   see: "c",
-//   sea: "c",
-//   dee: "d",
-//   ee: "e",
-//   ef: "f",
-//   eff: "f",
-//   gee: "g",
-//   aitch: "h",
-//   haitch: "h",
-//   jay: "j",
-//   kay: "k",
-//   el: "l",
-//   em: "m",
-//   en: "n",
-//   oh: "o",
-//   pee: "p",
-//   cue: "q",
-//   queue: "q",
-//   are: "r",
-//   ar: "r",
-//   ess: "s",
-//   es: "s",
-//   tee: "t",
-//   you: "u",
-//   vee: "v",
-//   double: null,
-//   ex: "x",
-//   why: "y",
-//   wye: "y",
-//   zee: "z",
-//   zed: "z",
-//   zero: "0",
-//   one: "1",
-//   two: "2",
-//   to: "2",
-//   too: "2",
-//   three: "3",
-//   four: "4",
-//   for: "4",
-//   five: "5",
-//   six: "6",
-//   seven: "7",
-//   eight: "8",
-//   nine: "9",
-//   at: "@",
-//   "at sign": "@",
-//   dot: ".",
-//   period: ".",
-//   full: null,
-//   stop: ".",
-//   dash: "-",
-//   hyphen: "-",
-//   minus: "-",
-//   underscore: "_",
-//   "under score": "_",
-//   plus: "+",
-//   hash: "#",
-//   hashtag: "#",
-//   pound: "#",
-//   com: "com",
-//   net: "net",
-//   org: "org",
-//   edu: "edu",
-//   gov: "gov",
-//   io: "io",
-//   co: "co",
-//   au: "au",
-//   uk: "uk",
-//   us: "us",
-//   ca: "ca",
-//   nz: "nz",
-// };
-
-// const DOMAIN_SHORTCUTS = {
-//   gmail: "gmail.com",
-//   "gmail dot com": "gmail.com",
-//   "google mail": "gmail.com",
-//   yahoo: "yahoo.com",
-//   "yahoo dot com": "yahoo.com",
-//   hotmail: "hotmail.com",
-//   "hotmail dot com": "hotmail.com",
-//   outlook: "outlook.com",
-//   "outlook dot com": "outlook.com",
-//   icloud: "icloud.com",
-//   "icloud dot com": "icloud.com",
-//   live: "live.com",
-//   "live dot com": "live.com",
-//   protonmail: "protonmail.com",
-//   "proton mail": "protonmail.com",
-//   bigpond: "bigpond.com",
-//   "bigpond dot com": "bigpond.com",
-//   optusnet: "optusnet.com.au",
-//   tpg: "tpg.com.au",
-//   bele: "bele.ai",
-// };
-
-// function parseVoiceEmail(transcript) {
-//   if (!transcript) return null;
-//   let raw = transcript.toLowerCase().trim();
-
-//   const directEmail = raw.match(/\b([^\s@]+@[^\s@]+\.[^\s@]{2,})\b/);
-//   if (directEmail) return directEmail[1].toLowerCase();
-
-//   raw = raw
-//     .replace(/\bfull\s+stop\b/gi, " dot ")
-//     .replace(/\bat\s+sign\b/gi, " at ")
-//     .replace(/\bunder\s+score\b/gi, " underscore ")
-//     .replace(/\bdouble\s+u\b/gi, " w ")
-//     .replace(/\bdouble\s+([a-z])\b/gi, (_, ch) => ` ${ch} ${ch} `)
-//     .replace(/\bcomma\b/gi, "")
-//     .replace(/[,;'"]/g, " ")
-//     .replace(/\s{2,}/g, " ")
-//     .trim();
-
-//   let domainReplaced = raw;
-//   for (const [spoken, actual] of Object.entries(DOMAIN_SHORTCUTS)) {
-//     const re = new RegExp(`\\b${spoken.replace(/\./g, "\\.")}\\b`, "gi");
-//     domainReplaced = domainReplaced.replace(re, actual);
-//   }
-//   raw = domainReplaced;
-
-//   const tokens = raw.split(/\s+/).filter(Boolean);
-//   const parts = [];
-
-//   for (let i = 0; i < tokens.length; i++) {
-//     const tok = tokens[i];
-//     if (/^[a-z0-9._@+-]+\.[a-z]{2,}$/.test(tok)) {
-//       parts.push(tok);
-//       continue;
-//     }
-//     if (/^[a-z]$/.test(tok) || /^\d$/.test(tok)) {
-//       parts.push(tok);
-//       continue;
-//     }
-//     if (/^\d{2,}$/.test(tok)) {
-//       parts.push(tok);
-//       continue;
-//     }
-//     if (NATO_MAP.hasOwnProperty(tok)) {
-//       const val = NATO_MAP[tok];
-//       if (val !== null) parts.push(val);
-//       continue;
-//     }
-//     if (/^[a-z]{2,6}(\.[a-z]{2,6})?$/.test(tok)) {
-//       parts.push(tok);
-//       continue;
-//     }
-//     parts.push(tok);
-//   }
-
-//   let email = parts.join("");
-//   email = email
-//     .replace(/@+/g, "@")
-//     .replace(/\.{2,}/g, ".")
-//     .replace(/^[.\-_]+/, "")
-//     .replace(/[.\-_]+@/, "@")
-//     .replace(/@[.\-_]+/, "@")
-//     .replace(/[.\-_]+$/, "");
-
-//   if (!email.includes("@")) return null;
-//   const [local, domain] = email.split("@");
-//   if (!local || local.length < 1) return null;
-//   if (!domain || !domain.includes(".")) return null;
-//   if (domain.endsWith(".")) return null;
-
-//   return email.toLowerCase();
-// }
-
-// function looksLikeVoiceEmailSpelling(text) {
-//   if (!text) return false;
-//   const lower = text.toLowerCase().trim();
-//   if (/\b[^\s@]+@[^\s@]+\.[^\s@]+\b/.test(lower)) return true;
-//   if (
-//     /\bat\s+(gmail|yahoo|hotmail|outlook|icloud|bigpond|optusnet|tpg|live|proton)/.test(
-//       lower,
-//     )
-//   )
-//     return true;
-//   const natoCount = (
-//     lower.match(
-//       /\b(alpha|bravo|charlie|delta|echo|foxtrot|golf|hotel|india|juliet|kilo|lima|mike|november|oscar|papa|quebec|romeo|sierra|tango|uniform|victor|whiskey|xray|yankee|zulu)\b/gi,
-//     ) || []
-//   ).length;
-//   if (natoCount >= 2 && /\bat\b/.test(lower)) return true;
-//   const words = lower.split(/\s+/);
-//   const hasAt = words.includes("at");
-//   const hasDot =
-//     words.includes("dot") || words.includes("period") || words.includes("stop");
-//   const singleLetterCount = words.filter((w) => /^[a-z]$/.test(w)).length;
-//   if (hasAt && hasDot && singleLetterCount >= 2) return true;
-//   return false;
-// }
-
-// // ═══════════════════════════════════════════════════════════════════════════
-// //  FSM STATES
-// // ═══════════════════════════════════════════════════════════════════════════
-// const FSM_STATE = {
-//   IDLE: "IDLE",
-//   SPEAKING: "SPEAKING",
-//   LISTENING: "LISTENING",
-//   EMAIL_CAPTURE: "EMAIL_CAPTURE",
-//   EMAIL_CONFIRMATION: "EMAIL_CONFIRMATION",
-//   PACKAGE_PRESENTATION: "PACKAGE_PRESENTATION",
-//   TOOL_EXECUTING: "TOOL_EXECUTING",
-//   FINAL: "FINAL",
-// };
-
-// // ═══════════════════════════════════════════════════════════════════════════
-// export function setupRealtimeVoice(io, deps) {
-//   const {
-//     OPENAI_API_KEY,
-//     ELEVENLABS_API_KEY,
-//     ELEVENLABS_VOICE_ID,
-//     SYSTEM_PROMPT,
-//     LOCATIONS,
-//     tools,
-//     mkSession,
-//     sessions,
-//     normalizeText,
-//     normalizePhone,
-//     safeParseJSON,
-//     applyExtractionToSession,
-//     fetchTariffs,
-//     customerLookup,
-//     objectToUrlEncoded,
-//     splynx,
-//     sendTicketEmail,
-//     checkAddressAvailability,
-//   } = deps;
-
-//   const realtimeTools = tools.map((t) => ({
-//     type: "function",
-//     name: t.name,
-//     description: t.description,
-//     parameters: t.parameters,
-//   }));
-
-//   io.on("connection", (socket) => {
-//     console.log(`🔌 Voice client connected: ${socket.id}`);
-//     console.log(`📊 [DEBUG] New connection - initializing handlers`);
-
-//     const session = mkSession();
-
-//     let openaiWs = null;
-
-//     // ─── ElevenLabs state ─────────────────────────────────────────
-//     let elevenLabsWs = null;
-//     let elevenLabsReady = false;
-//     let textBuffer = [];
-//     let elevenLabsStreaming = false;
-
-//     let assistantTextBuffer = "";
-//     let pendingFunctionCalls = 0;
-//     let lastTtsText = "";
-//     let isResponseActive = false;
-//     let assistantSpeaking = false;
-//     let awaitingStructuredInput = false;
-//     let structuredInputField = null;
-
-//     const PCM_SAMPLE_RATE = 16000;
-//     let lastAssistantText = "";
-
-//     let emptyResponseCount = 0;
-//     const MAX_EMPTY_RETRIES = 3;
-
-//     let cancelPending = false;
-
-//     let currentResponseId = null;
-//     let currentResponseHadOutput = false;
-
-//     let pendingPostDoneCreate = false;
-//     let pendingPostDoneHint = null;
-
-//     let salesStep = null;
-
-//     let lastResponseWasPackage = false;
-
-//     // ═══════════════════════════════════════════════════════════════
-//     //  UNIFIED EMAIL STATE
-//     // ═══════════════════════════════════════════════════════════════
-//     const email_state = {
-//       value: "",
-//       is_confirmed: false,
-//     };
-
-//     function setEmailValue(newEmail) {
-//       const prev = email_state.value;
-//       email_state.value = newEmail;
-//       email_state.is_confirmed = false;
-//       dbg("sales", "email_state_set", "overwrite", {
-//         prev,
-//         next: newEmail,
-//         confirmed: false,
-//         salesStep,
-//         createTicketBlockedForEmail: "see_closure",
-//       });
-//     }
-
-//     function confirmEmail() {
-//       email_state.is_confirmed = true;
-//       session.collected.email = email_state.value;
-//       sessions.set(session.id, session);
-//       dbg("sales", "email_confirmed", "success", {
-//         email: email_state.value,
-//         is_confirmed: true,
-//         session_email: session.collected.email,
-//         salesStep,
-//       });
-//     }
-
-//     // ═══════════════════════════════════════════════════════════════
-//     //  FINITE STATE MACHINE
-//     // ═══════════════════════════════════════════════════════════════
-//     let fsmState = FSM_STATE.IDLE;
-
-//     function transitionFSM(newState) {
-//       const prev = fsmState;
-//       fsmState = newState;
-//       dbg(session?.collected?.intent || "unknown", "fsm_transition", "ok", {
-//         from: prev,
-//         to: newState,
-//       });
-//       socket.emit("fsm_state", newState);
-//     }
-
-//     function debugState(label = "state_snapshot") {
-//       const c = session.collected || {};
-//       dbg(c.intent || "unknown", label, "snapshot", {
-//         fsmState,
-//         salesStep,
-//         emailCaptureMode,
-//         emailCaptureConfirmAsked,
-//         emailCaptureConfirmPending,
-//         "email_state.value": email_state.value,
-//         "email_state.is_confirmed": email_state.is_confirmed,
-//         createTicketBlockedForEmail,
-//         pendingFunctionCalls,
-//         isResponseActive,
-//         assistantSpeaking,
-//         elevenLabsStreaming,
-//         intent: c.intent || "none",
-//         leadInterest: c.leadInterest || "none",
-//         websiteCheckDone: c._websiteCheckDone || false,
-//         "session.collected.email": c.email || "",
-//         "session.collected.phone": c.phone || "",
-//         _firstName: c._firstName || "",
-//         _lastName: c._lastName || "",
-//       });
-//     }
-
-//     // ═══════════════════════════════════════════════════════════════
-//     //  CENTRAL TIMER MANAGER
-//     // ═══════════════════════════════════════════════════════════════
-//     const TimerManager = (() => {
-//       let _silenceTimer = null;
-//       let _emailConfirmTimer = null;
-//       let _finalMessageTimer = null;
-//       let _watchdogTimer = null;
-
-//       const SILENCE_NORMAL_MS = 15000;
-//       const SILENCE_PACKAGE_MS = 20000;
-//       const EMAIL_CONFIRM_MS = 30000;
-//       const WATCHDOG_MS = 8000;
-
-//       function _clearSilence() {
-//         if (_silenceTimer) {
-//           clearTimeout(_silenceTimer);
-//           _silenceTimer = null;
-//           console.log(`⏱️  [TMgr] Silence timer CLEARED`);
-//         }
-//       }
-//       function _clearEmailConfirm() {
-//         if (_emailConfirmTimer) {
-//           clearTimeout(_emailConfirmTimer);
-//           _emailConfirmTimer = null;
-//           console.log(`⏱️  [TMgr] Email confirm timer CLEARED`);
-//         }
-//       }
-//       function _clearFinalMessage() {
-//         if (_finalMessageTimer) {
-//           clearTimeout(_finalMessageTimer);
-//           _finalMessageTimer = null;
-//         }
-//       }
-//       function _clearWatchdog() {
-//         if (_watchdogTimer) {
-//           clearTimeout(_watchdogTimer);
-//           _watchdogTimer = null;
-//         }
-//       }
-
-//       return {
-//         startSilence(isPackage = false) {
-//           _clearSilence();
-//           console.log(
-//             `⏱️  [TMgr] startSilence called - isPackage=${isPackage}`,
-//           );
-
-//           if (
-//             fsmState === FSM_STATE.EMAIL_CAPTURE ||
-//             fsmState === FSM_STATE.EMAIL_CONFIRMATION ||
-//             fsmState === FSM_STATE.SPEAKING ||
-//             fsmState === FSM_STATE.TOOL_EXECUTING ||
-//             fsmState === FSM_STATE.FINAL
-//           ) {
-//             console.log(
-//               `⏱️  [TMgr] Silence timer suppressed (FSM: ${fsmState})`,
-//             );
-//             return;
-//           }
-//           if (emailCaptureMode) {
-//             console.log(
-//               `⏱️  [TMgr] Silence timer suppressed (emailCaptureMode)`,
-//             );
-//             return;
-//           }
-//           if (awaitingStructuredInput) return;
-//           if (finalMessageLock || session.finalLock) return;
-//           if (pendingFunctionCalls > 0) return;
-//           if (elevenLabsStreaming) {
-//             console.log(`⏱️  [TMgr] Silence timer suppressed (EL streaming)`);
-//             return;
-//           }
-//           if (assistantSpeaking) return;
-
-//           const timeoutMs = isPackage ? SILENCE_PACKAGE_MS : SILENCE_NORMAL_MS;
-//           console.log(
-//             `⏱️  [TMgr] Silence timer START: ${timeoutMs / 1000}s (${isPackage ? "package" : "normal"}) [FSM: ${fsmState}]`,
-//           );
-
-//           _silenceTimer = setTimeout(() => {
-//             _silenceTimer = null;
-//             if (emailCaptureMode) return;
-//             if (fsmState === FSM_STATE.EMAIL_CAPTURE) return;
-//             if (fsmState === FSM_STATE.EMAIL_CONFIRMATION) return;
-//             if (fsmState === FSM_STATE.SPEAKING) return;
-//             if (fsmState === FSM_STATE.TOOL_EXECUTING) return;
-//             if (fsmState === FSM_STATE.FINAL) return;
-//             if (awaitingStructuredInput) return;
-//             if (finalMessageLock || session.finalLock) return;
-//             if (pendingFunctionCalls > 0) return;
-//             if (assistantSpeaking) return;
-//             if (elevenLabsStreaming) return;
-
-//             const nudgeText = isPackage
-//               ? "[SILENCE_NUDGE] The user has not responded after you presented plans. Do NOT select a plan for them. Simply ask them gently which plan they'd like to go with."
-//               : "[SILENCE_NUDGE] The user has not responded. REPEAT your last question. Do NOT move forward.";
-
-//             console.log(
-//               `⏰ [TMgr] Silence fired (${timeoutMs / 1000}s) — nudging AI`,
-//             );
-//             if (openaiWs?.readyState === WebSocket.OPEN) {
-//               openaiWs.send(
-//                 JSON.stringify({
-//                   type: "conversation.item.create",
-//                   item: {
-//                     type: "message",
-//                     role: "user",
-//                     content: [{ type: "input_text", text: nudgeText }],
-//                   },
-//                 }),
-//               );
-//               scheduleResponseCreate();
-//             }
-//           }, timeoutMs);
-//         },
-
-//         resetSilence() {
-//           _clearSilence();
-//           console.log(`⏱️  [TMgr] User input detected → timer reset`);
-//         },
-
-//         clearSilence: _clearSilence,
-
-//         startEmailConfirm() {
-//           _clearEmailConfirm();
-//           console.log(
-//             `⏱️  [TMgr] Email confirm timer START (${EMAIL_CONFIRM_MS / 1000}s)`,
-//           );
-//           _emailConfirmTimer = setTimeout(() => {
-//             _emailConfirmTimer = null;
-//             if (!emailCaptureMode || !emailCaptureConfirmAsked) return;
-//             console.log(`⏰ [TMgr] Email confirm timeout — re-asking`);
-//             if (openaiWs?.readyState === WebSocket.OPEN) {
-//               openaiWs.send(
-//                 JSON.stringify({
-//                   type: "conversation.item.create",
-//                   item: {
-//                     type: "message",
-//                     role: "user",
-//                     content: [
-//                       {
-//                         type: "input_text",
-//                         text: `[SYSTEM_CONTEXT]: The customer hasn't responded to the email confirmation. Re-read the email back: "${email_state.value}" — spell each letter individually with hyphens, say "at" for @, say "dot" for full stops. Never say "double X". Ask again if it's correct.`,
-//                       },
-//                     ],
-//                   },
-//                 }),
-//               );
-//               scheduleResponseCreate();
-//             }
-//           }, EMAIL_CONFIRM_MS);
-//         },
-
-//         clearEmailConfirm: _clearEmailConfirm,
-
-//         startWatchdog() {
-//           _clearWatchdog();
-//           _watchdogTimer = setTimeout(() => {
-//             _watchdogTimer = null;
-//             if (!isResponseActive && pendingFunctionCalls === 0) {
-//               console.warn(
-//                 `⚠️ [TMgr] Watchdog fired — agent stuck, triggering recovery`,
-//               );
-//               if (openaiWs?.readyState === WebSocket.OPEN) {
-//                 openaiWs.send(
-//                   JSON.stringify({
-//                     type: "conversation.item.create",
-//                     item: {
-//                       type: "message",
-//                       role: "user",
-//                       content: [
-//                         {
-//                           type: "input_text",
-//                           text: "[SYSTEM_CONTEXT]: Please respond immediately to the last user message.",
-//                         },
-//                       ],
-//                     },
-//                   }),
-//                 );
-//                 scheduleResponseCreate(null, 0, true);
-//               }
-//             }
-//           }, WATCHDOG_MS);
-//         },
-
-//         clearWatchdog: _clearWatchdog,
-
-//         startFinalLock(durationMs = 15000, onRelease) {
-//           _clearFinalMessage();
-//           finalMessageLock = true;
-//           session.finalLock = true;
-//           _clearSilence();
-//           console.log(`🔒 [TMgr] Final message lock ON (${durationMs}ms)`);
-//           _finalMessageTimer = setTimeout(() => {
-//             _finalMessageTimer = null;
-//             finalMessageLock = false;
-//             session.finalLock = false;
-//             console.log("🔓 [TMgr] Final message lock auto-released");
-//             socket.emit("status", "listening");
-//             if (onRelease) onRelease();
-//           }, durationMs);
-//         },
-
-//         releaseFinalLock() {
-//           if (!finalMessageLock && !session.finalLock) return;
-//           finalMessageLock = false;
-//           session.finalLock = false;
-//           _clearFinalMessage();
-//           console.log("🔓 [TMgr] Final message lock released");
-//         },
-
-//         clearAll() {
-//           _clearSilence();
-//           _clearEmailConfirm();
-//           _clearFinalMessage();
-//           _clearWatchdog();
-//         },
-
-//         get hasSilenceTimer() {
-//           return _silenceTimer !== null;
-//         },
-//         get hasEmailConfirmTimer() {
-//           return _emailConfirmTimer !== null;
-//         },
-//       };
-//     })();
-
-//     // ─── Final message lock flags ──────────────────────────────────
-//     let finalMessageLock = false;
-
-//     // ═══════════════════════════════════════════════════════════════
-//     //  EMAIL CAPTURE STATE
-//     // ═══════════════════════════════════════════════════════════════
-//     let emailCaptureMode = false;
-//     let emailCaptureBuffer = [];
-//     let emailCaptureAttempt = 0;
-//     const EMAIL_MAX_ATTEMPTS = 3;
-//     let emailCaptureConfirmPending = null;
-//     let emailCaptureConfirmAsked = false;
-
-//     let createTicketBlockedForEmail = false;
-
-//     // ─── helper: full email state snapshot for debug ───────────────
-//     function emailSnapshot(label) {
-//       dbg("sales", label, "snapshot", {
-//         emailCaptureMode,
-//         emailCaptureConfirmAsked,
-//         emailCaptureConfirmPending,
-//         emailCaptureAttempt,
-//         "email_state.value": email_state.value,
-//         "email_state.is_confirmed": email_state.is_confirmed,
-//         createTicketBlockedForEmail,
-//         salesStep,
-//         "session.collected.email": session.collected?.email || "",
-//         bufferLen: emailCaptureBuffer.length,
-//       });
-//     }
-
-//     function startEmailCapture() {
-//       // ── DEBUG: full snapshot on every invocation ─────────────────
-//       const callerLine = new Error().stack.split("\n")[2]?.trim() || "unknown";
-//       emailSnapshot("startEmailCapture_ENTRY");
-//       dbg("sales", "startEmailCapture", "called", { caller: callerLine });
-
-//       if (emailCaptureMode) {
-//         dbg("sales", "startEmailCapture", "skipped", {
-//           reason: "already_active",
-//           emailCaptureConfirmAsked,
-//           emailCaptureConfirmPending,
-//         });
-//         return;
-//       }
-
-//       emailCaptureMode = true;
-//       emailCaptureBuffer = [];
-//       emailCaptureAttempt = 0;
-//       emailCaptureConfirmPending = null;
-//       emailCaptureConfirmAsked = false;
-//       // Only reset email_state if no value is already present
-//       if (!email_state.value) {
-//         email_state.value = "";
-//         email_state.is_confirmed = false;
-//         dbg("sales", "startEmailCapture", "email_state_reset", {
-//           reason: "was_empty",
-//         });
-//       } else {
-//         dbg("sales", "startEmailCapture", "email_state_preserved", {
-//           existing_value: email_state.value,
-//           reason: "already_has_value",
-//         });
-//       }
-//       createTicketBlockedForEmail = true;
-
-//       TimerManager.clearSilence();
-//       TimerManager.clearEmailConfirm();
-
-//       transitionFSM(FSM_STATE.EMAIL_CAPTURE);
-
-//       emailSnapshot("startEmailCapture_EXIT");
-//       socket.emit("email_spelling_mode", { active: true, attempt: 1 });
-//     }
-
-//     function resetEmailCapture() {
-//       // ── DEBUG ─────────────────────────────────────────────────────
-//       const callerLine = new Error().stack.split("\n")[2]?.trim() || "unknown";
-//       emailSnapshot("resetEmailCapture_ENTRY");
-//       dbg("sales", "resetEmailCapture", "called", { caller: callerLine });
-//       // ── END DEBUG ─────────────────────────────────────────────────
-
-//       emailCaptureMode = false;
-//       emailCaptureBuffer = [];
-//       emailCaptureConfirmPending = null;
-//       emailCaptureConfirmAsked = false;
-//       TimerManager.clearEmailConfirm();
-//       transitionFSM(FSM_STATE.LISTENING);
-//       socket.emit("email_spelling_mode", { active: false });
-
-//       emailSnapshot("resetEmailCapture_EXIT");
-//     }
-
-//     function handleEmailCaptureTranscript(text) {
-//       if (!emailCaptureMode) {
-//         dbg("sales", "handleEmailCaptureTranscript", "skipped", {
-//           reason: "not_in_capture_mode",
-//           text,
-//         });
-//         return false;
-//       }
-
-//       const cleaned = normalizeText(text);
-//       if (!cleaned) {
-//         dbg("sales", "handleEmailCaptureTranscript", "skipped", {
-//           reason: "empty_transcript",
-//         });
-//         return true;
-//       }
-
-//       // ── DEBUG: full snapshot at entry of every call ───────────────
-//       emailSnapshot("handleEmailCapture_ENTRY");
-//       dbg("sales", "handleEmailCaptureTranscript", "processing", {
-//         attempt: emailCaptureAttempt + 1,
-//         input: cleaned,
-//         bufferLen: emailCaptureBuffer.length,
-//         confirmPending: emailCaptureConfirmPending,
-//         confirmAsked: emailCaptureConfirmAsked,
-//       });
-
-//       // ── Phase 2: Waiting for YES/NO confirmation ──────────────────
-//       if (emailCaptureConfirmPending && emailCaptureConfirmAsked) {
-//         dbg("sales", "email_confirmation_phase", "awaiting_yesno", {
-//           email: emailCaptureConfirmPending,
-//           input: cleaned,
-//         });
-//         TimerManager.clearEmailConfirm();
-
-//         const lower = cleaned.toLowerCase().trim();
-//         const isYes =
-//           /\b(yes|yeah|yep|yup|correct|that'?s right|that is correct|right|confirm|confirmed|affirmative|go ahead|sounds good)\b/.test(
-//             lower,
-//           );
-//         const isNo =
-//           /\b(no|nope|wrong|incorrect|that'?s wrong|not right|try again|redo|different|change|mistake)\b/.test(
-//             lower,
-//           );
-
-//         dbg("sales", "email_yesno_detection", "result", {
-//           input: lower,
-//           isYes,
-//           isNo,
-//           emailPending: emailCaptureConfirmPending,
-//         });
-
-//         if (isYes) {
-//           const confirmedEmail = emailCaptureConfirmPending;
-
-//           // ── DEBUG: PRE-CONFIRM snapshot ───────────────────────────
-//           emailSnapshot("emailCapture_YES_PRE_CONFIRM");
-//           dbg("sales", "emailCapture_YES", "pre_confirm", {
-//             confirmedEmail,
-//             salesStep,
-//             createTicketBlockedForEmail,
-//             "email_state.value": email_state.value,
-//             "email_state.is_confirmed": email_state.is_confirmed,
-//             "session.collected.email": session.collected?.email || "",
-//             pendingFunctionCalls,
-//             isResponseActive,
-//           });
-
-//           setEmailValue(confirmedEmail);
-//           confirmEmail();
-
-//           // ── DEBUG: POST-CONFIRM snapshot ──────────────────────────
-//           emailSnapshot("emailCapture_YES_POST_CONFIRM");
-//           dbg("sales", "emailCapture_YES", "post_confirm", {
-//             "email_state.value": email_state.value,
-//             "email_state.is_confirmed": email_state.is_confirmed,
-//             "session.collected.email": session.collected?.email || "",
-//             salesStep,
-//             createTicketBlockedForEmail,
-//           });
-
-//           createTicketBlockedForEmail = false;
-
-//           dbg("sales", "createTicketBlockedForEmail", "set_false", {
-//             reason: "email_confirmed",
-//             salesStep,
-//           });
-
-//           // ── DEBUG: PRE-ADVANCE snapshot ───────────────────────────
-//           dbg("sales", "advanceSalesStep_about_to_call", "pre", {
-//             salesStep,
-//             completedStep: "email",
-//             willAdvance: salesStep === "email",
-//           });
-
-//           if (salesStep === "email") advanceSalesStep("email");
-
-//           // ── DEBUG: POST-ADVANCE snapshot ──────────────────────────
-//           emailSnapshot("emailCapture_YES_POST_ADVANCE");
-//           dbg("sales", "emailCapture_YES", "post_advance", {
-//             salesStep,
-//             pendingPostDoneCreate,
-//             pendingPostDoneHint,
-//           });
-
-//           const userMsg = `My email address is ${confirmedEmail}`;
-//           session.messages.push({ role: "user", content: userMsg });
-//           sessions.set(session.id, session);
-//           socket.emit("user_transcript", userMsg);
-
-//           resetEmailCapture();
-
-//           if (openaiWs?.readyState === WebSocket.OPEN) {
-//             openaiWs.send(
-//               JSON.stringify({
-//                 type: "conversation.item.create",
-//                 item: {
-//                   type: "message",
-//                   role: "user",
-//                   content: [{ type: "input_text", text: userMsg }],
-//                 },
-//               }),
-//             );
-//             const salesHint = buildSalesStepHint() || "";
-//             const hint = `The customer has confirmed their email address as ${confirmedEmail}. email_state.is_confirmed=true. createTicketBlockedForEmail=false. ${salesHint} Proceed to the next step immediately. If all required details are collected (name, phone, email, plan), call create_ticket NOW.`;
-
-//             dbg("sales", "emailCapture_YES", "sending_hint_to_openai", {
-//               hint: hint.substring(0, 200),
-//               salesStep,
-//               "email_state.is_confirmed": email_state.is_confirmed,
-//               createTicketBlockedForEmail,
-//             });
-
-//             openaiWs.send(
-//               JSON.stringify({
-//                 type: "conversation.item.create",
-//                 item: {
-//                   type: "message",
-//                   role: "user",
-//                   content: [
-//                     { type: "input_text", text: `[SYSTEM_CONTEXT]: ${hint}` },
-//                   ],
-//                 },
-//               }),
-//             );
-//             scheduleResponseCreate();
-//           }
-//           return true;
-//         }
-
-//         if (isNo) {
-//           dbg("sales", "email_confirmation_rejected", "user_said_no", {
-//             rejectedEmail: emailCaptureConfirmPending,
-//             attempt: emailCaptureAttempt,
-//           });
-
-//           emailCaptureAttempt++;
-//           emailCaptureConfirmPending = null;
-//           emailCaptureConfirmAsked = false;
-
-//           emailCaptureBuffer = [];
-//           email_state.value = "";
-//           email_state.is_confirmed = false;
-//           createTicketBlockedForEmail = true;
-
-//           dbg("sales", "email_capture_retry", "reset_for_retry", {
-//             attempt: emailCaptureAttempt,
-//             maxAttempts: EMAIL_MAX_ATTEMPTS,
-//             bufferCleared: true,
-//             confirmed: false,
-//           });
-
-//           if (emailCaptureAttempt >= EMAIL_MAX_ATTEMPTS) {
-//             dbg("sales", "email_capture_max_retries", "exceeded", {
-//               attempts: EMAIL_MAX_ATTEMPTS,
-//             });
-//             createTicketBlockedForEmail = false;
-//             resetEmailCapture();
-//             if (openaiWs?.readyState === WebSocket.OPEN) {
-//               openaiWs.send(
-//                 JSON.stringify({
-//                   type: "conversation.item.create",
-//                   item: {
-//                     type: "message",
-//                     role: "user",
-//                     content: [
-//                       {
-//                         type: "input_text",
-//                         text: `[SYSTEM_CONTEXT]: Email capture has failed after ${EMAIL_MAX_ATTEMPTS} attempts. Tell the customer you're having trouble capturing the email by voice and ask them to call 1300 101 414 or email support@infinetbroadband.com.au to complete their order. Be apologetic and warm.`,
-//                       },
-//                     ],
-//                   },
-//                 }),
-//               );
-//               scheduleResponseCreate();
-//             }
-//             return true;
-//           }
-
-//           socket.emit("email_spelling_mode", {
-//             active: true,
-//             attempt: emailCaptureAttempt + 1,
-//           });
-
-//           if (openaiWs?.readyState === WebSocket.OPEN) {
-//             openaiWs.send(
-//               JSON.stringify({
-//                 type: "conversation.item.create",
-//                 item: {
-//                   type: "message",
-//                   role: "user",
-//                   content: [
-//                     {
-//                       type: "input_text",
-//                       text: `[SYSTEM_CONTEXT]: The customer said the email was wrong. This is attempt ${emailCaptureAttempt + 1} of ${EMAIL_MAX_ATTEMPTS}. Ask them to spell the COMPLETE email again from the beginning, one letter at a time. Remind them: for @ use 'at', for . use 'dot'. Spell each letter individually — never say "double X". Be patient and encouraging.`,
-//                     },
-//                   ],
-//                 },
-//               }),
-//             );
-//             scheduleResponseCreate();
-//           }
-//           return true;
-//         }
-
-//         // Ambiguous — treat as re-spell
-//         dbg("sales", "email_confirmation_ambiguous", "treating_as_respell", {
-//           input: cleaned,
-//         });
-//         emailCaptureConfirmPending = null;
-//         emailCaptureConfirmAsked = false;
-//         transitionFSM(FSM_STATE.EMAIL_CAPTURE);
-//         // Fall through to Phase 1
-//       }
-
-//       // ── Phase 1: Parse the spoken email ──────────────────────────
-//       const looksLikeDomainCorrection =
-//         /^www\.[a-z0-9_-]+\.(com|ai|co|net|org|au|io)/i.test(cleaned) ||
-//         (/^[a-z0-9_-]+\s+(dot|point)\s+(com|ai|co|net|org|au|io)/i.test(
-//           cleaned,
-//         ) &&
-//           !cleaned.includes("@"));
-
-//       if (looksLikeDomainCorrection && emailCaptureBuffer.length > 0) {
-//         dbg("sales", "email_domain_correction", "buffer_cleared", {
-//           cleaned,
-//         });
-//         emailCaptureBuffer = [];
-//         emailCaptureConfirmPending = null;
-//         emailCaptureConfirmAsked = false;
-//         email_state.value = "";
-//         email_state.is_confirmed = false;
-//         createTicketBlockedForEmail = true;
-//       }
-
-//       emailCaptureBuffer.push(cleaned);
-//       const combinedTranscript = emailCaptureBuffer.join(" ");
-
-//       dbg("sales", "email_parse_attempt", "parsing", {
-//         combined: combinedTranscript,
-//         bufferLen: emailCaptureBuffer.length,
-//       });
-
-//       const parsed = parseVoiceEmail(combinedTranscript);
-
-//       dbg("sales", "email_parse_result", parsed ? "success" : "failed", {
-//         parsed,
-//         raw: combinedTranscript,
-//       });
-
-//       if (!parsed) {
-//         dbg("sales", "email_parse_failed", "no_email_found", {
-//           combined: combinedTranscript,
-//           wordCount: combinedTranscript.split(/\s+/).length,
-//         });
-
-//         if (combinedTranscript.split(/\s+/).length < 3) {
-//           dbg("sales", "email_parse_waiting", "buffer_too_short", {
-//             wordCount: combinedTranscript.split(/\s+/).length,
-//           });
-//           return true;
-//         }
-//         if (openaiWs?.readyState === WebSocket.OPEN) {
-//           openaiWs.send(
-//             JSON.stringify({
-//               type: "conversation.item.create",
-//               item: {
-//                 type: "message",
-//                 role: "user",
-//                 content: [
-//                   {
-//                     type: "input_text",
-//                     text: `[SYSTEM_CONTEXT]: The customer is spelling their email but I couldn't parse it fully. Heard: "${combinedTranscript}". Ask them to repeat from the beginning, one letter at a time. For @ use 'at', for . use 'dot'. Be warm and patient.`,
-//                   },
-//                 ],
-//               },
-//             }),
-//           );
-//           scheduleResponseCreate();
-//         }
-//         emailCaptureBuffer = [];
-//         return true;
-//       }
-
-//       setEmailValue(parsed);
-//       emailCaptureConfirmPending = parsed;
-//       emailCaptureConfirmAsked = true;
-
-//       dbg("sales", "email_parsed_requesting_confirmation", "ok", {
-//         email: parsed,
-//         requestingConfirmation: true,
-//       });
-
-//       socket.emit("email_spelling_confirmation", { email: parsed });
-
-//       transitionFSM(FSM_STATE.EMAIL_CONFIRMATION);
-//       TimerManager.startEmailConfirm();
-
-//       if (openaiWs?.readyState === WebSocket.OPEN) {
-//         openaiWs.send(
-//           JSON.stringify({
-//             type: "conversation.item.create",
-//             item: {
-//               type: "message",
-//               role: "user",
-//               content: [
-//                 {
-//                   type: "input_text",
-//                   text: `[SYSTEM_CONTEXT]: I parsed the customer's spoken email as: "${parsed}". Read this email address back clearly. MANDATORY FORMAT: spell the local part (before @) using individual letters separated by hyphens. Example: if local part is "shaun" say "s-h-a-u-n". Never say "double X" even for repeated letters — always say each letter separately (e.g. "l-l" not "double l"). Then say "at". Then say the domain with "dot" between parts. Full example for shaun@bele.ai: "I've got s-h-a-u-n at b-e-l-e dot a-i — is that correct?" Wait for yes or no only.`,
-//                 },
-//               ],
-//             },
-//           }),
-//         );
-//         scheduleResponseCreate();
-//       }
-
-//       return true;
-//     }
-
-//     // ─── Sales step machine ────────────────────────────────────────
-//     function initSalesStepMachine() {
-//       if (salesStep !== null) {
-//         dbg("sales", "initSalesStepMachine", "skipped", {
-//           reason: "already_initialized",
-//           salesStep,
-//         });
-//         return;
-//       }
-//       const c = session.collected || {};
-
-//       if (c.leadInterest && c._websiteCheckDone) {
-//         if (!c._firstName) salesStep = "firstName";
-//         else if (!c._lastName) salesStep = "lastName";
-//         else if (!c.phone) salesStep = "phone";
-//         else if (!c.email || !email_state.is_confirmed) salesStep = "email";
-//         else salesStep = "createTicket";
-//         dbg("sales", "initSalesStepMachine", "initialized", {
-//           startStep: salesStep,
-//           websiteCheckDone: true,
-//           _firstName: c._firstName || "",
-//           _lastName: c._lastName || "",
-//           phone: c.phone || "",
-//           email: c.email || "",
-//           emailConfirmed: email_state.is_confirmed,
-//         });
-//       } else {
-//         dbg("sales", "initSalesStepMachine", "blocked", {
-//           leadInterest: !!c.leadInterest,
-//           websiteCheckDone: !!c._websiteCheckDone,
-//         });
-//       }
-//     }
-
-//     function advanceSalesStep(completedStep) {
-//       // ── DEBUG: full snapshot at entry ─────────────────────────────
-//       const c = session.collected || {};
-//       dbg("sales", "advanceSalesStep_ENTRY", "called", {
-//         completedStep,
-//         salesStep,
-//         "email_state.is_confirmed": email_state.is_confirmed,
-//         "session.collected.email": c.email || "",
-//         "session.collected.phone": c.phone || "",
-//         _firstName: c._firstName || "",
-//         _lastName: c._lastName || "",
-//       });
-
-//       if (salesStep !== completedStep) {
-//         dbg("sales", "advanceSalesStep_MISMATCH", "no_op", {
-//           completedStep,
-//           currentSalesStep: salesStep,
-//           reason: "salesStep !== completedStep",
-//         });
-//         return;
-//       }
-
-//       const order = [
-//         "firstName",
-//         "lastName",
-//         "phone",
-//         "email",
-//         "createTicket",
-//         "done",
-//       ];
-//       const idx = order.indexOf(completedStep);
-//       if (idx === -1) {
-//         dbg("sales", "advanceSalesStep", "unknown_step", { completedStep });
-//         return;
-//       }
-//       const next = order[idx + 1];
-//       if (!next) {
-//         salesStep = "done";
-//         dbg("sales", "advanceSalesStep_RESULT", "done", {
-//           from: completedStep,
-//         });
-//         return;
-//       }
-
-//       // Skip steps that are already filled
-//       if (next === "lastName" && c._lastName) {
-//         dbg("sales", "advanceSalesStep_SKIP", "lastName_already_set", {
-//           _lastName: c._lastName,
-//         });
-//         advanceSalesStep("lastName");
-//         return;
-//       }
-//       if (next === "phone" && c.phone) {
-//         dbg("sales", "advanceSalesStep_SKIP", "phone_already_set", {
-//           phone: c.phone,
-//         });
-//         advanceSalesStep("phone");
-//         return;
-//       }
-//       if (next === "email" && c.email && email_state.is_confirmed) {
-//         dbg("sales", "advanceSalesStep_SKIP", "email_already_confirmed", {
-//           email: c.email,
-//           is_confirmed: email_state.is_confirmed,
-//         });
-//         advanceSalesStep("email");
-//         return;
-//       }
-
-//       if (
-//         next === "createTicket" &&
-//         c._firstName &&
-//         c._lastName &&
-//         c.phone &&
-//         c.email &&
-//         email_state.is_confirmed
-//       ) {
-//         salesStep = "createTicket";
-//       } else {
-//         salesStep = next;
-//       }
-
-//       dbg("sales", "advanceSalesStep_RESULT", "advanced", {
-//         from: completedStep,
-//         to: salesStep,
-//         conditionCheck: {
-//           _firstName: c._firstName || "",
-//           _lastName: c._lastName || "",
-//           phone: c.phone || "",
-//           email: c.email || "",
-//           emailConfirmed: email_state.is_confirmed,
-//         },
-//       });
-//     }
-
-//     function buildSalesStepHint() {
-//       const c = session.collected || {};
-
-//       // ── DEBUG wrapper ─────────────────────────────────────────────
-//       const _logAndReturn = (label, val) => {
-//         dbg("sales", "buildSalesStepHint_RETURN", label, {
-//           salesStep,
-//           "email_state.value": email_state.value,
-//           "email_state.is_confirmed": email_state.is_confirmed,
-//           createTicketBlockedForEmail,
-//           emailCaptureMode,
-//           emailCaptureConfirmAsked,
-//           leadInterest: c.leadInterest || "",
-//           websiteCheckDone: c._websiteCheckDone || false,
-//           hint: String(val || "").substring(0, 150),
-//         });
-//         return val;
-//       };
-
-//       if (
-//         c.leadInterest &&
-//         c._websiteCheckRequired &&
-//         !c._websiteCheckAsked &&
-//         !c._websiteCheckDone
-//       ) {
-//         if (!c._websiteCheckAsked) {
-//           return _logAndReturn(
-//             "website_check_not_asked",
-//             `SALES STEP [website_check]: You MUST ask: "Just out of curiosity — have you had a chance to check out our website and seen the plans or pricing?" Do NOT proceed to collect name, phone, or email until this question is asked and answered. websiteCheckAsked=${c._websiteCheckAsked} websiteCheckDone=${c._websiteCheckDone}`,
-//           );
-//         } else {
-//           return _logAndReturn(
-//             "website_check_asked_awaiting",
-//             `SALES STEP [website_check]: Website check already asked. Wait for customer answer. Do NOT proceed to name/phone/email yet. websiteCheckDone=${c._websiteCheckDone}`,
-//           );
-//         }
-//       }
-
-//       if (
-//         salesStep === null &&
-//         c.leadInterest &&
-//         (c._websiteCheckDone || c._websiteCheckAsked)
-//       ) {
-//         initSalesStepMachine();
-//       }
-
-//       if (!salesStep || salesStep === "done") {
-//         return _logAndReturn("null_no_salesstep", null);
-//       }
-
-//       const name = c._firstName || c.preferredName || "";
-
-//       switch (salesStep) {
-//         case "firstName":
-//           return _logAndReturn(
-//             "step_firstName",
-//             `[FLOW: sales][STEP: firstName][STATUS: pending] Ask ONLY for the customer's first name. Say something like "Could I start with your first name?" Say NOTHING else.`,
-//           );
-
-//         case "lastName":
-//           return _logAndReturn(
-//             "step_lastName",
-//             `[FLOW: sales][STEP: lastName][STATUS: pending] You have their first name (${c._firstName || "collected"}). Ask ONLY for their last name. Say something like "And your last name?"`,
-//           );
-
-//         case "phone":
-//           return _logAndReturn(
-//             "step_phone",
-//             `[FLOW: sales][STEP: phone][STATUS: pending] You have their name (${name}). Ask ONLY for their mobile phone number. Say something like "What's the best mobile number for you?"`,
-//           );
-
-//         case "email":
-//           if (email_state.value && email_state.is_confirmed) {
-//             dbg(
-//               "sales",
-//               "buildSalesStepHint_email",
-//               "already_confirmed_skipping",
-//               {
-//                 email: email_state.value,
-//               },
-//             );
-//             advanceSalesStep("email");
-//             return buildSalesStepHint();
-//           }
-//           if (emailCaptureMode) {
-//             return _logAndReturn(
-//               "step_email_capture_active",
-//               `[FLOW: sales][STEP: email][STATUS: capture_active] Email capture is already in progress. Do NOT ask for email again. Wait for the customer to finish spelling their email. emailCaptureMode=true confirmAsked=${emailCaptureConfirmAsked}`,
-//             );
-//           }
-//           return _logAndReturn(
-//             "step_email_ask",
-//             `[FLOW: sales][STEP: email][STATUS: pending] Ask for email: "Could I grab your email address? Please spell it letter by letter — for @ say 'at', for dots say 'dot'. Example: s-h-a-u-n at b-e-l-e dot a-i. Take your time." Then STOP and wait.`,
-//           );
-
-//         case "createTicket": {
-//           if (createTicketBlockedForEmail) {
-//             dbg(
-//               "sales",
-//               "buildSalesStepHint_createTicket",
-//               "blocked_by_email",
-//               {
-//                 createTicketBlockedForEmail,
-//                 "email_state.is_confirmed": email_state.is_confirmed,
-//               },
-//             );
-//             return _logAndReturn(
-//               "step_createTicket_email_blocked",
-//               `[FLOW: sales][STEP: email][STATUS: capture_required] Email not yet confirmed. Do NOT call create_ticket. email_state.is_confirmed=${email_state.is_confirmed} createTicketBlockedForEmail=true. Ask for email NOW using VOICE SPELLING MODE.`,
-//             );
-//           }
-
-//           const missing = [];
-//           if (!c._firstName && !c.name && !c.preferredName)
-//             missing.push("name");
-//           if (!c.phone) missing.push("phone");
-//           if (!c.email) missing.push("email");
-//           if (!c.leadInterest) missing.push("selected plan");
-
-//           if (missing.length > 0) {
-//             dbg("sales", "buildSalesStepHint_createTicket", "missing_fields", {
-//               missing,
-//             });
-//             if (!c.phone) salesStep = "phone";
-//             else if (!c.email) salesStep = "email";
-//             return buildSalesStepHint();
-//           }
-
-//           dbg("sales", "buildSalesStepHint_createTicket", "ready_to_fire", {
-//             name: `${c._firstName || ""} ${c._lastName || ""}`.trim(),
-//             phone: c.phone,
-//             email: c.email,
-//             plan: c.leadInterest,
-//           });
-
-//           return _logAndReturn(
-//             "step_createTicket_execute",
-//             `[FLOW: sales][STEP: create_ticket][STATUS: execute] ALL required details collected:
-// - Name: ${c._firstName || ""} ${c._lastName || ""} / ${c.name || ""}
-// - Phone: ${c.phone}
-// - Email: ${c.email}
-// - Plan: ${c.leadInterest}
-// - Address: ${c.address || "provided earlier"}
-// - email_state.is_confirmed: true
-
-// STEP 1: Call extract_call_fields to save any recently collected details.
-// STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user first. CALL THE TOOLS.`,
-//           );
-//         }
-
-//         default:
-//           return _logAndReturn("unknown_step", null);
-//       }
-//     }
-
-//     // ─── Raw phone buffer ──────────────────────────────────────────
-//     let rawPhoneBuffer = null;
-//     let awaitingPhoneVerification = false;
-
-//     // ─── Single pending response.create gate ──────────────────────
-//     let responseCreatePending = false;
-
-//     function scheduleResponseCreate(
-//       contextHint = null,
-//       delayMs = 0,
-//       force = false,
-//     ) {
-//       if (isResponseActive && !force) {
-//         if (contextHint) pendingPostDoneHint = contextHint;
-//         pendingPostDoneCreate = true;
-//         dbg("sales", "scheduleResponseCreate", "queued_post_done", {
-//           salesStep,
-//           emailCaptureMode,
-//           "email_state.is_confirmed": email_state.is_confirmed,
-//           createTicketBlockedForEmail,
-//           hint: (contextHint || "").substring(0, 100),
-//         });
-//         return;
-//       }
-
-//       if (responseCreatePending && !force) {
-//         dbg("sales", "scheduleResponseCreate", "skipped_already_pending", {
-//           salesStep,
-//         });
-//         return;
-//       }
-//       responseCreatePending = true;
-
-//       const send = () => {
-//         responseCreatePending = false;
-//         if (openaiWs?.readyState !== WebSocket.OPEN) return;
-//         if (isResponseActive && !force) {
-//           pendingPostDoneCreate = true;
-//           if (contextHint) pendingPostDoneHint = contextHint;
-//           return;
-//         }
-
-//         const salesHint = buildSalesStepHint();
-//         const combinedHint = [contextHint, salesHint]
-//           .filter(Boolean)
-//           .join("\n\n");
-
-//         if (combinedHint) {
-//           openaiWs.send(
-//             JSON.stringify({
-//               type: "conversation.item.create",
-//               item: {
-//                 type: "message",
-//                 role: "user",
-//                 content: [
-//                   {
-//                     type: "input_text",
-//                     text: `[SYSTEM_CONTEXT]: ${combinedHint}`,
-//                   },
-//                 ],
-//               },
-//             }),
-//           );
-//         }
-
-//         // ── DEBUG: log every response.create with full state ─────────
-//         dbg("sales", "scheduleResponseCreate_FIRING", "sending", {
-//           salesStep,
-//           emailCaptureMode,
-//           emailCaptureConfirmAsked,
-//           "email_state.is_confirmed": email_state.is_confirmed,
-//           createTicketBlockedForEmail,
-//           isResponseActive,
-//           pendingFunctionCalls,
-//           force,
-//           combinedHint: combinedHint.substring(0, 200),
-//         });
-
-//         console.log("📤 Sending response.create to OpenAI");
-//         openaiWs.send(JSON.stringify({ type: "response.create" }));
-
-//         TimerManager.startWatchdog();
-//       };
-
-//       if (delayMs > 0) {
-//         setTimeout(send, delayMs);
-//       } else {
-//         send();
-//       }
-//     }
-
-//     // ─── Detection helpers ─────────────────────────────────────────
-//     function detectPhoneVerificationRequest(text) {
-//       if (!text) return false;
-//       const lower = text.toLowerCase();
-//       const c = session.collected || {};
-//       if (!c._emailVerifiedCustomerId) return false;
-//       if (c._phoneVerified) return false;
-//       return (
-//         lower.includes("phone") ||
-//         lower.includes("contact number") ||
-//         lower.includes("mobile number") ||
-//         lower.includes("number on the account")
-//       );
-//     }
-
-//     function mapOrdinalNetworkChoice(text) {
-//       const t = (text || "").toLowerCase().trim();
-//       if (/\bnbn\b/.test(t) || /\b(opti\s*comm|opticomm)\b/.test(t))
-//         return null;
-//       if (
-//         /\b(first|1st|one|1|option\s*1|option\s*one|number\s*1|the\s*first)\b/.test(
-//           t,
-//         )
-//       )
-//         return "NBN";
-//       if (
-//         /\b(second|2nd|two|2|option\s*2|option\s*two|number\s*2|the\s*second|to)\b/.test(
-//           t,
-//         )
-//       )
-//         return "Opticomm";
-//       return null;
-//     }
-
-//     function wasLastMessageNetworkQuestion() {
-//       const msgs = session.messages || [];
-//       for (let i = msgs.length - 1; i >= 0; i--) {
-//         if (msgs[i].role === "assistant") {
-//           const t = (msgs[i].content || "").toLowerCase();
-//           return (
-//             (t.includes("nbn") && t.includes("opticomm")) ||
-//             (t.includes("first option") && t.includes("second option")) ||
-//             t.includes("nbn or opticomm") ||
-//             t.includes("which one would you prefer")
-//           );
-//         }
-//         if (msgs[i].role === "user") break;
-//       }
-//       return false;
-//     }
-
-//     function detectPlanPresentation(text) {
-//       if (!text) return false;
-//       const lower = text.toLowerCase();
-//       return (
-//         (lower.includes("mbps") &&
-//           (lower.includes("$") ||
-//             lower.includes("per month") ||
-//             lower.includes("/m"))) ||
-//         (lower.includes("plan") && lower.includes("available")) ||
-//         lower.includes("here are the plans") ||
-//         lower.includes("which of those plans") ||
-//         lower.includes("catches your eye")
-//       );
-//     }
-
-//     function detectWebsiteCheckQuestion(text) {
-//       if (!text) return false;
-//       const lower = text.toLowerCase();
-//       return (
-//         lower.includes("check out our website") ||
-//         lower.includes("visited our website") ||
-//         lower.includes("had a chance to check out") ||
-//         lower.includes("seen the plans or pricing") ||
-//         lower.includes("look at the plans or pricing") ||
-//         (lower.includes("website") &&
-//           (lower.includes("plans") || lower.includes("pricing")))
-//       );
-//     }
-
-//     function detectWebsiteCheckAnswer(text) {
-//       if (!text) return false;
-//       const lower = text.toLowerCase().trim();
-//       if (
-//         /\b(yes|yeah|yep|yup|i have|i did|already|looked|checked|seen|saw|visited)\b/.test(
-//           lower,
-//         )
-//       )
-//         return true;
-//       if (
-//         /\b(no|nope|not yet|haven't|didn't|i haven't|i didn't|no i haven't)\b/.test(
-//           lower,
-//         )
-//       )
-//         return true;
-//       return false;
-//     }
-
-//     function detectEmailSpellingRequest(text) {
-//       if (!text) return false;
-//       const lower = text.toLowerCase();
-//       return (
-//         (lower.includes("spell") && lower.includes("email")) ||
-//         (lower.includes("one letter at a time") && lower.includes("email")) ||
-//         (lower.includes("nato") && lower.includes("email")) ||
-//         (lower.includes("say 'at'") && lower.includes("email")) ||
-//         (lower.includes("i'm listening") && lower.includes("email"))
-//       );
-//     }
-
-//     function detectSalesStepAnswer(text) {
-//       if (!salesStep || salesStep === "done" || salesStep === "createTicket")
-//         return;
-//       const c = session.collected || {};
-
-//       if (salesStep === "firstName") {
-//         const words = text.trim().split(/\s+/);
-//         const firstName = words[0];
-//         if (firstName && firstName.length > 1) {
-//           session.collected._firstName = firstName;
-//           sessions.set(session.id, session);
-//           dbg("sales", "detectSalesStepAnswer_firstName", "captured", {
-//             firstName,
-//           });
-//           advanceSalesStep("firstName");
-//         }
-//       } else if (salesStep === "lastName") {
-//         const words = text.trim().split(/\s+/);
-//         const lastName = words[words.length - 1];
-//         if (lastName && lastName.length > 1) {
-//           session.collected._lastName = lastName;
-//           session.collected.name = `${c._firstName || ""} ${lastName}`.trim();
-//           session.collected.preferredName = c._firstName || lastName;
-//           sessions.set(session.id, session);
-//           dbg("sales", "detectSalesStepAnswer_lastName", "captured", {
-//             lastName,
-//             fullName: session.collected.name,
-//           });
-//           advanceSalesStep("lastName");
-//         }
-//       } else if (salesStep === "phone") {
-//         const digits = text.replace(/\D/g, "");
-//         if (digits.length >= 8) {
-//           session.collected.phone = digits;
-//           sessions.set(session.id, session);
-//           dbg("sales", "detectSalesStepAnswer_phone", "captured", {
-//             phone: digits,
-//           });
-//           advanceSalesStep("phone");
-//         }
-//       }
-//     }
-
-//     // ═══════════════════════════════════════════════════════════════
-//     //  ElevenLabs Connection Management
-//     // ═══════════════════════════════════════════════════════════════
-//     function openElevenLabsStream(force = false) {
-//       if (
-//         !force &&
-//         elevenLabsWs &&
-//         (elevenLabsWs.readyState === WebSocket.OPEN ||
-//           elevenLabsWs.readyState === WebSocket.CONNECTING)
-//       ) {
-//         return;
-//       }
-//       closeElevenLabsWs();
-
-//       const wsUrl = `wss://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}/stream-input?model_id=eleven_flash_v2_5&output_format=pcm_16000`;
-//       const elWs = new WebSocket(wsUrl);
-
-//       elWs.on("open", () => {
-//         console.log(`✅ [EL] ElevenLabs WebSocket connected`);
-//         elWs.send(
-//           JSON.stringify({
-//             text: " ",
-//             voice_settings: {
-//               stability: 0.4,
-//               similarity_boost: 0.75,
-//               speed: 1.1,
-//             },
-//             xi_api_key: ELEVENLABS_API_KEY,
-//           }),
-//         );
-//         if (elevenLabsWs === elWs) {
-//           elevenLabsReady = true;
-//           elevenLabsStreaming = true;
-//           for (const text of textBuffer) {
-//             sendTextToElevenLabs(text);
-//           }
-//           textBuffer = [];
-//         }
-//       });
-
-//       elWs.on("message", (data) => {
-//         try {
-//           const msg = JSON.parse(data.toString());
-//           if (msg.audio) {
-//             socket.emit("audio_chunk_pcm", {
-//               sampleRate: PCM_SAMPLE_RATE,
-//               audio: msg.audio,
-//             });
-//           }
-
-//           const isFinal =
-//             msg.isFinal === true || msg.is_final === true || msg.final === true;
-
-//           if (isFinal) {
-//             console.log(
-//               `🔊 [EL] TTS generation complete (isFinal) — waiting for client audio_done`,
-//             );
-//             elevenLabsStreaming = false;
-//             socket.emit("audio_stream_complete");
-
-//             if (emailCaptureMode && !emailCaptureConfirmAsked) {
-//               socket.emit("email_spelling_ready");
-//             }
-//           }
-//         } catch (err) {
-//           console.error(`⚠️ [EL] Message parse error:`, err.message);
-//         }
-//       });
-
-//       elWs.on("error", (err) => {
-//         console.warn(`⚠️ [EL] ElevenLabs WS error: ${err.message}`);
-//         elevenLabsStreaming = false;
-//       });
-
-//       elWs.on("close", () => {
-//         if (elevenLabsWs === elWs) {
-//           elevenLabsReady = false;
-//           elevenLabsStreaming = false;
-//         }
-//       });
-
-//       elevenLabsWs = elWs;
-//     }
-
-//     function interruptElevenLabsStream() {
-//       elevenLabsStreaming = false;
-//       if (!elevenLabsWs || elevenLabsWs.readyState !== WebSocket.OPEN) {
-//         openElevenLabsStream(true);
-//         return;
-//       }
-//       try {
-//         elevenLabsWs.send(JSON.stringify({ text: "" }));
-//       } catch (e) {
-//         console.warn("[EL] interrupt flush failed:", e.message);
-//       }
-//       try {
-//         elevenLabsWs.send(
-//           JSON.stringify({
-//             text: " ",
-//             voice_settings: {
-//               stability: 0.4,
-//               similarity_boost: 0.75,
-//               speed: 1.1,
-//             },
-//             xi_api_key: ELEVENLABS_API_KEY,
-//           }),
-//         );
-//         elevenLabsReady = true;
-//         elevenLabsStreaming = true;
-//       } catch (e) {
-//         console.warn("[EL] re-prime failed:", e.message);
-//         openElevenLabsStream(true);
-//       }
-//     }
-
-//     function sendTextToElevenLabs(text) {
-//       if (!text) return;
-//       if (elevenLabsWs?.readyState === WebSocket.OPEN) {
-//         elevenLabsWs.send(
-//           JSON.stringify({ text, try_trigger_generation: true }),
-//         );
-//       }
-//     }
-
-//     function flushElevenLabsStream() {
-//       if (elevenLabsWs?.readyState === WebSocket.OPEN) {
-//         elevenLabsWs.send(JSON.stringify({ text: "" }));
-//       }
-//     }
-
-//     function closeElevenLabsWs() {
-//       if (elevenLabsWs) {
-//         elevenLabsStreaming = false;
-//         try {
-//           if (elevenLabsWs.readyState === WebSocket.CONNECTING)
-//             elevenLabsWs.terminate();
-//           else if (elevenLabsWs.readyState === WebSocket.OPEN)
-//             elevenLabsWs.close();
-//         } catch (err) {
-//           console.warn(`⚠️ [EL] Error closing WS: ${err.message}`);
-//         }
-//         elevenLabsWs = null;
-//         elevenLabsReady = false;
-//         textBuffer = [];
-//       }
-//     }
-
-//     // ═══════════════ OpenAI Realtime API ════════════════
-//     function connectOpenAI() {
-//       return new Promise((resolve, reject) => {
-//         openaiWs = new WebSocket(
-//           "wss://api.openai.com/v1/realtime?model=gpt-4o-mini-realtime-preview",
-//           {
-//             headers: {
-//               Authorization: `Bearer ${OPENAI_API_KEY}`,
-//               "OpenAI-Beta": "realtime=v1",
-//             },
-//           },
-//         );
-
-//         openaiWs.on("open", () => {
-//           console.log("✅ [WS-1] OpenAI Realtime connected");
-//           const instructions =
-//             SYSTEM_PROMPT +
-//             "\n\nCRITICAL: Always respond in English only." +
-//             "\n\nFIELD COLLECTION RULE: Collect ONE field per turn. Wait for answer before moving on." +
-//             "\n\nEMAIL — ABSOLUTE RULES:" +
-//             "\n1. Email is ALWAYS mutable. Any new email input DISCARDS the previous one completely." +
-//             "\n2. After parsing, you MUST read back the EXACT parsed email (the local part before @) using ONLY individual letters separated by hyphens." +
-//             "\n3. CRITICAL: Use the ACTUAL letters from the parsed email. If parsed email is aun@bele.ai, say 'a-u-n' NOT 's-h-a-u-n'. NEVER hallucinate different letters." +
-//             "\n4. NEVER say 'double X' for repeated letters. Always say each letter separately: l-l not double-l." +
-//             "\n5. If user corrects ANY part, reconstruct the ENTIRE email from scratch. Never partial-edit." +
-//             "\n6. Only call any tool with email AFTER the user explicitly says YES to the readback." +
-//             "\n\nEMAIL COLLECTION — VOICE ONLY: Collect email by voice spelling only. Do NOT mention any text input box. Do NOT say 'you can also type it'. Voice spelling is the ONLY method." +
-//             "\n\nEMAIL DUPLICATE PREVENTION: If [SYSTEM_CONTEXT] shows emailCaptureMode=true or email_state.value is already set, do NOT ask for email again." +
-//             "\n\nCREATE_TICKET RULE: NEVER call create_ticket if createTicketBlockedForEmail=true in [SYSTEM_CONTEXT]. Only call it when email_state.is_confirmed=true is explicitly shown." +
-//             "\n\nFIELD EXTRACTION RULE: Before calling create_ticket, you MUST first call extract_call_fields to save any name, phone, or other details the customer just provided. create_ticket does NOT save fields automatically — extract_call_fields must be called first." +
-//             "\n\nWEBSITE CHECK RULE: In sales flow, ALWAYS ask 'have you had a chance to check out our website and seen the plans or pricing?' AFTER plan is selected and BEFORE collecting any personal details (name/phone/email). Never skip this step." +
-//             "\n\nCUSTOMER_LOOKUP RULE: NEVER call customer_lookup for a new sales lead. customer_lookup is ONLY for existing customers in support/accounts/relocation flows. If the customer is new (has leadInterest, no customer_id), proceed directly to collect name/phone/email and then call create_ticket." +
-//             "\n\nEMAIL SPELLING INSTRUCTIONS (ALL FLOWS): When asking for email, say: 'Please spell your email address letter by letter. For the @ symbol, say 'at'. For dots, say 'dot'. For example: s-h-a-u-n at b-e-l-e dot a-i.' Always read back the email using the same format to confirm.";
-
-//           openaiWs.send(
-//             JSON.stringify({
-//               type: "session.update",
-//               session: {
-//                 instructions,
-//                 modalities: ["text"],
-//                 input_audio_format: "pcm16",
-//                 turn_detection: {
-//                   type: "server_vad",
-//                   threshold: 0.8,
-//                   prefix_padding_ms: 300,
-//                   silence_duration_ms: 1500,
-//                 },
-//                 tools: realtimeTools,
-//                 tool_choice: "auto",
-//                 input_audio_transcription: { model: "whisper-1" },
-//               },
-//             }),
-//           );
-
-//           openElevenLabsStream();
-//         });
-
-//         let resolved = false;
-//         openaiWs.on("message", (raw) => {
-//           try {
-//             const data = JSON.parse(raw.toString());
-//             if (!resolved) {
-//               resolved = true;
-//               resolve();
-//             }
-//             handleOpenAIEvent(data);
-//           } catch (e) {
-//             console.error("[WS-1] parse error:", e.message);
-//           }
-//         });
-
-//         openaiWs.on("error", (err) => {
-//           console.error("[WS-1] error:", err.message);
-//           if (!resolved) {
-//             resolved = true;
-//             reject(err);
-//           }
-//         });
-//         openaiWs.on("close", (code) => {
-//           console.log(`[WS-1] closed (${code})`);
-//           closeElevenLabsWs();
-//         });
-//       });
-//     }
-
-//     // ═══════════════ OpenAI Event Handler ════════════════
-//     let lastEventLog = "";
-
-//     function handleOpenAIEvent(event) {
-//       if (event.type !== lastEventLog) {
-//         console.log(`📡 [WS-1] Event: ${event.type}`);
-//         lastEventLog = event.type;
-//       }
-
-//       switch (event.type) {
-//         case "session.created":
-//           break;
-
-//         case "session.updated":
-//           console.log("✅ [WS-1] Session configured");
-//           break;
-
-//         case "input_audio_buffer.speech_started": {
-//           if (
-//             awaitingStructuredInput ||
-//             pendingFunctionCalls > 0 ||
-//             session.finalLock ||
-//             finalMessageLock
-//           ) {
-//             console.log(`🔇 Speech ignored (locked)`);
-//             if (openaiWs?.readyState === WebSocket.OPEN) {
-//               openaiWs.send(
-//                 JSON.stringify({ type: "input_audio_buffer.clear" }),
-//               );
-//             }
-//             break;
-//           }
-
-//           console.log(`🎙️ USER INTERRUPTED -> Stopping AI Voice`);
-//           socket.emit("status", "user_speaking");
-//           socket.emit("interrupt");
-//           socket.emit("audio_interrupt");
-
-//           TimerManager.resetSilence();
-//           TimerManager.clearEmailConfirm();
-//           TimerManager.clearWatchdog();
-
-//           if (isResponseActive) {
-//             cancelPending = true;
-//             openaiWs.send(JSON.stringify({ type: "response.cancel" }));
-//           }
-
-//           interruptElevenLabsStream();
-
-//           assistantTextBuffer = "";
-//           lastTtsText = "";
-//           assistantSpeaking = false;
-//           lastResponseWasPackage = false;
-//           emptyResponseCount = 0;
-//           responseCreatePending = false;
-//           if (!emailCaptureConfirmAsked) {
-//             pendingPostDoneCreate = false;
-//             pendingPostDoneHint = null;
-//           }
-//           break;
-//         }
-
-//         case "input_audio_buffer.speech_stopped":
-//           socket.emit("status", "processing");
-//           break;
-
-//         case "conversation.item.input_audio_transcription.completed": {
-//           if (!event.transcript) break;
-
-//           const cleaned = normalizeText(event.transcript);
-//           if (!cleaned) break;
-
-//           console.log(
-//             `📊 [TRANSCRIPT] raw="${event.transcript}" cleaned="${cleaned}"`,
-//           );
-
-//           TimerManager.clearWatchdog();
-
-//           const looksLikeEmail = /\b[^\s@]+@[^\s@]+\.[^\s@]+\b/i.test(cleaned);
-//           const digitCount = (cleaned.match(/\d/g) || []).length;
-//           const looksLikePhone = digitCount >= 6;
-//           const looksLikeSpelling = looksLikeVoiceEmailSpelling(cleaned);
-
-//           const isPurePhoneNumber =
-//             looksLikePhone && !looksLikeEmail && !looksLikeSpelling;
-
-//           const isEmailConfirmResponse =
-//             emailCaptureMode && emailCaptureConfirmAsked;
-//           const isEmailSpelling =
-//             emailCaptureMode && !emailCaptureConfirmAsked && looksLikeSpelling;
-
-//           // ── DEBUG: transcript classification ─────────────────────
-//           dbg(
-//             session.collected?.intent || "unknown",
-//             "transcript_received",
-//             "classified",
-//             {
-//               cleaned,
-//               looksLikeEmail,
-//               looksLikePhone,
-//               looksLikeSpelling,
-//               isPurePhoneNumber,
-//               isEmailConfirmResponse,
-//               isEmailSpelling,
-//               emailCaptureMode,
-//               salesStep,
-//               assistantSpeaking,
-//               pendingFunctionCalls,
-//               finalMessageLock,
-//             },
-//           );
-
-//           if (
-//             pendingFunctionCalls > 0 ||
-//             finalMessageLock ||
-//             session.finalLock
-//           ) {
-//             dbg("unknown", "transcript_dropped", "locked", {
-//               pendingFunctionCalls,
-//               finalMessageLock,
-//               sessionFinalLock: session.finalLock,
-//             });
-//             break;
-//           }
-
-//           // FIX: Clear assistantSpeaking when user takes the floor
-//           if (assistantSpeaking) {
-//             dbg(
-//               session.collected?.intent || "unknown",
-//               "assistantSpeaking_cleared",
-//               "user_took_floor",
-//               {
-//                 cleaned: cleaned.substring(0, 50),
-//               },
-//             );
-//             assistantSpeaking = false;
-//           }
-
-//           if (isEmailSpelling) {
-//             dbg(
-//               "sales",
-//               "transcript_email_spelling_detected",
-//               "allowing_through",
-//               {
-//                 input: cleaned,
-//               },
-//             );
-//           }
-
-//           if (isEmailConfirmResponse) {
-//             dbg("sales", "transcript_email_confirm_response", "processing", {
-//               input: cleaned,
-//             });
-//           }
-
-//           if (awaitingPhoneVerification && looksLikePhone) {
-//             const digits = cleaned.replace(/\D/g, "");
-//             if (digits.length >= 6) {
-//               rawPhoneBuffer = digits;
-//               dbg("support", "phone_verification_buffered", "ok", {
-//                 phone: rawPhoneBuffer,
-//               });
-//             }
-//           }
-
-//           // ── DEBUG: email routing decision ─────────────────────────
-//           const willRouteToEmail =
-//             !isPurePhoneNumber &&
-//             (emailCaptureMode ||
-//               (salesStep === "email" && (looksLikeEmail || looksLikeSpelling)));
-
-//           dbg(
-//             "sales",
-//             "transcript_email_routing_decision",
-//             willRouteToEmail ? "routing_to_email" : "routing_normal",
-//             {
-//               isPurePhoneNumber,
-//               emailCaptureMode,
-//               salesStep,
-//               looksLikeEmail,
-//               looksLikeSpelling,
-//               willRouteToEmail,
-//               "email_state.value": email_state.value,
-//               "email_state.is_confirmed": email_state.is_confirmed,
-//             },
-//           );
-
-//           if (willRouteToEmail) {
-//             if (!emailCaptureMode) {
-//               dbg(
-//                 "sales",
-//                 "transcript_activating_email_capture",
-//                 "auto_start",
-//                 {
-//                   reason: "salesStep=email and input looks like email",
-//                 },
-//               );
-//               startEmailCapture();
-//             }
-//             const consumed = handleEmailCaptureTranscript(cleaned);
-//             dbg("sales", "transcript_after_email_handle", "result", {
-//               consumed,
-//               emailCaptureMode,
-//               "email_state.value": email_state.value,
-//               "email_state.is_confirmed": email_state.is_confirmed,
-//               salesStep,
-//               createTicketBlockedForEmail,
-//             });
-//             if (consumed) {
-//               socket.emit("user_transcript", cleaned);
-//               TimerManager.clearSilence();
-//               break;
-//             }
-//           }
-
-//           console.log(`👤 User: "${cleaned}"`);
-//           socket.emit("user_transcript", cleaned);
-
-//           const mappedNetwork = mapOrdinalNetworkChoice(cleaned);
-//           if (mappedNetwork && wasLastMessageNetworkQuestion()) {
-//             const clarified = `I want ${mappedNetwork}`;
-//             session.collected.networkPreference = mappedNetwork;
-//             session.messages.push({ role: "user", content: clarified });
-//             sessions.set(session.id, session);
-//             if (openaiWs?.readyState === WebSocket.OPEN) {
-//               openaiWs.send(
-//                 JSON.stringify({
-//                   type: "conversation.item.create",
-//                   item: {
-//                     type: "message",
-//                     role: "user",
-//                     content: [{ type: "input_text", text: clarified }],
-//                   },
-//                 }),
-//               );
-//               scheduleResponseCreate();
-//             }
-//             TimerManager.resetSilence();
-//             break;
-//           }
-
-//           if (
-//             session.collected._websiteCheckRequired &&
-//             !session.collected._websiteCheckDone &&
-//             detectWebsiteCheckAnswer(cleaned)
-//           ) {
-//             const lastAiMsg = [...(session.messages || [])]
-//               .reverse()
-//               .find((m) => m.role === "assistant");
-//             if (
-//               lastAiMsg &&
-//               detectWebsiteCheckQuestion(lastAiMsg.content || "")
-//             ) {
-//               session.collected._websiteCheckDone = true;
-//               sessions.set(session.id, session);
-//               dbg("sales", "website_check_answered", "done", {
-//                 answer: cleaned,
-//                 websiteCheckDone: true,
-//               });
-//               initSalesStepMachine();
-//             }
-//           }
-
-//           detectSalesStepAnswer(cleaned);
-
-//           session.messages.push({ role: "user", content: cleaned });
-//           sessions.set(session.id, session);
-
-//           TimerManager.resetSilence();
-//           break;
-//         }
-
-//         case "response.created":
-//           isResponseActive = true;
-//           currentResponseId = event.response?.id || null;
-//           currentResponseHadOutput = false;
-//           cancelPending = false;
-//           elevenLabsStreaming = true;
-//           openElevenLabsStream();
-//           if (!(emailCaptureMode && emailCaptureConfirmAsked)) {
-//             assistantSpeaking = true;
-//           }
-//           transitionFSM(FSM_STATE.SPEAKING);
-//           socket.emit("status", "speaking");
-//           TimerManager.clearWatchdog();
-//           console.log(`🔊 [FSM] speech_start`);
-//           break;
-
-//         case "response.text.delta":
-//           if (event.delta) {
-//             currentResponseHadOutput = true;
-//             assistantTextBuffer += event.delta;
-//             socket.emit("assistant_text_delta", event.delta);
-//             if (elevenLabsReady) sendTextToElevenLabs(event.delta);
-//             else textBuffer.push(event.delta);
-//           }
-//           break;
-
-//         case "response.text.done":
-//           if (event.text) {
-//             currentResponseHadOutput = true;
-//             const newTextNorm = event.text
-//               .toLowerCase()
-//               .replace(/[^a-z0-9\s]/g, "")
-//               .trim();
-//             const lastTextNorm = lastAssistantText
-//               .toLowerCase()
-//               .replace(/[^a-z0-9\s]/g, "")
-//               .trim();
-//             const isDuplicate =
-//               newTextNorm.length > 20 &&
-//               lastTextNorm.length > 20 &&
-//               (newTextNorm === lastTextNorm ||
-//                 newTextNorm.includes(lastTextNorm) ||
-//                 lastTextNorm.includes(newTextNorm));
-
-//             if (isDuplicate) {
-//               console.log(`🔁 DUPLICATE response detected — skipping`);
-//               assistantTextBuffer = "";
-//               break;
-//             }
-
-//             lastAssistantText = event.text;
-//             console.log(`🤖 AI: "${event.text.substring(0, 100)}..."`);
-//             session.messages.push({ role: "assistant", content: event.text });
-//             sessions.set(session.id, session);
-//             socket.emit("assistant_text_done", event.text);
-
-//             flushElevenLabsStream();
-
-//             if (detectPlanPresentation(event.text)) {
-//               lastResponseWasPackage = true;
-//               transitionFSM(FSM_STATE.PACKAGE_PRESENTATION);
-//             }
-
-//             if (detectPhoneVerificationRequest(event.text)) {
-//               awaitingPhoneVerification = true;
-//               rawPhoneBuffer = null;
-//             }
-
-//             // ── DEBUG: log detectEmailSpellingRequest evaluation ────
-//             const emailSpellingDetected = detectEmailSpellingRequest(
-//               event.text,
-//             );
-//             dbg("sales", "response_text_done_email_check", "evaluated", {
-//               emailSpellingDetected,
-//               salesStep,
-//               emailCaptureMode,
-//               emailCaptureConfirmPending,
-//               emailCaptureConfirmAsked,
-//               "email_state.value": email_state.value,
-//               "email_state.is_confirmed": email_state.is_confirmed,
-//               textSnippet: event.text.substring(0, 100),
-//             });
-
-//             if (
-//               emailSpellingDetected &&
-//               salesStep === "email" &&
-//               !emailCaptureMode &&
-//               !emailCaptureConfirmPending &&
-//               !emailCaptureConfirmAsked
-//             ) {
-//               dbg(
-//                 "sales",
-//                 "detectEmailSpellingRequest_TRIGGERED",
-//                 "activating_capture",
-//                 {
-//                   salesStep,
-//                   emailCaptureMode,
-//                   emailCaptureConfirmPending,
-//                   emailCaptureConfirmAsked,
-//                 },
-//               );
-//               startEmailCapture();
-//             } else if (emailSpellingDetected) {
-//               dbg(
-//                 "sales",
-//                 "detectEmailSpellingRequest_SUPPRESSED",
-//                 "conditions_not_met",
-//                 {
-//                   salesStep,
-//                   emailCaptureMode,
-//                   emailCaptureConfirmPending,
-//                   emailCaptureConfirmAsked,
-//                   reason: emailCaptureMode
-//                     ? "already_in_capture"
-//                     : emailCaptureConfirmPending
-//                       ? "confirm_pending"
-//                       : emailCaptureConfirmAsked
-//                         ? "confirm_asked"
-//                         : "salesStep_not_email",
-//                 },
-//               );
-//             }
-
-//             if (
-//               session.collected.leadInterest &&
-//               session.collected._websiteCheckRequired &&
-//               !session.collected._websiteCheckAsked &&
-//               detectWebsiteCheckQuestion(event.text)
-//             ) {
-//               session.collected._websiteCheckAsked = true;
-//               sessions.set(session.id, session);
-//               dbg("sales", "website_check_question_detected", "marked_asked", {
-//                 websiteCheckAsked: true,
-//               });
-//             }
-//           }
-//           break;
-
-//         case "response.done": {
-//           isResponseActive = false;
-//           TimerManager.clearWatchdog();
-//           console.log(`🔊 [FSM] speech_end`);
-//           debugState("response_done_snapshot");
-
-//           const outputItems = event.response?.output || [];
-//           const hasTextOutput =
-//             outputItems.some(
-//               (item) =>
-//                 item.type === "message" &&
-//                 item.content?.some((c) => c.type === "text" && c.text?.trim()),
-//             ) || currentResponseHadOutput;
-//           const hasFunctionCall = outputItems.some(
-//             (item) => item.type === "function_call",
-//           );
-
-//           dbg(
-//             session.collected?.intent || "unknown",
-//             "response_done",
-//             "analysis",
-//             {
-//               hasTextOutput,
-//               hasFunctionCall,
-//               pendingFunctionCalls,
-//               elevenLabsStreaming,
-//               cancelPending,
-//               pendingPostDoneCreate,
-//             },
-//           );
-
-//           // FIX: Clear assistantSpeaking if EL not streaming
-//           if (
-//             !hasFunctionCall &&
-//             pendingFunctionCalls === 0 &&
-//             !elevenLabsStreaming
-//           ) {
-//             assistantSpeaking = false;
-//             dbg(
-//               "sales",
-//               "assistantSpeaking_cleared_response_done",
-//               "no_el_streaming",
-//               {},
-//             );
-//           }
-
-//           if (
-//             !hasFunctionCall &&
-//             !hasTextOutput &&
-//             pendingFunctionCalls === 0 &&
-//             !finalMessageLock
-//           ) {
-//             if (cancelPending) {
-//               console.log(`✅ response.done (cancelled) — no retry`);
-//               cancelPending = false;
-//               assistantSpeaking = false;
-//               transitionFSM(FSM_STATE.LISTENING);
-//               socket.emit("status", "listening");
-//               if (pendingPostDoneCreate) {
-//                 pendingPostDoneCreate = false;
-//                 const hint = pendingPostDoneHint;
-//                 pendingPostDoneHint = null;
-//                 setTimeout(() => scheduleResponseCreate(hint), 50);
-//               }
-//               break;
-//             }
-
-//             emptyResponseCount++;
-//             console.warn(
-//               `⚠️ EMPTY RESPONSE: attempt ${emptyResponseCount}/${MAX_EMPTY_RETRIES}`,
-//             );
-//             if (emptyResponseCount <= MAX_EMPTY_RETRIES) {
-//               const retryDelay = 150 * Math.pow(2, emptyResponseCount - 1);
-//               assistantSpeaking = false;
-//               scheduleResponseCreate(null, retryDelay, true);
-//             } else {
-//               console.warn(
-//                 `⚠️ Max retries (${MAX_EMPTY_RETRIES}) reached — stopping retry loop`,
-//               );
-//               emptyResponseCount = 0;
-//               assistantSpeaking = false;
-//               transitionFSM(FSM_STATE.LISTENING);
-//               socket.emit("status", "listening");
-//             }
-//             break;
-//           }
-
-//           emptyResponseCount = 0;
-
-//           if (pendingPostDoneCreate && pendingFunctionCalls === 0) {
-//             if (createTicketBlockedForEmail) {
-//               dbg("sales", "post_done_create_blocked", "email_not_confirmed", {
-//                 createTicketBlockedForEmail,
-//                 "email_state.is_confirmed": email_state.is_confirmed,
-//               });
-//               pendingPostDoneCreate = false;
-//               const emailHint = buildSalesStepHint() || "";
-//               pendingPostDoneHint = null;
-//               setTimeout(() => scheduleResponseCreate(emailHint, 0, true), 50);
-//               break;
-//             }
-//             pendingPostDoneCreate = false;
-//             const hint = pendingPostDoneHint;
-//             pendingPostDoneHint = null;
-//             console.log(`📤 Firing queued post-done response.create`);
-//             setTimeout(() => scheduleResponseCreate(hint, 0, true), 50);
-//             break;
-//           }
-
-//           if (!pendingFunctionCalls) {
-//             if (
-//               fsmState !== FSM_STATE.EMAIL_CAPTURE &&
-//               fsmState !== FSM_STATE.EMAIL_CONFIRMATION
-//             ) {
-//               transitionFSM(FSM_STATE.LISTENING);
-//             }
-//             socket.emit("status", "listening");
-//           }
-//           assistantTextBuffer = "";
-//           currentResponseHadOutput = false;
-//           break;
-//         }
-
-//         case "response.output_item.added":
-//           if (event.item?.type === "function_call") {
-//             const fnName = event.item.name || event.item.function_call?.name;
-//             dbg(
-//               session.collected?.intent || "unknown",
-//               "function_call_added",
-//               "detected",
-//               {
-//                 fnName,
-//                 createTicketBlockedForEmail,
-//                 "email_state.is_confirmed": email_state.is_confirmed,
-//               },
-//             );
-//             if (fnName === "create_ticket") {
-//               if (!createTicketBlockedForEmail) {
-//                 TimerManager.startFinalLock(20000);
-//               }
-//               if (openaiWs?.readyState === WebSocket.OPEN) {
-//                 openaiWs.send(
-//                   JSON.stringify({ type: "input_audio_buffer.clear" }),
-//                 );
-//               }
-//             }
-//           }
-//           break;
-
-//         case "response.output_item.done":
-//           if (event.item?.type === "function_call") {
-//             pendingFunctionCalls++;
-//             transitionFSM(FSM_STATE.TOOL_EXECUTING);
-//             handleFunctionCall(event.item);
-//           }
-//           break;
-
-//         case "error":
-//           console.error("[WS-1] OpenAI error:", JSON.stringify(event.error));
-//           socket.emit("error_msg", event.error?.message || "AI error");
-//           if (isResponseActive) isResponseActive = false;
-//           if (pendingFunctionCalls > 0) pendingFunctionCalls = 0;
-//           emptyResponseCount = 0;
-//           responseCreatePending = false;
-//           pendingPostDoneCreate = false;
-//           elevenLabsStreaming = false;
-//           assistantSpeaking = false;
-//           TimerManager.clearWatchdog();
-//           transitionFSM(FSM_STATE.LISTENING);
-//           socket.emit("status", "listening");
-//           break;
-//       }
-//     }
-
-//     // ═══════════════ Tool Execution ════════════════
-//     async function handleFunctionCall(item) {
-//       const { call_id, name: fn, arguments: argsStr } = item;
-//       let args = safeParseJSON(argsStr) || {};
-
-//       dbg(
-//         session.collected?.intent || "unknown",
-//         "handleFunctionCall_ENTRY",
-//         "called",
-//         {
-//           fn,
-//           argsPreview: JSON.stringify(args).substring(0, 150),
-//           salesStep,
-//           "email_state.is_confirmed": email_state.is_confirmed,
-//           createTicketBlockedForEmail,
-//           emailCaptureMode,
-//         },
-//       );
-
-//       if (
-//         fn === "verify_phone" &&
-//         !session.collected._emailVerifiedCustomerId
-//       ) {
-//         const phoneToSave = args.phone || rawPhoneBuffer;
-//         rawPhoneBuffer = null;
-//         awaitingPhoneVerification = false;
-//         if (phoneToSave) {
-//           session.collected.phone =
-//             String(phoneToSave).replace(/\D/g, "") || phoneToSave;
-//           sessions.set(session.id, session);
-//           if (salesStep === "phone") advanceSalesStep("phone");
-//           dbg("sales", "verify_phone_redirected_to_save", "saved", {
-//             phone: session.collected.phone,
-//             salesStep,
-//           });
-//         }
-//         const fakeResult = JSON.stringify({
-//           success: true,
-//           _redirected: true,
-//           message: "Phone number saved.",
-//         });
-//         if (openaiWs?.readyState === WebSocket.OPEN) {
-//           openaiWs.send(
-//             JSON.stringify({
-//               type: "conversation.item.create",
-//               item: {
-//                 type: "function_call_output",
-//                 call_id,
-//                 output: fakeResult,
-//               },
-//             }),
-//           );
-//         }
-//         pendingFunctionCalls = Math.max(0, pendingFunctionCalls - 1);
-//         if (
-//           pendingFunctionCalls === 0 &&
-//           openaiWs?.readyState === WebSocket.OPEN
-//         ) {
-//           const salesHint = buildSalesStepHint() || "";
-//           const hint = `Phone number has been saved. ${salesHint}\n\nIMPORTANT: Respond immediately — proceed to the next step.`;
-//           openaiWs.send(
-//             JSON.stringify({
-//               type: "conversation.item.create",
-//               item: {
-//                 type: "message",
-//                 role: "user",
-//                 content: [
-//                   { type: "input_text", text: `[SYSTEM_CONTEXT]: ${hint}` },
-//                 ],
-//               },
-//             }),
-//           );
-//           if (
-//             fsmState !== FSM_STATE.EMAIL_CAPTURE &&
-//             fsmState !== FSM_STATE.EMAIL_CONFIRMATION
-//           ) {
-//             transitionFSM(FSM_STATE.LISTENING);
-//           }
-//           scheduleResponseCreate();
-//         }
-//         return;
-//       }
-
-//       if (fn === "verify_phone" && rawPhoneBuffer) {
-//         args = { ...args, phone: rawPhoneBuffer };
-//         rawPhoneBuffer = null;
-//         awaitingPhoneVerification = false;
-//       }
-
-//       console.log(`🔧 Tool: ${fn}`, JSON.stringify(args).substring(0, 200));
-
-//       let result;
-//       socket.emit("status", "processing");
-//       TimerManager.clearSilence();
-//       TimerManager.clearEmailConfirm();
-//       TimerManager.clearWatchdog();
-
-//       if (openaiWs?.readyState === WebSocket.OPEN) {
-//         openaiWs.send(JSON.stringify({ type: "input_audio_buffer.clear" }));
-//       }
-
-//       const toolTimeout = setTimeout(() => {
-//         console.warn(`⚠️ Tool ${fn} timed out after 30s`);
-//         pendingFunctionCalls = Math.max(0, pendingFunctionCalls - 1);
-//         if (pendingFunctionCalls === 0) {
-//           transitionFSM(FSM_STATE.LISTENING);
-//           socket.emit("status", "listening");
-//         }
-//       }, 30000);
-
-//       try {
-//         result = await execTool(fn, args);
-//         console.log(
-//           `🔧 [TOOL-END] ${fn} - result: ${result.substring(0, 200)}`,
-//         );
-//       } catch (err) {
-//         console.error(`🔧 [TOOL-ERROR] ${fn}:`, err.message);
-//         result = JSON.stringify({ success: false, error: err.message });
-//       }
-
-//       clearTimeout(toolTimeout);
-
-//       let systemHint = `[FLOW: ${session.collected?.intent || "unknown"}] Current collected fields: ${JSON.stringify(
-//         Object.fromEntries(
-//           Object.entries(session.collected || {}).filter(
-//             ([k]) => k !== "_registeredPhone" && k !== "_rp",
-//           ),
-//         ),
-//       )}. email_state: { value: "${email_state.value}", is_confirmed: ${email_state.is_confirmed} }. createTicketBlockedForEmail: ${createTicketBlockedForEmail}. emailCaptureMode: ${emailCaptureMode}.`;
-
-//       // ── DEBUG: after tool execution, log full email state ─────────
-//       dbg(session.collected?.intent || "unknown", "tool_executed", fn, {
-//         salesStep,
-//         "email_state.value": email_state.value,
-//         "email_state.is_confirmed": email_state.is_confirmed,
-//         createTicketBlockedForEmail,
-//         emailCaptureMode,
-//         result: result.substring(0, 200),
-//       });
-
-//       if (fn === "check_address_availability") {
-//         let parsedResult = null;
-//         try {
-//           parsedResult = JSON.parse(result);
-//         } catch (_) {}
-//         if (parsedResult) {
-//           const networkLabel = parsedResult.network || "the available network";
-//           const planCount = Array.isArray(parsedResult.availablePlans)
-//             ? parsedResult.availablePlans.length
-//             : 0;
-//           const requiresFilter =
-//             parsedResult.requiresResidentialFilter === true;
-//           if (parsedResult.orderable === false) {
-//             systemHint += `\nTOOL RESULT: Address not serviceable. Tell customer empathetically and offer to take their details.`;
-//           } else if (planCount > 0 && requiresFilter) {
-//             systemHint += `\nTOOL RESULT: ${planCount} plans found on "${networkLabel}". Ask: "Is this for your home or a business?" before showing plans.`;
-//           } else if (planCount > 0 && !requiresFilter) {
-//             systemHint += `\nTOOL RESULT: ${planCount} plans found on "${networkLabel}". Present ALL plans NOW. Speak slowly using voice_description fields. End with "Which of these catches your eye?" LOCKED to ${networkLabel}.`;
-//           } else {
-//             systemHint += `\nTOOL RESULT: No plans returned. Tell customer and offer alternative help.`;
-//           }
-//           if (session.networkShown) {
-//             systemHint += `\nNETWORK LOCK: Only ${session.networkShown} — NEVER mention ${session.networkShown === "OptiComm" ? "NBN" : "OptiComm"} again.`;
-//           }
-//         }
-//       }
-
-//       if (fn === "customer_lookup") {
-//         let parsedResult = null;
-//         try {
-//           parsedResult = JSON.parse(result);
-//         } catch (_) {}
-
-//         if (parsedResult?._blocked && parsedResult?.reason === "sales_flow") {
-//           systemHint += `\nTOOL RESULT: customer_lookup blocked — this is a new sales lead. Do NOT retry customer_lookup. Treat as a new customer. Collect name, phone, email one at a time, then call create_ticket.`;
-//         } else if (parsedResult?._invalidEmail) {
-//           systemHint += `\nTOOL RESULT: Email format invalid — missing '@' symbol. Ask customer to spell email again: 'Please spell your email letter by letter, saying 'at' for @ and 'dot' for dots.'`;
-//         } else if (parsedResult?.success && parsedResult?.customer) {
-//           systemHint += `\nTOOL RESULT: Email lookup succeeded. Say "Perfect, I can see that account." Then ask for their phone number. When they give it, call verify_phone.`;
-//           awaitingPhoneVerification = true;
-//           rawPhoneBuffer = null;
-//         } else {
-//           systemHint += `\nTOOL RESULT: Customer not found. Ask customer to double-check their email address.`;
-//         }
-//       }
-
-//       if (fn === "verify_phone") {
-//         let parsedResult = null;
-//         try {
-//           parsedResult = JSON.parse(result);
-//         } catch (_) {}
-//         if (parsedResult?.verificationFailed) {
-//           awaitingPhoneVerification = true;
-//           rawPhoneBuffer = null;
-//           systemHint += `\nTOOL RESULT: Phone verification FAILED. Tell customer: "That phone number doesn't match what we have on file. Could you double-check?" Do NOT proceed.`;
-//         } else if (parsedResult?.success && parsedResult?.verified) {
-//           awaitingPhoneVerification = false;
-//           rawPhoneBuffer = null;
-//           systemHint += `\nTOOL RESULT: Phone verification PASSED. Say "Perfect, thanks for confirming — your account's all verified now." then ask what they need help with.`;
-//         } else {
-//           systemHint += `\nTOOL RESULT: Verification error — ${parsedResult?.message || "unknown"}. Tell customer to email support@infinetbroadband.com.au.`;
-//         }
-//       }
-
-//       if (fn === "create_ticket") {
-//         let parsedResult = null;
-//         try {
-//           parsedResult = JSON.parse(result);
-//         } catch (_) {}
-
-//         dbg("sales", "create_ticket_result_processing", "evaluating", {
-//           success: parsedResult?.success,
-//           _blocked: parsedResult?._blocked,
-//           reason: parsedResult?.reason,
-//           ticket_id: parsedResult?.ticket_id,
-//           _isSalesTicket: parsedResult?._isSalesTicket,
-//           "email_state.is_confirmed": email_state.is_confirmed,
-//           createTicketBlockedForEmail,
-//         });
-
-//         if (
-//           parsedResult?._blocked &&
-//           parsedResult?.reason === "email_missing"
-//         ) {
-//           TimerManager.releaseFinalLock();
-//           salesStep = "email";
-//           createTicketBlockedForEmail = true;
-//           if (!emailCaptureMode && !emailCaptureConfirmAsked) {
-//             startEmailCapture();
-//           }
-//           dbg(
-//             "sales",
-//             "create_ticket_BLOCKED_email_missing",
-//             "forcing_email_capture",
-//             {
-//               salesStep,
-//               createTicketBlockedForEmail,
-//               emailCaptureMode,
-//               emailCaptureConfirmAsked,
-//             },
-//           );
-//           systemHint += `\nTOOL RESULT: create_ticket BLOCKED — email not confirmed. salesStep is now "email". Ask for email NOW: "Could I grab your email address? Please spell it letter by letter — for @ say 'at', for dots say 'dot'. Example: s-h-a-u-n at b-e-l-e dot a-i." Do NOT call create_ticket again until email_state.is_confirmed=true.`;
-//         } else if (parsedResult?.success) {
-//           salesStep = "done";
-//           createTicketBlockedForEmail = false;
-//           TimerManager.releaseFinalLock();
-//           const ticketId = parsedResult.ticket_id;
-//           const isSales = parsedResult._isSalesTicket === true || !ticketId;
-//           dbg("sales", "create_ticket_SUCCESS", "ticket_created", {
-//             isSales,
-//             ticketId,
-//             salesStep,
-//           });
-//           if (isSales) {
-//             systemHint += `\nTOOL RESULT: Sales enquiry submitted. Say: "Awesome, you're all set! I've submitted your enquiry and our sales team will be in touch via email shortly. Is there anything else you'd like to know?"`;
-//           } else {
-//             systemHint += `\nTOOL RESULT: Support ticket #${ticketId} created. Say: "Brilliant, all done! I've raised support ticket number ${ticketId} — you'll get details via email shortly. Is there anything else I can help with?"`;
-//           }
-//           transitionFSM(FSM_STATE.FINAL);
-//         } else {
-//           TimerManager.releaseFinalLock();
-//           dbg("sales", "create_ticket_FAILED", "error", {
-//             error: parsedResult?.error,
-//           });
-//           systemHint += `\nTOOL RESULT: Ticket FAILED — ${parsedResult?.error || "unknown error"}. Apologise and suggest calling 1300 101 414 or emailing support@infinetbroadband.com.au.`;
-//         }
-//       }
-
-//       if (fn === "send_portal_login_email") {
-//         systemHint += `\nTOOL RESULT: Portal login email sent. Tell customer the request was sent and team will be in touch.`;
-//       }
-
-//       if (fn === "extract_call_fields") {
-//         const c = session.collected || {};
-//         const shouldGate =
-//           c.leadInterest &&
-//           c._websiteCheckRequired &&
-//           !c._websiteCheckAsked &&
-//           !c._websiteCheckDone;
-//         if (shouldGate) {
-//           systemHint += `\nCRITICAL GATE: You MUST ask: "Just out of curiosity — have you had a chance to check out our website and seen the plans or pricing?" WAIT for their answer before collecting name/phone/email.`;
-//         }
-//         if (
-//           c.leadInterest &&
-//           c._websiteCheckRequired &&
-//           (c._websiteCheckAsked || c._websiteCheckDone)
-//         ) {
-//           systemHint += `\nWEBSITE CHECK DONE: Do NOT ask again. Proceed with order collection.`;
-//         }
-//         if (createTicketBlockedForEmail) {
-//           systemHint += `\nEMAIL CAPTURE IN PROGRESS: email_state.is_confirmed=${email_state.is_confirmed}. Do NOT call create_ticket. Wait for email confirmation.`;
-//         }
-//         const stepHint = buildSalesStepHint();
-//         if (stepHint) systemHint += `\n\n${stepHint}`;
-//       }
-
-//       if (openaiWs?.readyState === WebSocket.OPEN) {
-//         await Promise.resolve();
-//         openaiWs.send(
-//           JSON.stringify({
-//             type: "conversation.item.create",
-//             item: { type: "function_call_output", call_id, output: result },
-//           }),
-//         );
-//       }
-
-//       pendingFunctionCalls = Math.max(0, pendingFunctionCalls - 1);
-
-//       if (
-//         pendingFunctionCalls === 0 &&
-//         openaiWs?.readyState === WebSocket.OPEN
-//       ) {
-//         openaiWs.send(
-//           JSON.stringify({
-//             type: "conversation.item.create",
-//             item: {
-//               type: "message",
-//               role: "user",
-//               content: [
-//                 {
-//                   type: "input_text",
-//                   text: `[SYSTEM_CONTEXT]: ${systemHint}\n\nIMPORTANT: Respond immediately based on the tool result above.`,
-//                 },
-//               ],
-//             },
-//           }),
-//         );
-
-//         if (
-//           fsmState === FSM_STATE.TOOL_EXECUTING &&
-//           fsmState !== FSM_STATE.EMAIL_CAPTURE &&
-//           fsmState !== FSM_STATE.EMAIL_CONFIRMATION &&
-//           fsmState !== FSM_STATE.FINAL
-//         ) {
-//           transitionFSM(FSM_STATE.LISTENING);
-//         }
-
-//         console.log(`📤 Tool complete (${fn}) — triggering response.create`);
-//         scheduleResponseCreate();
-//       }
-//     }
-
-//     async function execTool(fn, args) {
-//       if (fn === "extract_call_fields") {
-//         if (args.email && typeof args.email === "string") {
-//           const parsed = parseVoiceEmail(args.email);
-//           dbg(
-//             session.collected?.intent || "unknown",
-//             "extract_call_fields_email_parse",
-//             parsed ? "normalized" : "parse_failed",
-//             {
-//               raw: args.email,
-//               parsed,
-//             },
-//           );
-//           if (parsed) {
-//             args.email = parsed;
-//           }
-//         }
-//         applyExtractionToSession(session, args);
-//         const c = session.collected || {};
-
-//         if (salesStep === "firstName" && (args.preferredName || args.name)) {
-//           const firstName = (args.preferredName || args.name || "").split(
-//             " ",
-//           )[0];
-//           if (firstName) {
-//             session.collected._firstName = firstName;
-//             sessions.set(session.id, session);
-//             dbg("sales", "extract_firstName_captured", "ok", { firstName });
-//             advanceSalesStep("firstName");
-//           }
-//         }
-//         if (salesStep === "lastName" && args.name && args.name.includes(" ")) {
-//           const parts = args.name.split(" ");
-//           session.collected._lastName = parts[parts.length - 1];
-//           sessions.set(session.id, session);
-//           dbg("sales", "extract_lastName_captured", "ok", {
-//             lastName: session.collected._lastName,
-//           });
-//           advanceSalesStep("lastName");
-//         }
-//         if (salesStep === "phone" && args.phone) {
-//           dbg("sales", "extract_phone_captured", "advancing", {
-//             phone: args.phone,
-//           });
-//           advanceSalesStep("phone");
-//         }
-
-//         if (args.email) {
-//           setEmailValue(args.email);
-//           session.collected.email = args.email;
-//           sessions.set(session.id, session);
-//           dbg("sales", "extract_email_captured_by_llm", "set", {
-//             email: args.email,
-//             salesStep,
-//             "email_state.is_confirmed": email_state.is_confirmed,
-//           });
-//           if (salesStep === "email") advanceSalesStep("email");
-//         }
-
-//         return JSON.stringify({ success: true });
-//       }
-
-//       if (fn === "customer_lookup") {
-//         const isSalesFlow =
-//           !!session.collected?.leadInterest &&
-//           !session.collected?._emailVerifiedCustomerId;
-//         if (isSalesFlow) {
-//           dbg("sales", "customer_lookup_BLOCKED", "sales_flow_new_lead", {
-//             leadInterest: session.collected.leadInterest,
-//           });
-//           return JSON.stringify({
-//             success: false,
-//             _blocked: true,
-//             reason: "sales_flow",
-//             message:
-//               "New sales lead — customer lookup not performed. Treat as new customer. Collect name, phone, email, then call create_ticket.",
-//           });
-//         }
-
-//         const lookupArgs = { ...(args || {}) };
-//         delete lookupArgs.phone;
-//         if (!lookupArgs.email && !lookupArgs.name) {
-//           return JSON.stringify({
-//             success: false,
-//             message: "Email is required for customer lookup",
-//           });
-//         }
-
-//         if (lookupArgs.email && typeof lookupArgs.email === "string") {
-//           const parsed = parseVoiceEmail(lookupArgs.email);
-//           if (parsed) {
-//             dbg("support", "customer_lookup_email_normalized", "ok", {
-//               raw: lookupArgs.email,
-//               parsed,
-//             });
-//             lookupArgs.email = parsed;
-//           } else {
-//             dbg("support", "customer_lookup_email_parse_failed", "invalid", {
-//               email: lookupArgs.email,
-//             });
-//             return JSON.stringify({
-//               success: false,
-//               _invalidEmail: true,
-//               message:
-//                 "Invalid email format — could not parse. Ask customer to spell email letter by letter, saying 'at' for @ and 'dot' for dots.",
-//             });
-//           }
-//         }
-
-//         try {
-//           const result = await customerLookup(lookupArgs);
-//           if (result.success && result.customer) {
-//             session.collected._emailVerifiedCustomerId = result.customer.id;
-//             session.collected._registeredPhone =
-//               result.customer.phone || result.customer.phone_mobile || null;
-//             session.collected._rp = session.collected._registeredPhone;
-//             session.collected._phoneVerified = false;
-//             session.collected.customer_id = result.customer.id;
-//             sessions.set(session.id, session);
-//             const safeResult = { ...result };
-//             if (safeResult.customer) {
-//               safeResult.customer = { ...safeResult.customer };
-//               delete safeResult.customer.phone;
-//               delete safeResult.customer.phone_mobile;
-//               delete safeResult.customer.mobile;
-//               delete safeResult.customer.phone2;
-//             }
-//             return JSON.stringify(safeResult);
-//           }
-//           delete session.collected.email;
-//           delete session.collected._emailVerifiedCustomerId;
-//           email_state.value = "";
-//           email_state.is_confirmed = false;
-//           sessions.set(session.id, session);
-//           dbg("support", "customer_lookup_not_found", "email_cleared", {
-//             email: lookupArgs.email,
-//           });
-//           return JSON.stringify({
-//             ...result,
-//             _emailCleared: true,
-//             message:
-//               "No account found with that email. Please check and try again.",
-//           });
-//         } catch (e) {
-//           return JSON.stringify({ success: false, error: e.message });
-//         }
-//       }
-
-//       if (fn === "verify_phone") {
-//         const { phone } = args || {};
-//         if (!phone)
-//           return JSON.stringify({
-//             success: false,
-//             verificationFailed: true,
-//             message: "No phone number provided.",
-//           });
-//         const emailCustomerId = session.collected._emailVerifiedCustomerId;
-//         if (!emailCustomerId)
-//           return JSON.stringify({
-//             success: false,
-//             verificationFailed: true,
-//             message: "Email verification must be completed first.",
-//           });
-//         const registeredPhone =
-//           session.collected._registeredPhone || session.collected._rp;
-//         if (!registeredPhone) {
-//           return JSON.stringify({
-//             success: false,
-//             verificationFailed: true,
-//             message: "No phone number registered on this account.",
-//           });
-//         }
-//         const normalize =
-//           normalizePhone && typeof normalizePhone === "function"
-//             ? normalizePhone
-//             : (p) =>
-//                 String(p || "")
-//                   .replace(/\D/g, "")
-//                   .replace(/^61(\d{9})$/, "0$1");
-//         const normalizedInput = normalize(phone);
-//         const normalizedRegistered = normalize(registeredPhone);
-//         if (normalizedInput !== normalizedRegistered) {
-//           dbg("support", "verify_phone_FAILED", "mismatch", {
-//             inputNormalized: normalizedInput,
-//             registeredNormalized: normalizedRegistered,
-//           });
-//           return JSON.stringify({
-//             success: false,
-//             verificationFailed: true,
-//             message: "Phone number does not match the registered number.",
-//           });
-//         }
-//         session.collected._phoneVerified = true;
-//         sessions.set(session.id, session);
-//         return JSON.stringify({
-//           success: true,
-//           verified: true,
-//           customer_id: emailCustomerId,
-//         });
-//       }
-
-//       if (fn === "check_address_availability") {
-//         try {
-//           if (args.address) session.collected.address = args.address;
-//           return await checkAddressAvailability(args, session);
-//         } catch (err) {
-//           return JSON.stringify({
-//             success: false,
-//             error: err.message,
-//             address: args.address,
-//           });
-//         }
-//       }
-
-//       if (fn === "create_ticket") {
-//         let fa = { ...args };
-//         if (typeof fa.message === "string")
-//           fa.message = { message: fa.message };
-//         const collected = session.collected || {};
-//         const hasCustomerId = !!(fa.customer_id || collected.customer_id);
-//         const hasLeadInterest = !!(collected.leadInterest || fa.leadInterest);
-//         const isSupportTicket = hasCustomerId && !hasLeadInterest;
-
-//         // ── DEBUG: guard check ────────────────────────────────────────
-//         dbg("sales", "execTool_create_ticket_GUARD_CHECK", "evaluating", {
-//           isSupportTicket,
-//           "collected.email": collected.email || "MISSING",
-//           "email_state.value": email_state.value,
-//           "email_state.is_confirmed": email_state.is_confirmed,
-//           createTicketBlockedForEmail,
-//           salesStep,
-//           hasCustomerId,
-//           hasLeadInterest,
-//           emailCaptureMode,
-//           emailCaptureConfirmAsked,
-//         });
-
-//         if (
-//           !isSupportTicket &&
-//           (!collected.email || !email_state.is_confirmed)
-//         ) {
-//           dbg(
-//             "sales",
-//             "execTool_create_ticket_BLOCKED",
-//             "email_not_confirmed",
-//             {
-//               reason: `isSupportTicket=${isSupportTicket} collected.email="${collected.email || "MISSING"}" email_state.is_confirmed=${email_state.is_confirmed}`,
-//               action: "forcing_salesStep=email + startEmailCapture",
-//             },
-//           );
-//           salesStep = "email";
-//           createTicketBlockedForEmail = true;
-//           TimerManager.releaseFinalLock();
-//           finalMessageLock = false;
-//           session.finalLock = false;
-//           if (!emailCaptureMode && !emailCaptureConfirmAsked) {
-//             startEmailCapture();
-//           } else {
-//             dbg(
-//               "sales",
-//               "execTool_create_ticket_BLOCKED_capture_already_active",
-//               "no_restart",
-//               {
-//                 emailCaptureMode,
-//                 emailCaptureConfirmAsked,
-//               },
-//             );
-//           }
-//           return JSON.stringify({
-//             success: false,
-//             _blocked: true,
-//             reason: "email_missing",
-//             message:
-//               "SALES STEP [email]: Ask for email by voice spelling mode. Do NOT retry create_ticket until email_state.is_confirmed=true.",
-//           });
-//         }
-
-//         const detailLines = [];
-//         const fullName =
-//           [collected._firstName, collected._lastName]
-//             .filter(Boolean)
-//             .join(" ") ||
-//           collected.name ||
-//           collected.preferredName;
-//         if (fullName) detailLines.push(`Name: ${fullName}`);
-//         if (collected.email) detailLines.push(`Email: ${collected.email}`);
-//         if (collected.phone) detailLines.push(`Phone: ${collected.phone}`);
-//         if (collected.address)
-//           detailLines.push(`Address: ${collected.address}`);
-//         if (collected.networkPreference)
-//           detailLines.push(`Network: ${collected.networkPreference}`);
-//         if (collected.residentialPreference)
-//           detailLines.push(`Type: ${collected.residentialPreference}`);
-//         if (collected.leadInterest || fa.leadInterest)
-//           detailLines.push(
-//             `Selected Plan: ${collected.leadInterest || fa.leadInterest}`,
-//           );
-
-//         const detailsBlock =
-//           detailLines.length > 0
-//             ? `\n\n--- Customer Details ---\n${detailLines.join("\n")}`
-//             : "";
-//         if (fa.message?.message) fa.message.message += detailsBlock;
-//         else if (detailsBlock) fa.message = { message: detailsBlock.trim() };
-
-//         let ticketResult;
-//         try {
-//           if (isSupportTicket) {
-//             const r = await splynx.request(
-//               "POST",
-//               "admin/support/tickets",
-//               objectToUrlEncoded(fa),
-//             );
-//             const emailResult = await sendTicketEmail(
-//               r.id,
-//               fa,
-//               collected,
-//               true,
-//             );
-//             ticketResult = {
-//               success: true,
-//               ticket_id: r.id,
-//               email_sent: emailResult.sent,
-//               email_error: emailResult.reason || null,
-//               _isSalesTicket: false,
-//               _ticketCompleted: true,
-//             };
-//           } else {
-//             const emailResult = await sendTicketEmail(
-//               null,
-//               fa,
-//               collected,
-//               false,
-//             );
-//             ticketResult = {
-//               success: true,
-//               message: "Sales inquiry submitted successfully",
-//               email_sent: emailResult.sent,
-//               email_error: emailResult.reason || null,
-//               _isSalesTicket: true,
-//               _ticketCompleted: true,
-//             };
-//           }
-//           dbg("sales", "execTool_create_ticket_SUCCESS", "submitted", {
-//             isSupportTicket,
-//             ticket_id: ticketResult.ticket_id,
-//             email_sent: ticketResult.email_sent,
-//           });
-//         } catch (err) {
-//           dbg("sales", "execTool_create_ticket_ERROR", "failed", {
-//             error: err.message,
-//           });
-//           ticketResult = {
-//             success: false,
-//             error: err.message || "Failed to process request",
-//             _ticketCompleted: true,
-//           };
-//         }
-
-//         return JSON.stringify(ticketResult);
-//       }
-
-//       if (fn === "get_ticket_types")
-//         return JSON.stringify({
-//           success: true,
-//           types: await splynx.request("GET", "admin/support/tickets-types"),
-//         });
-//       if (fn === "get_ticket_groups")
-//         return JSON.stringify({
-//           success: true,
-//           groups: await splynx.request("GET", "admin/support/tickets-groups"),
-//         });
-//       if (fn === "get_ticket_statuses")
-//         return JSON.stringify({
-//           success: true,
-//           statuses: await splynx.request(
-//             "GET",
-//             "admin/support/tickets-statuses",
-//           ),
-//         });
-
-//       return JSON.stringify({ error: `Unknown tool: ${fn}` });
-//     }
-
-//     // ═══════════════ Client Audio → OpenAI ════════════════
-//     let lastAudioLog = 0;
-//     socket.on("audio_chunk", (b64) => {
-//       const shouldSuppress =
-//         awaitingStructuredInput ||
-//         pendingFunctionCalls > 0 ||
-//         session.finalLock ||
-//         finalMessageLock;
-//       if (shouldSuppress) return;
-//       const now = Date.now();
-//       if (now - lastAudioLog > 2000) {
-//         const state =
-//           ["CONNECTING", "OPEN", "CLOSING", "CLOSED"][openaiWs?.readyState] ||
-//           "UNKNOWN";
-//         console.log(`🎤 [${socket.id}] [OpenAI: ${state}]`);
-//         lastAudioLog = now;
-//       }
-//       if (openaiWs?.readyState === WebSocket.OPEN) {
-//         openaiWs.send(
-//           JSON.stringify({ type: "input_audio_buffer.append", audio: b64 }),
-//         );
-//       }
-//     });
-
-//     socket.on("audio_done", () => {
-//       console.log(`🔊 [FSM] Client audio_done — browser playback complete`);
-//       assistantSpeaking = false;
-
-//       dbg(
-//         session.collected?.intent || "unknown",
-//         "audio_done",
-//         "playback_complete",
-//         {
-//           fsmState,
-//           emailCaptureMode,
-//           emailCaptureConfirmAsked,
-//           salesStep,
-//           "email_state.is_confirmed": email_state.is_confirmed,
-//           lastResponseWasPackage,
-//         },
-//       );
-
-//       if (
-//         fsmState !== FSM_STATE.EMAIL_CAPTURE &&
-//         fsmState !== FSM_STATE.EMAIL_CONFIRMATION &&
-//         fsmState !== FSM_STATE.FINAL
-//       ) {
-//         transitionFSM(FSM_STATE.LISTENING);
-//       }
-
-//       const isPackage = lastResponseWasPackage;
-//       lastResponseWasPackage = false;
-//       console.log(
-//         `⏱️  [TMgr] TTS finished → silence timer starting (${isPackage ? "20s package" : "15s normal"})`,
-//       );
-//       TimerManager.startSilence(isPackage);
-//     });
-
-//     // ═══════════════ Structured Input (email/phone typed by user) ══
-//     socket.on("structured_input", (payload) => {
-//       if (!payload || !payload.field || !payload.value) return;
-//       const { field, value } = payload;
-
-//       if (field === "email") {
-//         dbg("sales", "structured_input_email", "received", {
-//           value,
-//           salesStep,
-//           "email_state.is_confirmed": email_state.is_confirmed,
-//           createTicketBlockedForEmail,
-//         });
-
-//         setEmailValue(value);
-//         confirmEmail();
-//         if (salesStep === "email") advanceSalesStep("email");
-//         createTicketBlockedForEmail = false;
-//         resetEmailCapture();
-//         awaitingStructuredInput = false;
-//         structuredInputField = null;
-
-//         const userMessage = `My email is ${value}`;
-//         session.messages.push({ role: "user", content: userMessage });
-//         sessions.set(session.id, session);
-//         socket.emit("user_transcript", userMessage);
-
-//         if (openaiWs?.readyState === WebSocket.OPEN) {
-//           openaiWs.send(
-//             JSON.stringify({
-//               type: "conversation.item.create",
-//               item: {
-//                 type: "message",
-//                 role: "user",
-//                 content: [{ type: "input_text", text: userMessage }],
-//               },
-//             }),
-//           );
-//           const salesHint = buildSalesStepHint() || "";
-//           const hint = `Customer email confirmed via typed input: ${value}. email_state.is_confirmed=true. createTicketBlockedForEmail=false. ${salesHint} Proceed immediately.`;
-//           openaiWs.send(
-//             JSON.stringify({
-//               type: "conversation.item.create",
-//               item: {
-//                 type: "message",
-//                 role: "user",
-//                 content: [
-//                   { type: "input_text", text: `[SYSTEM_CONTEXT]: ${hint}` },
-//                 ],
-//               },
-//             }),
-//           );
-//           scheduleResponseCreate();
-//         }
-
-//         socket.emit("structured_input_accepted", { field, value });
-//         socket.emit("status", "listening");
-//         return;
-//       }
-
-//       dbg(
-//         session.collected?.intent || "unknown",
-//         "structured_input_other",
-//         "received",
-//         {
-//           field,
-//           value,
-//         },
-//       );
-
-//       TimerManager.clearSilence();
-//       awaitingStructuredInput = false;
-//       structuredInputField = null;
-
-//       const userMessage = `My ${field} is ${value}`;
-//       session.messages.push({ role: "user", content: userMessage });
-//       sessions.set(session.id, session);
-//       socket.emit("user_transcript", userMessage);
-
-//       if (openaiWs?.readyState === WebSocket.OPEN) {
-//         openaiWs.send(
-//           JSON.stringify({
-//             type: "conversation.item.create",
-//             item: {
-//               type: "message",
-//               role: "user",
-//               content: [{ type: "input_text", text: userMessage }],
-//             },
-//           }),
-//         );
-//         scheduleResponseCreate();
-//       }
-
-//       socket.emit("structured_input_accepted", { field, value });
-//       socket.emit("status", "listening");
-//     });
-
-//     // ═══════════════ Cleanup ════════════════
-//     socket.on("disconnect", () => {
-//       console.log(`🔌 Disconnected: ${socket.id}`);
-//       dbg(session?.collected?.intent || "unknown", "disconnect", "cleanup", {
-//         "email_state.value": email_state.value,
-//         "email_state.is_confirmed": email_state.is_confirmed,
-//         collected: JSON.stringify(session?.collected || {}),
-//       });
-//       TimerManager.clearAll();
-//       closeElevenLabsWs();
-//       if (openaiWs)
-//         try {
-//           openaiWs.close();
-//         } catch (_) {}
-//       sessions.delete(session.id);
-//     });
-
-//     // ═══════════════ Boot ════════════════
-//     (async () => {
-//       try {
-//         console.log("⏳ Connecting OpenAI Realtime...");
-//         dbg("init", "connect", "pending", { sessionId: session.id });
-//         await connectOpenAI();
-//         console.log(
-//           "✅ OpenAI connected! ElevenLabs pre-warmed. Waiting 200ms...",
-//         );
-//         socket.emit("connections_ready");
-//         await new Promise((r) => setTimeout(r, 200));
-
-//         if (!session.hasGreeted) {
-//           session.hasGreeted = true;
-//           dbg("init", "greeting", "sending", { sessionId: session.id });
-//           if (openaiWs?.readyState === WebSocket.OPEN) {
-//             openaiWs.send(JSON.stringify({ type: "response.create" }));
-//           } else {
-//             console.warn(
-//               `⚠️ OpenAI WS not open for greeting (state: ${openaiWs?.readyState})`,
-//             );
-//           }
-//           sessions.set(session.id, session);
-//         } else {
-//           transitionFSM(FSM_STATE.LISTENING);
-//           socket.emit("status", "listening");
-//         }
-//       } catch (err) {
-//         console.error("❌ Connection failed:", err.message);
-//         socket.emit("error_msg", "Failed to connect to AI services");
-//       }
 import WebSocket from "ws";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3348,111 +16,6 @@ function dbg(flow, step, status, data = {}) {
 // ═══════════════════════════════════════════════════════════════════════════
 //  VOICE EMAIL CAPTURE — NATO PHONETIC PARSER + ASSEMBLER
 // ═══════════════════════════════════════════════════════════════════════════
-const NATO_MAP = {
-  alpha: "a",
-  alfa: "a",
-  bravo: "b",
-  charlie: "c",
-  delta: "d",
-  echo: "e",
-  foxtrot: "f",
-  golf: "g",
-  hotel: "h",
-  india: "i",
-  juliet: "j",
-  juliett: "j",
-  kilo: "k",
-  lima: "l",
-  mike: "m",
-  november: "n",
-  oscar: "o",
-  papa: "p",
-  quebec: "q",
-  romeo: "r",
-  sierra: "s",
-  tango: "t",
-  uniform: "u",
-  victor: "v",
-  whiskey: "w",
-  xray: "x",
-  "x-ray": "x",
-  yankee: "y",
-  zulu: "z",
-  ay: "a",
-  bee: "b",
-  see: "c",
-  sea: "c",
-  dee: "d",
-  ee: "e",
-  ef: "f",
-  eff: "f",
-  gee: "g",
-  aitch: "h",
-  haitch: "h",
-  jay: "j",
-  kay: "k",
-  el: "l",
-  em: "m",
-  en: "n",
-  oh: "o",
-  pee: "p",
-  cue: "q",
-  queue: "q",
-  are: "r",
-  ar: "r",
-  ess: "s",
-  es: "s",
-  tee: "t",
-  you: "u",
-  vee: "v",
-  double: null,
-  ex: "x",
-  why: "y",
-  wye: "y",
-  zee: "z",
-  zed: "z",
-  zero: "0",
-  one: "1",
-  two: "2",
-  to: "2",
-  too: "2",
-  three: "3",
-  four: "4",
-  for: "4",
-  five: "5",
-  six: "6",
-  seven: "7",
-  eight: "8",
-  nine: "9",
-  at: "@",
-  "at sign": "@",
-  dot: ".",
-  period: ".",
-  full: null,
-  stop: ".",
-  dash: "-",
-  hyphen: "-",
-  minus: "-",
-  underscore: "_",
-  "under score": "_",
-  plus: "+",
-  hash: "#",
-  hashtag: "#",
-  pound: "#",
-  com: "com",
-  net: "net",
-  org: "org",
-  edu: "edu",
-  gov: "gov",
-  io: "io",
-  co: "co",
-  au: "au",
-  uk: "uk",
-  us: "us",
-  ca: "ca",
-  nz: "nz",
-};
-
 const DOMAIN_SHORTCUTS = {
   gmail: "gmail.com",
   "gmail dot com": "gmail.com",
@@ -3476,12 +39,16 @@ const DOMAIN_SHORTCUTS = {
   bele: "bele.ai",
 };
 
-// FIX P4e: Strip filler words AND AI speech leakage before parsing email
+const NATO_MAP = {
+  zero: "0", one: "1", two: "2", three: "3", four: "4",
+  five: "5", six: "6", seven: "7", eight: "8", nine: "9",
+  niner: "9", dash: "-", hyphen: "-", underscore: "_", plus: "+",
+};
+
 function stripEmailFillers(text) {
   if (!text) return text;
   return (
     text
-      // FIX P4e: Remove common AI speech leakage patterns captured by mic
       .replace(
         /\b(of\s+ai|for\s+example|for\s+instance|listen\s*,?|go\s+ahead|spelling\s+mode|letter\s+by\s+letter)\b/gi,
         " ",
@@ -3502,13 +69,10 @@ function parseVoiceEmail(transcript) {
   const directEmail = raw.match(/\b([^\s@]+@[^\s@]+\.[^\s@]{2,})\b/);
   if (directEmail) return directEmail[1].toLowerCase();
 
-  // FIX P4a: Expand hyphenated spelled-out letter sequences FIRST
-  // e.g. "S-H-A-U-N" → "s h a u n", "B-E-L-E" → "b e l e"
+  // Expand hyphenated spelled-out letter sequences FIRST
   raw = raw.replace(
     /(?<![a-z0-9])([a-z])(?:-([a-z]))+(?![a-z0-9])/gi,
-    (match) => {
-      return match.toLowerCase().split("-").join(" ");
-    },
+    (match) => match.toLowerCase().split("-").join(" "),
   );
 
   raw = raw
@@ -3534,27 +98,17 @@ function parseVoiceEmail(transcript) {
 
   for (let i = 0; i < tokens.length; i++) {
     const tok = tokens[i];
-    if (/^[a-z0-9._@+-]+\.[a-z]{2,}$/.test(tok)) {
-      parts.push(tok);
-      continue;
-    }
-    if (/^[a-z]$/.test(tok) || /^\d$/.test(tok)) {
-      parts.push(tok);
-      continue;
-    }
-    if (/^\d{2,}$/.test(tok)) {
-      parts.push(tok);
-      continue;
-    }
+    if (tok === "at") { parts.push("@"); continue; }
+    if (tok === "dot" || tok === "period" || tok === "point") { parts.push("."); continue; }
+    if (/^[a-z0-9._@+-]+\.[a-z]{2,}$/.test(tok)) { parts.push(tok); continue; }
+    if (/^[a-z]$/.test(tok) || /^\d$/.test(tok)) { parts.push(tok); continue; }
+    if (/^\d{2,}$/.test(tok)) { parts.push(tok); continue; }
     if (NATO_MAP.hasOwnProperty(tok)) {
       const val = NATO_MAP[tok];
       if (val !== null) parts.push(val);
       continue;
     }
-    if (/^[a-z]{2,6}(\.[a-z]{2,6})?$/.test(tok)) {
-      parts.push(tok);
-      continue;
-    }
+    if (/^[a-z]{2,6}(\.[a-z]{2,6})?$/.test(tok)) { parts.push(tok); continue; }
     parts.push(tok);
   }
 
@@ -3581,11 +135,8 @@ function looksLikeVoiceEmailSpelling(text) {
   const lower = text.toLowerCase().trim();
   if (/\b[^\s@]+@[^\s@]+\.[^\s@]+\b/.test(lower)) return true;
   if (
-    /\bat\s+(gmail|yahoo|hotmail|outlook|icloud|bigpond|optusnet|tpg|live|proton|bele)/.test(
-      lower,
-    )
-  )
-    return true;
+    /\bat\s+(gmail|yahoo|hotmail|outlook|icloud|bigpond|optusnet|tpg|live|proton|bele)/.test(lower)
+  ) return true;
   const natoCount = (
     lower.match(
       /\b(alpha|bravo|charlie|delta|echo|foxtrot|golf|hotel|india|juliet|kilo|lima|mike|november|oscar|papa|quebec|romeo|sierra|tango|uniform|victor|whiskey|xray|yankee|zulu)\b/gi,
@@ -3594,29 +145,13 @@ function looksLikeVoiceEmailSpelling(text) {
   if (natoCount >= 2 && /\bat\b/.test(lower)) return true;
   const words = lower.split(/\s+/);
   const hasAt = words.includes("at");
-  const hasDot =
-    words.includes("dot") || words.includes("period") || words.includes("stop");
+  const hasDot = words.includes("dot") || words.includes("period") || words.includes("stop");
   const singleLetterCount = words.filter((w) => /^[a-z]$/.test(w)).length;
   if (hasAt && hasDot && singleLetterCount >= 2) return true;
-  // FIX P4: Also detect hyphenated spelling like "S-H-A-U-N at B-E-L-E dot A-I"
   const hyphenSpellingCount = (lower.match(/\b[a-z]-[a-z]\b/g) || []).length;
   if (hyphenSpellingCount >= 2 && hasAt) return true;
   return false;
 }
-
-// ═══════════════════════════════════════════════════════════════════════════
-//  FSM STATES
-// ═══════════════════════════════════════════════════════════════════════════
-const FSM_STATE = {
-  IDLE: "IDLE",
-  SPEAKING: "SPEAKING",
-  LISTENING: "LISTENING",
-  EMAIL_CAPTURE: "EMAIL_CAPTURE",
-  EMAIL_CONFIRMATION: "EMAIL_CONFIRMATION",
-  PACKAGE_PRESENTATION: "PACKAGE_PRESENTATION",
-  TOOL_EXECUTING: "TOOL_EXECUTING",
-  FINAL: "FINAL",
-};
 
 // ═══════════════════════════════════════════════════════════════════════════
 export function setupRealtimeVoice(io, deps) {
@@ -3650,17 +185,30 @@ export function setupRealtimeVoice(io, deps) {
 
   io.on("connection", (socket) => {
     console.log(`🔌 Voice client connected: ${socket.id}`);
-    console.log(`📊 [DEBUG] New connection - initializing handlers`);
 
     const session = mkSession();
-
     let openaiWs = null;
 
-    // ─── ElevenLabs state ─────────────────────────────────────────
     let elevenLabsWs = null;
     let elevenLabsReady = false;
     let textBuffer = [];
     let elevenLabsStreaming = false;
+    let elevenLabsInitialized = false;
+    let elevenLabsStreamingTimeout = null;
+
+    function safeSetElevenLabsStreaming(val) {
+      if (elevenLabsStreamingTimeout) { clearTimeout(elevenLabsStreamingTimeout); elevenLabsStreamingTimeout = null; }
+      elevenLabsStreaming = val;
+      if (val) {
+        elevenLabsStreamingTimeout = setTimeout(() => {
+          if (elevenLabsStreaming) {
+            console.warn(`⚠️ [EL] elevenLabsStreaming force-cleared after 15s safety timeout`);
+            elevenLabsStreaming = false;
+            assistantSpeaking = false;
+          }
+        }, 15000);
+      }
+    }
 
     let assistantTextBuffer = "";
     let pendingFunctionCalls = 0;
@@ -3688,76 +236,35 @@ export function setupRealtimeVoice(io, deps) {
 
     let lastResponseWasPackage = false;
 
-    // ═══════════════════════════════════════════════════════════════
-    //  UNIFIED EMAIL STATE
-    // ═══════════════════════════════════════════════════════════════
-    const email_state = {
-      value: "",
-      is_confirmed: false,
-    };
-
-    function setEmailValue(newEmail) {
-      const prev = email_state.value;
-      email_state.value = newEmail;
-      email_state.is_confirmed = false;
-      dbg("sales", "email_state_set", "overwrite", {
-        prev,
-        next: newEmail,
-        confirmed: false,
-        salesStep,
-        createTicketBlockedForEmail: "see_closure",
-      });
-    }
-
-    function confirmEmail() {
-      email_state.is_confirmed = true;
-      session.collected.email = email_state.value;
-      sessions.set(session.id, session);
-      dbg("sales", "email_confirmed", "success", {
-        email: email_state.value,
-        is_confirmed: true,
-        session_email: session.collected.email,
-        salesStep,
-      });
-    }
+    // ─── Email confirmation state ──────────────────────────────────
+    // FIX: pendingEmailConfirmation tracks the email waiting for user YES/NO.
+    // _emailStepComplete (on session.collected) prevents re-entry after YES.
+    let pendingEmailConfirmation = null; // { raw: string, parsed: string }
+    let emailConfirmationAsked = false;
 
     // ═══════════════════════════════════════════════════════════════
-    //  FINITE STATE MACHINE
+    //  DEBUG STATE
     // ═══════════════════════════════════════════════════════════════
-    let fsmState = FSM_STATE.IDLE;
-
-    function transitionFSM(newState) {
-      const prev = fsmState;
-      fsmState = newState;
-      dbg(session?.collected?.intent || "unknown", "fsm_transition", "ok", {
-        from: prev,
-        to: newState,
-      });
-      socket.emit("fsm_state", newState);
-    }
-
     function debugState(label = "state_snapshot") {
       const c = session.collected || {};
       dbg(c.intent || "unknown", label, "snapshot", {
-        fsmState,
         salesStep,
-        emailCaptureMode,
-        emailCaptureConfirmAsked,
-        emailCaptureConfirmPending,
-        "email_state.value": email_state.value,
-        "email_state.is_confirmed": email_state.is_confirmed,
-        createTicketBlockedForEmail,
         pendingFunctionCalls,
         isResponseActive,
         assistantSpeaking,
         elevenLabsStreaming,
+        elevenLabsReady,
         intent: c.intent || "none",
         leadInterest: c.leadInterest || "none",
         websiteCheckDone: c._websiteCheckDone || false,
-        "session.collected.email": c.email || "",
-        "session.collected.phone": c.phone || "",
+        websiteCheckAsked: c._websiteCheckAsked || false,
+        "collected.email": c.email || "",
+        "collected.phone": c.phone || "",
         _firstName: c._firstName || "",
         _lastName: c._lastName || "",
+        _emailStepComplete: c._emailStepComplete || false,
+        pendingEmailConfirmation: pendingEmailConfirmation?.parsed || "",
+        emailConfirmationAsked,
       });
     }
 
@@ -3766,13 +273,11 @@ export function setupRealtimeVoice(io, deps) {
     // ═══════════════════════════════════════════════════════════════
     const TimerManager = (() => {
       let _silenceTimer = null;
-      let _emailConfirmTimer = null;
       let _finalMessageTimer = null;
       let _watchdogTimer = null;
 
       const SILENCE_NORMAL_MS = 15000;
       const SILENCE_PACKAGE_MS = 20000;
-      const EMAIL_CONFIRM_MS = 30000;
       const WATCHDOG_MS = 8000;
 
       function _clearSilence() {
@@ -3780,13 +285,6 @@ export function setupRealtimeVoice(io, deps) {
           clearTimeout(_silenceTimer);
           _silenceTimer = null;
           console.log(`⏱️  [TMgr] Silence timer CLEARED`);
-        }
-      }
-      function _clearEmailConfirm() {
-        if (_emailConfirmTimer) {
-          clearTimeout(_emailConfirmTimer);
-          _emailConfirmTimer = null;
-          console.log(`⏱️  [TMgr] Email confirm timer CLEARED`);
         }
       }
       function _clearFinalMessage() {
@@ -3805,49 +303,17 @@ export function setupRealtimeVoice(io, deps) {
       return {
         startSilence(isPackage = false) {
           _clearSilence();
-          console.log(
-            `⏱️  [TMgr] startSilence called - isPackage=${isPackage}`,
-          );
-          if (
-            fsmState === FSM_STATE.EMAIL_CAPTURE ||
-            fsmState === FSM_STATE.EMAIL_CONFIRMATION ||
-            fsmState === FSM_STATE.SPEAKING ||
-            fsmState === FSM_STATE.TOOL_EXECUTING ||
-            fsmState === FSM_STATE.FINAL
-          ) {
-            console.log(
-              `⏱️  [TMgr] Silence timer suppressed (FSM: ${fsmState})`,
-            );
-            return;
-          }
-          if (emailCaptureMode) {
-            console.log(
-              `⏱️  [TMgr] Silence timer suppressed (emailCaptureMode)`,
-            );
-            return;
-          }
+          if (assistantSpeaking) { return; }
+          if (pendingFunctionCalls > 0) { return; }
           if (awaitingStructuredInput) return;
           if (finalMessageLock || session.finalLock) return;
-          if (pendingFunctionCalls > 0) return;
-          if (elevenLabsStreaming) {
-            console.log(`⏱️  [TMgr] Silence timer suppressed (EL streaming)`);
-            return;
-          }
-          if (assistantSpeaking) return;
+          if (elevenLabsStreaming) { return; }
 
           const timeoutMs = isPackage ? SILENCE_PACKAGE_MS : SILENCE_NORMAL_MS;
-          console.log(
-            `⏱️  [TMgr] Silence timer START: ${timeoutMs / 1000}s (${isPackage ? "package" : "normal"}) [FSM: ${fsmState}]`,
-          );
+          console.log(`⏱️  [TMgr] Silence timer START: ${timeoutMs / 1000}s`);
 
           _silenceTimer = setTimeout(() => {
             _silenceTimer = null;
-            if (emailCaptureMode) return;
-            if (fsmState === FSM_STATE.EMAIL_CAPTURE) return;
-            if (fsmState === FSM_STATE.EMAIL_CONFIRMATION) return;
-            if (fsmState === FSM_STATE.SPEAKING) return;
-            if (fsmState === FSM_STATE.TOOL_EXECUTING) return;
-            if (fsmState === FSM_STATE.FINAL) return;
             if (awaitingStructuredInput) return;
             if (finalMessageLock || session.finalLock) return;
             if (pendingFunctionCalls > 0) return;
@@ -3855,90 +321,42 @@ export function setupRealtimeVoice(io, deps) {
             if (elevenLabsStreaming) return;
 
             const nudgeText = isPackage
-              ? "[SILENCE_NUDGE] The user has not responded after you presented plans. Do NOT select a plan for them. Simply ask them gently which plan they'd like to go with."
+              ? "[CRITICAL_SILENCE_NUDGE] User has NOT responded after you presented plans. ABSOLUTELY DO NOT auto-select or assume a plan. User MUST explicitly tell you which plan they want. Ask clearly: 'Which of these plans would you like to go with?' and WAIT for their explicit choice."
               : "[SILENCE_NUDGE] The user has not responded. REPEAT your last question. Do NOT move forward.";
 
-            console.log(
-              `⏰ [TMgr] Silence fired (${timeoutMs / 1000}s) — nudging AI`,
-            );
+            console.log(`⏰ [TMgr] Silence fired — nudging AI`);
             if (openaiWs?.readyState === WebSocket.OPEN) {
-              openaiWs.send(
-                JSON.stringify({
-                  type: "conversation.item.create",
-                  item: {
-                    type: "message",
-                    role: "user",
-                    content: [{ type: "input_text", text: nudgeText }],
-                  },
-                }),
-              );
+              openaiWs.send(JSON.stringify({
+                type: "conversation.item.create",
+                item: {
+                  type: "message",
+                  role: "user",
+                  content: [{ type: "input_text", text: nudgeText }],
+                },
+              }));
               scheduleResponseCreate();
             }
           }, timeoutMs);
         },
 
-        resetSilence() {
-          _clearSilence();
-          console.log(`⏱️  [TMgr] User input detected → timer reset`);
-        },
+        resetSilence() { _clearSilence(); },
         clearSilence: _clearSilence,
-
-        startEmailConfirm() {
-          _clearEmailConfirm();
-          console.log(
-            `⏱️  [TMgr] Email confirm timer START (${EMAIL_CONFIRM_MS / 1000}s)`,
-          );
-          _emailConfirmTimer = setTimeout(() => {
-            _emailConfirmTimer = null;
-            if (!emailCaptureMode || !emailCaptureConfirmAsked) return;
-            console.log(`⏰ [TMgr] Email confirm timeout — re-asking`);
-            if (openaiWs?.readyState === WebSocket.OPEN) {
-              openaiWs.send(
-                JSON.stringify({
-                  type: "conversation.item.create",
-                  item: {
-                    type: "message",
-                    role: "user",
-                    content: [
-                      {
-                        type: "input_text",
-                        text: `[SYSTEM_CONTEXT]: The customer hasn't responded to the email confirmation. Re-read the email back: "${email_state.value}" — spell each letter individually with hyphens, say "at" for @, say "dot" for full stops. Never say "double X". Ask again if it's correct.`,
-                      },
-                    ],
-                  },
-                }),
-              );
-              scheduleResponseCreate();
-            }
-          }, EMAIL_CONFIRM_MS);
-        },
-
-        clearEmailConfirm: _clearEmailConfirm,
 
         startWatchdog() {
           _clearWatchdog();
           _watchdogTimer = setTimeout(() => {
             _watchdogTimer = null;
             if (!isResponseActive && pendingFunctionCalls === 0) {
-              console.warn(
-                `⚠️ [TMgr] Watchdog fired — agent stuck, triggering recovery`,
-              );
+              console.warn(`⚠️ [TMgr] Watchdog fired — agent stuck`);
               if (openaiWs?.readyState === WebSocket.OPEN) {
-                openaiWs.send(
-                  JSON.stringify({
-                    type: "conversation.item.create",
-                    item: {
-                      type: "message",
-                      role: "user",
-                      content: [
-                        {
-                          type: "input_text",
-                          text: "[SYSTEM_CONTEXT]: Please respond immediately to the last user message.",
-                        },
-                      ],
-                    },
-                  }),
-                );
+                openaiWs.send(JSON.stringify({
+                  type: "conversation.item.create",
+                  item: {
+                    type: "message",
+                    role: "user",
+                    content: [{ type: "input_text", text: "[SYSTEM_CONTEXT]: Please respond immediately to the last user message." }],
+                  },
+                }));
                 scheduleResponseCreate(null, 0, true);
               }
             }
@@ -3973,697 +391,65 @@ export function setupRealtimeVoice(io, deps) {
 
         clearAll() {
           _clearSilence();
-          _clearEmailConfirm();
           _clearFinalMessage();
           _clearWatchdog();
         },
 
-        get hasSilenceTimer() {
-          return _silenceTimer !== null;
-        },
-        get hasEmailConfirmTimer() {
-          return _emailConfirmTimer !== null;
-        },
+        get hasSilenceTimer() { return _silenceTimer !== null; },
       };
     })();
 
-    // ─── Final message lock flags ──────────────────────────────────
     let finalMessageLock = false;
-
-    // ═══════════════════════════════════════════════════════════════
-    //  EMAIL CAPTURE STATE
-    // ═══════════════════════════════════════════════════════════════
-    let emailCaptureMode = false;
-    let emailCaptureBuffer = [];
-    let emailCaptureAttempt = 0;
-    const EMAIL_MAX_ATTEMPTS = 3;
-    let emailCaptureConfirmPending = null;
-    let emailCaptureConfirmAsked = false;
-
-    let createTicketBlockedForEmail = false;
-
-    function emailSnapshot(label) {
-      dbg("sales", label, "snapshot", {
-        emailCaptureMode,
-        emailCaptureConfirmAsked,
-        emailCaptureConfirmPending,
-        emailCaptureAttempt,
-        "email_state.value": email_state.value,
-        "email_state.is_confirmed": email_state.is_confirmed,
-        createTicketBlockedForEmail,
-        salesStep,
-        "session.collected.email": session.collected?.email || "",
-        bufferLen: emailCaptureBuffer.length,
-      });
-    }
-
-    function startEmailCapture() {
-      const callerLine = new Error().stack.split("\n")[2]?.trim() || "unknown";
-      emailSnapshot("startEmailCapture_ENTRY");
-      dbg("sales", "startEmailCapture", "called", { caller: callerLine });
-
-      if (emailCaptureMode) {
-        dbg("sales", "startEmailCapture", "skipped", {
-          reason: "already_active",
-          emailCaptureConfirmAsked,
-          emailCaptureConfirmPending,
-        });
-        return;
-      }
-
-      emailCaptureMode = true;
-      // FIX P4b: ALWAYS reset buffer unconditionally — never carry over stale fragments
-      emailCaptureBuffer = [];
-      emailCaptureAttempt = 0;
-      emailCaptureConfirmPending = null;
-      emailCaptureConfirmAsked = false;
-      // FIX P4b: Always reset email state when starting fresh capture
-      email_state.value = "";
-      email_state.is_confirmed = false;
-      dbg("sales", "startEmailCapture", "email_state_reset", {
-        reason: "always_reset_on_fresh_capture",
-      });
-
-      createTicketBlockedForEmail = true;
-
-      TimerManager.clearSilence();
-      TimerManager.clearEmailConfirm();
-
-      transitionFSM(FSM_STATE.EMAIL_CAPTURE);
-
-      emailSnapshot("startEmailCapture_EXIT");
-      socket.emit("email_spelling_mode", { active: true, attempt: 1 });
-    }
-
-    function resetEmailCapture() {
-      const callerLine = new Error().stack.split("\n")[2]?.trim() || "unknown";
-      emailSnapshot("resetEmailCapture_ENTRY");
-      dbg("sales", "resetEmailCapture", "called", { caller: callerLine });
-
-      emailCaptureMode = false;
-      emailCaptureBuffer = [];
-      emailCaptureConfirmPending = null;
-      emailCaptureConfirmAsked = false;
-      TimerManager.clearEmailConfirm();
-      transitionFSM(FSM_STATE.LISTENING);
-      socket.emit("email_spelling_mode", { active: false });
-
-      emailSnapshot("resetEmailCapture_EXIT");
-    }
-
-    function handleEmailCaptureTranscript(text) {
-      if (!emailCaptureMode) {
-        dbg("sales", "handleEmailCaptureTranscript", "skipped", {
-          reason: "not_in_capture_mode",
-          text,
-        });
-        return false;
-      }
-
-      const cleaned = normalizeText(text);
-      if (!cleaned) {
-        dbg("sales", "handleEmailCaptureTranscript", "skipped", {
-          reason: "empty_transcript",
-        });
-        return true;
-      }
-
-      emailSnapshot("handleEmailCapture_ENTRY");
-      dbg("sales", "handleEmailCaptureTranscript", "processing", {
-        attempt: emailCaptureAttempt + 1,
-        input: cleaned,
-        bufferLen: emailCaptureBuffer.length,
-        confirmPending: emailCaptureConfirmPending,
-        confirmAsked: emailCaptureConfirmAsked,
-      });
-
-      // ── Phase 2: Waiting for YES/NO confirmation ──────────────────
-      if (emailCaptureConfirmPending && emailCaptureConfirmAsked) {
-        dbg("sales", "email_confirmation_phase", "awaiting_yesno", {
-          email: emailCaptureConfirmPending,
-          input: cleaned,
-        });
-        TimerManager.clearEmailConfirm();
-
-        const lower = cleaned.toLowerCase().trim();
-        const isYes =
-          /\b(yes|yeah|yep|yup|correct|that'?s right|that is correct|right|confirm|confirmed|affirmative|go ahead|sounds good)\b/.test(
-            lower,
-          );
-        const isNo =
-          /\b(no|nope|wrong|incorrect|that'?s wrong|not right|try again|redo|different|change|mistake)\b/.test(
-            lower,
-          );
-
-        dbg("sales", "email_yesno_detection", "result", {
-          input: lower,
-          isYes,
-          isNo,
-          emailPending: emailCaptureConfirmPending,
-        });
-
-        if (isYes) {
-          const confirmedEmail = emailCaptureConfirmPending;
-
-          emailSnapshot("emailCapture_YES_PRE_CONFIRM");
-          dbg("sales", "emailCapture_YES", "pre_confirm", {
-            confirmedEmail,
-            salesStep,
-            createTicketBlockedForEmail,
-            "email_state.value": email_state.value,
-            "email_state.is_confirmed": email_state.is_confirmed,
-            "session.collected.email": session.collected?.email || "",
-            pendingFunctionCalls,
-            isResponseActive,
-          });
-
-          setEmailValue(confirmedEmail);
-          confirmEmail();
-
-          emailSnapshot("emailCapture_YES_POST_CONFIRM");
-          dbg("sales", "emailCapture_YES", "post_confirm", {
-            "email_state.value": email_state.value,
-            "email_state.is_confirmed": email_state.is_confirmed,
-            "session.collected.email": session.collected?.email || "",
-            salesStep,
-            createTicketBlockedForEmail,
-          });
-
-          createTicketBlockedForEmail = false;
-
-          dbg("sales", "createTicketBlockedForEmail", "set_false", {
-            reason: "email_confirmed",
-            salesStep,
-          });
-
-          dbg("sales", "advanceSalesStep_about_to_call", "pre", {
-            salesStep,
-            completedStep: "email",
-            willAdvance: salesStep === "email",
-          });
-
-          if (salesStep === "email") advanceSalesStep("email");
-
-          emailSnapshot("emailCapture_YES_POST_ADVANCE");
-          dbg("sales", "emailCapture_YES", "post_advance", {
-            salesStep,
-            pendingPostDoneCreate,
-            pendingPostDoneHint,
-          });
-
-          const userMsg = `My email address is ${confirmedEmail}`;
-          session.messages.push({ role: "user", content: userMsg });
-          sessions.set(session.id, session);
-          socket.emit("user_transcript", userMsg);
-
-          resetEmailCapture();
-
-          if (openaiWs?.readyState === WebSocket.OPEN) {
-            openaiWs.send(
-              JSON.stringify({
-                type: "conversation.item.create",
-                item: {
-                  type: "message",
-                  role: "user",
-                  content: [{ type: "input_text", text: userMsg }],
-                },
-              }),
-            );
-            const salesHint = buildSalesStepHint() || "";
-            const hint = `The customer has confirmed their email address as ${confirmedEmail}. email_state.is_confirmed=true. createTicketBlockedForEmail=false. ${salesHint} Proceed to the next step immediately. If all required details are collected (name, phone, email, plan), call create_ticket NOW.`;
-
-            dbg("sales", "emailCapture_YES", "sending_hint_to_openai", {
-              hint: hint.substring(0, 200),
-              salesStep,
-              "email_state.is_confirmed": email_state.is_confirmed,
-              createTicketBlockedForEmail,
-            });
-
-            openaiWs.send(
-              JSON.stringify({
-                type: "conversation.item.create",
-                item: {
-                  type: "message",
-                  role: "user",
-                  content: [
-                    { type: "input_text", text: `[SYSTEM_CONTEXT]: ${hint}` },
-                  ],
-                },
-              }),
-            );
-            scheduleResponseCreate();
-          }
-          return true;
-        }
-
-        if (isNo) {
-          dbg("sales", "email_confirmation_rejected", "user_said_no", {
-            rejectedEmail: emailCaptureConfirmPending,
-            attempt: emailCaptureAttempt,
-          });
-
-          emailCaptureAttempt++;
-          emailCaptureConfirmPending = null;
-          emailCaptureConfirmAsked = false;
-
-          // Always clear the buffer on NO so old input doesn't contaminate next attempt
-          emailCaptureBuffer = [];
-          email_state.value = "";
-          email_state.is_confirmed = false;
-          createTicketBlockedForEmail = true;
-
-          dbg("sales", "email_capture_retry", "reset_for_retry", {
-            attempt: emailCaptureAttempt,
-            maxAttempts: EMAIL_MAX_ATTEMPTS,
-            bufferCleared: true,
-            confirmed: false,
-          });
-
-          if (emailCaptureAttempt >= EMAIL_MAX_ATTEMPTS) {
-            dbg("sales", "email_capture_max_retries", "exceeded", {
-              attempts: EMAIL_MAX_ATTEMPTS,
-            });
-            createTicketBlockedForEmail = false;
-            resetEmailCapture();
-            if (openaiWs?.readyState === WebSocket.OPEN) {
-              openaiWs.send(
-                JSON.stringify({
-                  type: "conversation.item.create",
-                  item: {
-                    type: "message",
-                    role: "user",
-                    content: [
-                      {
-                        type: "input_text",
-                        text: `[SYSTEM_CONTEXT]: Email capture has failed after ${EMAIL_MAX_ATTEMPTS} attempts. Tell the customer you're having trouble capturing the email by voice and ask them to call 1300 101 414 or email support@infinetbroadband.com.au to complete their order. Be apologetic and warm.`,
-                      },
-                    ],
-                  },
-                }),
-              );
-              scheduleResponseCreate();
-            }
-            return true;
-          }
-
-          socket.emit("email_spelling_mode", {
-            active: true,
-            attempt: emailCaptureAttempt + 1,
-          });
-
-          if (openaiWs?.readyState === WebSocket.OPEN) {
-            openaiWs.send(
-              JSON.stringify({
-                type: "conversation.item.create",
-                item: {
-                  type: "message",
-                  role: "user",
-                  content: [
-                    {
-                      type: "input_text",
-                      text: `[SYSTEM_CONTEXT]: The customer said the email was wrong. This is attempt ${emailCaptureAttempt + 1} of ${EMAIL_MAX_ATTEMPTS}. Ask them to spell the COMPLETE email again from the beginning, one letter at a time. Remind them: for @ use 'at', for . use 'dot'. Spell each letter individually — never say "double X". Be patient and encouraging.`,
-                    },
-                  ],
-                },
-              }),
-            );
-            scheduleResponseCreate();
-          }
-          return true;
-        }
-
-        // FIX P4d: If user says something during confirmation that looks like
-        // a correction or new spelling attempt, reset and re-capture
-        const looksLikeCorrection =
-          looksLikeVoiceEmailSpelling(cleaned) ||
-          /\b(wrong|not|correction|actually|no wait|its|it's)\b/i.test(lower);
-
-        if (looksLikeCorrection) {
-          dbg(
-            "sales",
-            "email_confirmation_correction_detected",
-            "resetting_for_new_parse",
-            { input: cleaned },
-          );
-          emailCaptureBuffer = [];
-          emailCaptureConfirmPending = null;
-          emailCaptureConfirmAsked = false;
-          email_state.value = "";
-          email_state.is_confirmed = false;
-          createTicketBlockedForEmail = true;
-          TimerManager.clearEmailConfirm();
-          transitionFSM(FSM_STATE.EMAIL_CAPTURE);
-          // Re-route this transcript through Phase 1 immediately
-          const cleanedForEmailRetry = stripEmailFillers(cleaned);
-          if (cleanedForEmailRetry && cleanedForEmailRetry.length >= 2) {
-            emailCaptureBuffer.push(cleanedForEmailRetry);
-            const combinedRetry = emailCaptureBuffer.join(" ");
-            const parsedRetry = parseVoiceEmail(combinedRetry);
-            if (parsedRetry) {
-              setEmailValue(parsedRetry);
-              emailCaptureConfirmPending = parsedRetry;
-              emailCaptureConfirmAsked = true;
-              socket.emit("email_spelling_confirmation", {
-                email: parsedRetry,
-              });
-              transitionFSM(FSM_STATE.EMAIL_CONFIRMATION);
-              TimerManager.startEmailConfirm();
-              if (openaiWs?.readyState === WebSocket.OPEN) {
-                openaiWs.send(
-                  JSON.stringify({
-                    type: "conversation.item.create",
-                    item: {
-                      type: "message",
-                      role: "user",
-                      content: [
-                        {
-                          type: "input_text",
-                          text: `[SYSTEM_CONTEXT]: Customer corrected their email. New parse: "${parsedRetry}". Read back ONLY the exact letters: local="${parsedRetry.split("@")[0]}" domain="${parsedRetry.split("@")[1]}". Spell each letter with hyphens. Ask "is that correct?" ONLY.`,
-                        },
-                      ],
-                    },
-                  }),
-                );
-                scheduleResponseCreate();
-              }
-              return true;
-            }
-          }
-          // If still can't parse, ask them to spell again
-          if (openaiWs?.readyState === WebSocket.OPEN) {
-            openaiWs.send(
-              JSON.stringify({
-                type: "conversation.item.create",
-                item: {
-                  type: "message",
-                  role: "user",
-                  content: [
-                    {
-                      type: "input_text",
-                      text: `[SYSTEM_CONTEXT]: Customer is correcting their email. Ask them to spell the complete email from the beginning, one letter at a time. For @ say 'at', for . say 'dot'. Be patient and warm.`,
-                    },
-                  ],
-                },
-              }),
-            );
-            scheduleResponseCreate();
-          }
-          return true;
-        }
-
-        // Truly ambiguous — re-ask yes/no only
-        dbg("sales", "email_confirmation_ambiguous", "re_asking_yesno", {
-          input: cleaned,
-        });
-        if (openaiWs?.readyState === WebSocket.OPEN) {
-          openaiWs.send(
-            JSON.stringify({
-              type: "conversation.item.create",
-              item: {
-                type: "message",
-                role: "user",
-                content: [
-                  {
-                    type: "input_text",
-                    text: `[SYSTEM_CONTEXT]: The customer said something ambiguous ("${cleaned}") when I asked them to confirm their email. The pending email is "${emailCaptureConfirmPending}". Please re-read the email back to them using individual letters and ask ONLY "is that correct?" Wait for yes or no ONLY.`,
-                  },
-                ],
-              },
-            }),
-          );
-          scheduleResponseCreate();
-        }
-        return true;
-      }
-
-      // ── Phase 1: Parse the spoken email ──────────────────────────
-      // Strip filler words before adding to buffer or parsing
-      const cleanedForEmail = stripEmailFillers(cleaned);
-      dbg("sales", "email_filler_stripped", "result", {
-        original: cleaned,
-        stripped: cleanedForEmail,
-      });
-
-      // If after stripping there's nothing useful, skip
-      if (!cleanedForEmail || cleanedForEmail.length < 2) {
-        dbg("sales", "email_parse_skipped", "empty_after_strip", {
-          original: cleaned,
-        });
-        return true;
-      }
-
-      // FIX P4c: Reject very short fragments that are likely AI speech leakage
-      // (e.g. "of AI." heard when mic picks up assistant's own voice)
-      const wordCountCheck = cleanedForEmail
-        .split(/\s+/)
-        .filter((w) => w.length > 0).length;
-      const hasAtOrDot = /\bat\b|\bdot\b/i.test(cleanedForEmail);
-      const looksLikeEmailFragment =
-        looksLikeVoiceEmailSpelling(cleanedForEmail) || hasAtOrDot;
-
-      if (
-        wordCountCheck <= 3 &&
-        !looksLikeEmailFragment &&
-        emailCaptureBuffer.length === 0
-      ) {
-        dbg("sales", "email_fragment_rejected", "likely_leakage", {
-          cleanedForEmail,
-          wordCountCheck,
-          reason: "short_fragment_at_start_of_capture",
-        });
-        return true; // consumed but not added to buffer
-      }
-
-      const looksLikeDomainCorrection =
-        /^www\.[a-z0-9_-]+\.(com|ai|co|net|org|au|io)/i.test(cleanedForEmail) ||
-        (/^[a-z0-9_-]+\s+(dot|point)\s+(com|ai|co|net|org|au|io)/i.test(
-          cleanedForEmail,
-        ) &&
-          !cleanedForEmail.includes("@"));
-
-      if (looksLikeDomainCorrection && emailCaptureBuffer.length > 0) {
-        dbg("sales", "email_domain_correction", "buffer_cleared", {
-          cleanedForEmail,
-        });
-        emailCaptureBuffer = [];
-        emailCaptureConfirmPending = null;
-        emailCaptureConfirmAsked = false;
-        email_state.value = "";
-        email_state.is_confirmed = false;
-        createTicketBlockedForEmail = true;
-      }
-
-      // Push the filler-stripped version to buffer (not raw)
-      emailCaptureBuffer.push(cleanedForEmail);
-      const combinedTranscript = emailCaptureBuffer.join(" ");
-
-      dbg("sales", "email_parse_attempt", "parsing", {
-        combined: combinedTranscript,
-        bufferLen: emailCaptureBuffer.length,
-      });
-
-      const parsed = parseVoiceEmail(combinedTranscript);
-
-      dbg("sales", "email_parse_result", parsed ? "success" : "failed", {
-        parsed,
-        raw: combinedTranscript,
-      });
-
-      if (!parsed) {
-        dbg("sales", "email_parse_failed", "no_email_found", {
-          combined: combinedTranscript,
-          wordCount: combinedTranscript.split(/\s+/).length,
-        });
-
-        if (combinedTranscript.split(/\s+/).length < 3) {
-          dbg("sales", "email_parse_waiting", "buffer_too_short", {
-            wordCount: combinedTranscript.split(/\s+/).length,
-          });
-          return true;
-        }
-        if (openaiWs?.readyState === WebSocket.OPEN) {
-          openaiWs.send(
-            JSON.stringify({
-              type: "conversation.item.create",
-              item: {
-                type: "message",
-                role: "user",
-                content: [
-                  {
-                    type: "input_text",
-                    text: `[SYSTEM_CONTEXT]: The customer is spelling their email but I couldn't parse it fully. Heard: "${combinedTranscript}". Ask them to repeat from the beginning, one letter at a time. For @ use 'at', for . use 'dot'. Be warm and patient.`,
-                  },
-                ],
-              },
-            }),
-          );
-          scheduleResponseCreate();
-        }
-        // Reset buffer on failed parse so next attempt is clean
-        emailCaptureBuffer = [];
-        return true;
-      }
-
-      setEmailValue(parsed);
-      emailCaptureConfirmPending = parsed;
-      emailCaptureConfirmAsked = true;
-
-      dbg("sales", "email_parsed_requesting_confirmation", "ok", {
-        email: parsed,
-        requestingConfirmation: true,
-      });
-
-      socket.emit("email_spelling_confirmation", { email: parsed });
-
-      transitionFSM(FSM_STATE.EMAIL_CONFIRMATION);
-      TimerManager.startEmailConfirm();
-
-      if (openaiWs?.readyState === WebSocket.OPEN) {
-        openaiWs.send(
-          JSON.stringify({
-            type: "conversation.item.create",
-            item: {
-              type: "message",
-              role: "user",
-              content: [
-                {
-                  type: "input_text",
-                  text: `[SYSTEM_CONTEXT]: I parsed the customer's spoken email as: "${parsed}". Read this email address back clearly. MANDATORY FORMAT: spell the local part (before @) using ONLY the EXACT letters from "${parsed.split("@")[0]}" separated by hyphens. Example: if local part is "shaun" say "s-h-a-u-n". Never say "double X" even for repeated letters — always say each letter separately (e.g. "l-l" not "double l"). Then say "at". Then say the domain with "dot" between parts. Full example for shaun@bele.ai: "I've got s-h-a-u-n at b-e-l-e dot a-i — is that correct?" Wait for yes or no ONLY. Do NOT ask any other question.`,
-                },
-              ],
-            },
-          }),
-        );
-        scheduleResponseCreate();
-      }
-
-      return true;
-    }
 
     // ─── Sales step machine ────────────────────────────────────────
     function initSalesStepMachine() {
-      if (salesStep !== null) {
-        dbg("sales", "initSalesStepMachine", "skipped", {
-          reason: "already_initialized",
-          salesStep,
-        });
-        return;
-      }
+      if (salesStep !== null) { return; }
       const c = session.collected || {};
 
       if (c.leadInterest && c._websiteCheckDone) {
-        if (!c._firstName) salesStep = "firstName";
-        else if (!c._lastName) salesStep = "lastName";
+        const hasFirstName = c._firstName || c.preferredName || (c.name && c.name.trim().length >= 2);
+        const hasLastName = c._lastName || (c.name && c.name.trim().split(/\s+/).length >= 2);
+
+        if (!hasFirstName) salesStep = "firstName";
+        else if (!hasLastName) salesStep = "lastName";
         else if (!c.phone) salesStep = "phone";
-        else if (!c.email || !email_state.is_confirmed) salesStep = "email";
+        // FIX BUG 1: Use _emailStepComplete as the authoritative "email done" signal
+        else if (!c.email || !c._emailStepComplete) salesStep = "email";
         else salesStep = "createTicket";
-        dbg("sales", "initSalesStepMachine", "initialized", {
-          startStep: salesStep,
-          websiteCheckDone: true,
-          _firstName: c._firstName || "",
-          _lastName: c._lastName || "",
-          phone: c.phone || "",
-          email: c.email || "",
-          emailConfirmed: email_state.is_confirmed,
-        });
-      } else {
-        dbg("sales", "initSalesStepMachine", "blocked", {
-          leadInterest: !!c.leadInterest,
-          websiteCheckDone: !!c._websiteCheckDone,
-        });
+
+        dbg("sales", "initSalesStepMachine", "initialized", { startStep: salesStep });
       }
     }
 
     function advanceSalesStep(completedStep) {
       const c = session.collected || {};
-      dbg("sales", "advanceSalesStep_ENTRY", "called", {
-        completedStep,
-        salesStep,
-        "email_state.is_confirmed": email_state.is_confirmed,
-        "session.collected.email": c.email || "",
-        "session.collected.phone": c.phone || "",
-        _firstName: c._firstName || "",
-        _lastName: c._lastName || "",
-      });
+      if (salesStep !== completedStep) { return; }
 
-      if (salesStep !== completedStep) {
-        dbg("sales", "advanceSalesStep_MISMATCH", "no_op", {
-          completedStep,
-          currentSalesStep: salesStep,
-          reason: "salesStep !== completedStep",
-        });
-        return;
-      }
-
-      const order = [
-        "firstName",
-        "lastName",
-        "phone",
-        "email",
-        "createTicket",
-        "done",
-      ];
+      const order = ["firstName", "lastName", "phone", "email", "createTicket", "done"];
       const idx = order.indexOf(completedStep);
-      if (idx === -1) {
-        dbg("sales", "advanceSalesStep", "unknown_step", { completedStep });
-        return;
-      }
+      if (idx === -1) { return; }
       const next = order[idx + 1];
-      if (!next) {
-        salesStep = "done";
-        dbg("sales", "advanceSalesStep_RESULT", "done", {
-          from: completedStep,
-        });
-        return;
-      }
+      if (!next) { salesStep = "done"; return; }
 
-      if (next === "lastName" && c._lastName) {
-        dbg("sales", "advanceSalesStep_SKIP", "lastName_already_set", {
-          _lastName: c._lastName,
-        });
-        advanceSalesStep("lastName");
-        return;
-      }
-      if (next === "phone" && c.phone) {
-        dbg("sales", "advanceSalesStep_SKIP", "phone_already_set", {
-          phone: c.phone,
-        });
-        advanceSalesStep("phone");
-        return;
-      }
-      if (next === "email" && c.email && email_state.is_confirmed) {
-        dbg("sales", "advanceSalesStep_SKIP", "email_already_confirmed", {
-          email: c.email,
-          is_confirmed: email_state.is_confirmed,
-        });
-        advanceSalesStep("email");
-        return;
-      }
+      if (next === "lastName" && c._lastName) { salesStep = "lastName"; advanceSalesStep("lastName"); return; }
+      if (next === "phone" && c.phone) { salesStep = "phone"; advanceSalesStep("phone"); return; }
+      // FIX BUG 1: Skip email step if _emailStepComplete is set
+      if (next === "email" && (c.email && c._emailStepComplete)) { salesStep = "email"; advanceSalesStep("email"); return; }
 
-      if (
-        next === "createTicket" &&
-        c._firstName &&
-        c._lastName &&
-        c.phone &&
-        c.email &&
-        email_state.is_confirmed
-      ) {
+      const hasName =
+        (c._firstName && c._lastName) ||
+        (c.name && c.name.trim().split(/\s+/).length >= 2) ||
+        (c._firstName && c.name) ||
+        c.preferredName;
+
+      // FIX BUG 1: Check _emailStepComplete for createTicket gate
+      if (next === "createTicket" && hasName && c.phone && c.email && c._emailStepComplete) {
         salesStep = "createTicket";
       } else {
         salesStep = next;
       }
 
-      dbg("sales", "advanceSalesStep_RESULT", "advanced", {
-        from: completedStep,
-        to: salesStep,
-        conditionCheck: {
-          _firstName: c._firstName || "",
-          _lastName: c._lastName || "",
-          phone: c.phone || "",
-          email: c.email || "",
-          emailConfirmed: email_state.is_confirmed,
-        },
-      });
+      dbg("sales", "advanceSalesStep_RESULT", "advanced", { from: completedStep, to: salesStep });
     }
 
     function buildSalesStepHint() {
@@ -4672,13 +458,6 @@ export function setupRealtimeVoice(io, deps) {
       const _logAndReturn = (label, val) => {
         dbg("sales", "buildSalesStepHint_RETURN", label, {
           salesStep,
-          "email_state.value": email_state.value,
-          "email_state.is_confirmed": email_state.is_confirmed,
-          createTicketBlockedForEmail,
-          emailCaptureMode,
-          emailCaptureConfirmAsked,
-          leadInterest: c.leadInterest || "",
-          websiteCheckDone: c._websiteCheckDone || false,
           hint: String(val || "").substring(0, 150),
         });
         return val;
@@ -4687,27 +466,28 @@ export function setupRealtimeVoice(io, deps) {
       if (
         c.leadInterest &&
         c._websiteCheckRequired &&
-        !c._websiteCheckAsked &&
-        !c._websiteCheckDone
+        !c._websiteCheckDone &&
+        !c._websiteCheckAsked
       ) {
-        if (!c._websiteCheckAsked) {
-          return _logAndReturn(
-            "website_check_not_asked",
-            `SALES STEP [website_check]: You MUST ask: "Just out of curiosity — have you had a chance to check out our website and seen the plans or pricing?" Do NOT proceed to collect name, phone, or email until this question is asked and answered. websiteCheckAsked=${c._websiteCheckAsked} websiteCheckDone=${c._websiteCheckDone}`,
-          );
-        } else {
-          return _logAndReturn(
-            "website_check_asked_awaiting",
-            `SALES STEP [website_check]: Website check already asked. Wait for customer answer. Do NOT proceed to name/phone/email yet. websiteCheckDone=${c._websiteCheckDone}`,
-          );
-        }
+        return _logAndReturn(
+          "website_check_not_asked",
+          `SALES STEP [website_check]: You MUST ask: "Just out of curiosity — have you had a chance to check out our website and seen the plans or pricing?" Do NOT proceed to collect name, phone, or email until this question is asked and answered.`,
+        );
       }
 
       if (
-        salesStep === null &&
         c.leadInterest &&
-        (c._websiteCheckDone || c._websiteCheckAsked)
+        c._websiteCheckRequired &&
+        c._websiteCheckAsked &&
+        !c._websiteCheckDone
       ) {
+        return _logAndReturn(
+          "website_check_asked_awaiting_answer",
+          `SALES STEP [website_check_pending]: Website check was already asked. DO NOT ask again. Wait for customer to answer.`,
+        );
+      }
+
+      if (salesStep === null && c.leadInterest && c._websiteCheckDone) {
         initSalesStepMachine();
       }
 
@@ -4718,101 +498,84 @@ export function setupRealtimeVoice(io, deps) {
       const name = c._firstName || c.preferredName || "";
 
       switch (salesStep) {
-        case "firstName":
+        case "firstName": {
+          if (c.preferredName || (c.name && c.name.trim().length >= 2)) {
+            const derivedFirst = c.preferredName || c.name.trim().split(/\s+/)[0];
+            const INVALID = new Set(["yes","yeah","no","nope","ok","okay","i","my","the","a","an","hi","hello"]);
+            if (derivedFirst && derivedFirst.length >= 2 && !INVALID.has(derivedFirst.toLowerCase())) {
+              session.collected._firstName = derivedFirst;
+              sessions.set(session.id, session);
+              advanceSalesStep("firstName");
+              return buildSalesStepHint();
+            }
+          }
           return _logAndReturn(
             "step_firstName",
             `[FLOW: sales][STEP: firstName][STATUS: pending] Ask ONLY for the customer's first name. Say something like "Could I start with your first name?" Say NOTHING else.`,
           );
+        }
 
-        case "lastName":
+        case "lastName": {
+          if (!c._lastName && c.name && c.name.trim().split(/\s+/).length >= 2) {
+            const parts = c.name.trim().split(/\s+/);
+            const derivedLast = parts[parts.length - 1];
+            const INVALID = new Set(["yes","yeah","no","nope","ok","okay","i","my","the","a","an"]);
+            if (derivedLast && derivedLast.length >= 2 && !INVALID.has(derivedLast.toLowerCase())) {
+              session.collected._lastName = derivedLast;
+              sessions.set(session.id, session);
+              advanceSalesStep("lastName");
+              return buildSalesStepHint();
+            }
+          }
           return _logAndReturn(
             "step_lastName",
-            `[FLOW: sales][STEP: lastName][STATUS: pending] You have their first name (${c._firstName || "collected"}). Ask ONLY for their last name. Say something like "And your last name?"`,
+            `[FLOW: sales][STEP: lastName][STATUS: pending] You have their first name (${c._firstName || "collected"}). Ask ONLY for their last name.`,
           );
+        }
 
         case "phone":
           return _logAndReturn(
             "step_phone",
-            `[FLOW: sales][STEP: phone][STATUS: pending] You have their name (${name}). Ask ONLY for their mobile phone number. Say something like "What's the best mobile number for you?"`,
+            `[FLOW: sales][STEP: phone][STATUS: pending] You have their name (${name}). Ask ONLY for their mobile phone number.`,
           );
 
-        case "email":
-          if (email_state.value && email_state.is_confirmed) {
-            dbg(
-              "sales",
-              "buildSalesStepHint_email",
-              "already_confirmed_skipping",
-              { email: email_state.value },
-            );
+        case "email": {
+          // ── FIX BUG 1: If email step is fully confirmed, skip immediately
+          if (c._emailStepComplete) {
+            dbg("sales", "buildSalesStepHint_email", "already_confirmed_skipping", {
+              email: c.email,
+              _emailStepComplete: true,
+            });
             advanceSalesStep("email");
             return buildSalesStepHint();
           }
-          if (
-            emailCaptureMode &&
-            emailCaptureConfirmAsked &&
-            emailCaptureConfirmPending
-          ) {
+
+          // ── FIX BUG 1: If email awaiting confirmation, do not re-ask
+          if (emailConfirmationAsked && pendingEmailConfirmation) {
             return _logAndReturn(
-              "step_email_confirm_pending",
-              `[FLOW: sales][STEP: email][STATUS: awaiting_confirmation] I have parsed the email as "${emailCaptureConfirmPending}". Do NOT ask for email again. Simply read this email back using individual letters and ask "is that correct?" Wait for yes or no ONLY.`,
+              "step_email_awaiting_confirmation",
+              `[FLOW: sales][STEP: email][STATUS: awaiting_confirmation] You already read the email back as "${pendingEmailConfirmation.parsed}". WAIT for the user to say YES or NO. Do NOT ask for the email again. Do NOT re-read it. Just wait.`,
             );
           }
-          if (emailCaptureMode) {
-            return _logAndReturn(
-              "step_email_capture_active",
-              `[FLOW: sales][STEP: email][STATUS: capture_active] Email capture is already in progress. Do NOT ask for email again. Wait for the customer to finish spelling their email. emailCaptureMode=true confirmAsked=${emailCaptureConfirmAsked}`,
-            );
-          }
+
           return _logAndReturn(
             "step_email_ask",
-            `[FLOW: sales][STEP: email][STATUS: pending] Ask for email: "Could I grab your email address? Please spell it letter by letter — for @ say 'at', for dots say 'dot'. Example: s-h-a-u-n at b-e-l-e dot a-i. Take your time." Then STOP and wait.`,
+            `[FLOW: sales][STEP: email][STATUS: pending] Ask for email: "Could I grab your email address? Please spell it letter by letter — for at the rate say 'at', for dots say 'dot'. Example: john dot doe at gmail dot com." Then read it back letter-by-letter and ask "Is that correct?" Only proceed after user confirms YES.`,
           );
+        }
 
         case "createTicket": {
-          if (createTicketBlockedForEmail) {
-            dbg(
-              "sales",
-              "buildSalesStepHint_createTicket",
-              "blocked_by_email",
-              {
-                createTicketBlockedForEmail,
-                "email_state.is_confirmed": email_state.is_confirmed,
-              },
-            );
-            if (emailCaptureConfirmAsked && emailCaptureConfirmPending) {
-              return _logAndReturn(
-                "step_createTicket_email_confirm_pending",
-                `[FLOW: sales][STEP: email][STATUS: awaiting_confirmation] Email parsed as "${emailCaptureConfirmPending}". Read it back letter by letter and ask ONLY "is that correct?" Do NOT call create_ticket.`,
-              );
-            }
-            return _logAndReturn(
-              "step_createTicket_email_blocked",
-              `[FLOW: sales][STEP: email][STATUS: capture_required] Email not yet confirmed. Do NOT call create_ticket. email_state.is_confirmed=${email_state.is_confirmed} createTicketBlockedForEmail=true. Ask for email NOW using VOICE SPELLING MODE.`,
-            );
-          }
-
           const missing = [];
-          if (!c._firstName && !c.name && !c.preferredName)
-            missing.push("name");
+          if (!c._firstName && !c.name && !c.preferredName) missing.push("name");
           if (!c.phone) missing.push("phone");
           if (!c.email) missing.push("email");
           if (!c.leadInterest) missing.push("selected plan");
 
           if (missing.length > 0) {
-            dbg("sales", "buildSalesStepHint_createTicket", "missing_fields", {
-              missing,
-            });
             if (!c.phone) salesStep = "phone";
-            else if (!c.email) salesStep = "email";
+            else if (!c.email || !c._emailStepComplete) salesStep = "email";
             return buildSalesStepHint();
           }
-
-          dbg("sales", "buildSalesStepHint_createTicket", "ready_to_fire", {
-            name: `${c._firstName || ""} ${c._lastName || ""}`.trim(),
-            phone: c.phone,
-            email: c.email,
-            plan: c.leadInterest,
-          });
 
           return _logAndReturn(
             "step_createTicket_execute",
@@ -4822,7 +585,6 @@ export function setupRealtimeVoice(io, deps) {
 - Email: ${c.email}
 - Plan: ${c.leadInterest}
 - Address: ${c.address || "provided earlier"}
-- email_state.is_confirmed: true
 
 STEP 1: Call extract_call_fields to save any recently collected details.
 STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user first. CALL THE TOOLS.`,
@@ -4842,30 +604,13 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
     // ─── Single pending response.create gate ──────────────────────
     let responseCreatePending = false;
 
-    function scheduleResponseCreate(
-      contextHint = null,
-      delayMs = 0,
-      force = false,
-    ) {
+    function scheduleResponseCreate(contextHint = null, delayMs = 0, force = false) {
       if (isResponseActive && !force) {
         if (contextHint) pendingPostDoneHint = contextHint;
         pendingPostDoneCreate = true;
-        dbg("sales", "scheduleResponseCreate", "queued_post_done", {
-          salesStep,
-          emailCaptureMode,
-          "email_state.is_confirmed": email_state.is_confirmed,
-          createTicketBlockedForEmail,
-          hint: (contextHint || "").substring(0, 100),
-        });
         return;
       }
-
-      if (responseCreatePending && !force) {
-        dbg("sales", "scheduleResponseCreate", "skipped_already_pending", {
-          salesStep,
-        });
-        return;
-      }
+      if (responseCreatePending && !force) { return; }
       responseCreatePending = true;
 
       const send = () => {
@@ -4878,51 +623,26 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
         }
 
         const salesHint = buildSalesStepHint();
-        const combinedHint = [contextHint, salesHint]
-          .filter(Boolean)
-          .join("\n\n");
+        const combinedHint = [contextHint, salesHint].filter(Boolean).join("\n\n");
 
         if (combinedHint) {
-          openaiWs.send(
-            JSON.stringify({
-              type: "conversation.item.create",
-              item: {
-                type: "message",
-                role: "user",
-                content: [
-                  {
-                    type: "input_text",
-                    text: `[SYSTEM_CONTEXT]: ${combinedHint}`,
-                  },
-                ],
-              },
-            }),
-          );
+          openaiWs.send(JSON.stringify({
+            type: "conversation.item.create",
+            item: {
+              type: "message",
+              role: "user",
+              content: [{ type: "input_text", text: `[SYSTEM_CONTEXT]: ${combinedHint}` }],
+            },
+          }));
         }
-
-        dbg("sales", "scheduleResponseCreate_FIRING", "sending", {
-          salesStep,
-          emailCaptureMode,
-          emailCaptureConfirmAsked,
-          "email_state.is_confirmed": email_state.is_confirmed,
-          createTicketBlockedForEmail,
-          isResponseActive,
-          pendingFunctionCalls,
-          force,
-          combinedHint: combinedHint.substring(0, 200),
-        });
 
         console.log("📤 Sending response.create to OpenAI");
         openaiWs.send(JSON.stringify({ type: "response.create" }));
-
         TimerManager.startWatchdog();
       };
 
-      if (delayMs > 0) {
-        setTimeout(send, delayMs);
-      } else {
-        send();
-      }
+      if (delayMs > 0) setTimeout(send, delayMs);
+      else send();
     }
 
     // ─── Detection helpers ─────────────────────────────────────────
@@ -4942,20 +662,9 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
 
     function mapOrdinalNetworkChoice(text) {
       const t = (text || "").toLowerCase().trim();
-      if (/\bnbn\b/.test(t) || /\b(opti\s*comm|opticomm)\b/.test(t))
-        return null;
-      if (
-        /\b(first|1st|one|1|option\s*1|option\s*one|number\s*1|the\s*first)\b/.test(
-          t,
-        )
-      )
-        return "NBN";
-      if (
-        /\b(second|2nd|two|2|option\s*2|option\s*two|number\s*2|the\s*second|to)\b/.test(
-          t,
-        )
-      )
-        return "Opticomm";
+      if (/\bnbn\b/.test(t) || /\b(opti\s*comm|opticomm)\b/.test(t)) return null;
+      if (/\b(first|1st|one|1|option\s*1|option\s*one|number\s*1|the\s*first)\b/.test(t)) return "NBN";
+      if (/\b(second|2nd|two|2|option\s*2|option\s*two|number\s*2|the\s*second|to)\b/.test(t)) return "Opticomm";
       return null;
     }
 
@@ -4966,7 +675,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           const t = (msgs[i].content || "").toLowerCase();
           return (
             (t.includes("nbn") && t.includes("opticomm")) ||
-            (t.includes("first option") && t.includes("second option")) ||
             t.includes("nbn or opticomm") ||
             t.includes("which one would you prefer")
           );
@@ -4980,10 +688,7 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
       if (!text) return false;
       const lower = text.toLowerCase();
       return (
-        (lower.includes("mbps") &&
-          (lower.includes("$") ||
-            lower.includes("per month") ||
-            lower.includes("/m"))) ||
+        (lower.includes("mbps") && (lower.includes("$") || lower.includes("per month") || lower.includes("/m"))) ||
         (lower.includes("plan") && lower.includes("available")) ||
         lower.includes("here are the plans") ||
         lower.includes("which of those plans") ||
@@ -5000,156 +705,100 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
         lower.includes("had a chance to check out") ||
         lower.includes("seen the plans or pricing") ||
         lower.includes("look at the plans or pricing") ||
-        (lower.includes("website") &&
-          (lower.includes("plans") || lower.includes("pricing")))
+        (lower.includes("website") && (lower.includes("plans") || lower.includes("pricing")))
       );
     }
 
     function detectWebsiteCheckAnswer(text) {
       if (!text) return false;
       const lower = text.toLowerCase().trim();
-      if (
-        /\b(yes|yeah|yep|yup|i have|i did|already|looked|checked|seen|saw|visited)\b/.test(
-          lower,
-        )
-      )
-        return true;
-      if (
-        /\b(no|nope|not yet|haven't|didn't|i haven't|i didn't|no i haven't)\b/.test(
-          lower,
-        )
-      )
-        return true;
+      if (/\b(yes|yeah|yep|yup|i have|i did|already|looked|checked|seen|saw|visited)\b/.test(lower)) return true;
+      if (/\b(no|nope|not yet|haven't|didn't|i haven't|i didn't|no i haven't)\b/.test(lower)) return true;
       return false;
     }
 
-    function detectEmailSpellingRequest(text) {
+    function wasLastAssistantMessageWebsiteCheck() {
+      const msgs = session.messages || [];
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        if (msgs[i].role === "assistant") {
+          return detectWebsiteCheckQuestion(msgs[i].content || "");
+        }
+        if (msgs[i].role === "user") break;
+      }
+      return false;
+    }
+
+    // ── FIX BUG original: Detect when AI reads email back asking for confirmation
+    function detectEmailReadbackQuestion(text) {
       if (!text) return false;
       const lower = text.toLowerCase();
       return (
-        (lower.includes("spell") && lower.includes("email")) ||
-        (lower.includes("one letter at a time") && lower.includes("email")) ||
-        (lower.includes("nato") && lower.includes("email")) ||
-        (lower.includes("say 'at'") && lower.includes("email")) ||
-        (lower.includes("i'm listening") && lower.includes("email"))
+        (lower.includes("is that correct") || lower.includes("correct?") || lower.includes("is that right") || lower.includes("shall i use")) &&
+        lower.includes("at") &&
+        (lower.includes("dot") || lower.includes("."))
       );
     }
 
-    // FIX P1+P2: Rewritten detectSalesStepAnswer with website check guard and input validation
+    // ── Detect user confirming email (YES) or rejecting (NO)
+    function detectEmailConfirmation(text) {
+      if (!text) return null;
+      const lower = text.toLowerCase().trim();
+      if (/\b(yes|yeah|yep|yup|correct|that's right|that is correct|that's correct|perfect|looks good|confirmed|confirm)\b/.test(lower)) return "yes";
+      if (/\b(no|nope|wrong|incorrect|that's wrong|that is wrong|change it|try again|re-spell|different)\b/.test(lower)) return "no";
+      return null;
+    }
+
     function detectSalesStepAnswer(text) {
-      if (!salesStep || salesStep === "done" || salesStep === "createTicket")
-        return;
+      if (!salesStep || salesStep === "done" || salesStep === "createTicket") return;
 
-      // FIX P1+P2: Never extract field values before website check is done
       const c = session.collected || {};
-      if (!c._websiteCheckDone) {
-        dbg(
-          "sales",
-          "detectSalesStepAnswer_SKIPPED",
-          "website_check_not_done",
-          { salesStep, text: text.substring(0, 50) },
-        );
-        return;
-      }
+      if (!c._websiteCheckDone) { return; }
 
-      // FIX P2: Words that must never be captured as names
       const INVALID_NAME_WORDS = new Set([
-        "yes",
-        "yeah",
-        "yep",
-        "no",
-        "nope",
-        "ok",
-        "okay",
-        "sure",
-        "right",
-        "alright",
-        "correct",
-        "true",
-        "false",
-        "i",
-        "my",
-        "the",
-        "a",
-        "an",
-        "hi",
-        "hello",
-        "hey",
-        "sorry",
-        "please",
-        "thank",
-        "thanks",
+        "yes","yeah","yep","no","nope","ok","okay","sure","right","alright",
+        "correct","true","false","i","my","the","a","an","hi","hello","hey",
+        "sorry","please","thank","thanks",
       ]);
 
       if (salesStep === "firstName") {
         const words = text.trim().split(/\s+/);
         const firstName = words[0]?.replace(/[^a-zA-Z'-]/g, "");
-        // FIX P2: Reject single-word yes/no answers and very short strings
-        if (
-          firstName &&
-          firstName.length >= 2 &&
-          !INVALID_NAME_WORDS.has(firstName.toLowerCase())
-        ) {
+        if (firstName && firstName.length >= 2 && !INVALID_NAME_WORDS.has(firstName.toLowerCase())) {
           session.collected._firstName = firstName;
           sessions.set(session.id, session);
-          dbg("sales", "detectSalesStepAnswer_firstName", "captured", {
-            firstName,
-          });
           advanceSalesStep("firstName");
-        } else {
-          dbg("sales", "detectSalesStepAnswer_firstName", "rejected", {
-            firstName,
-            reason: "invalid_or_reserved_word",
-          });
         }
       } else if (salesStep === "lastName") {
         const words = text.trim().split(/\s+/);
         const lastName = words[words.length - 1]?.replace(/[^a-zA-Z'-]/g, "");
-        if (
-          lastName &&
-          lastName.length >= 2 &&
-          !INVALID_NAME_WORDS.has(lastName.toLowerCase())
-        ) {
+        if (lastName && lastName.length >= 2 && !INVALID_NAME_WORDS.has(lastName.toLowerCase())) {
           session.collected._lastName = lastName;
           session.collected.name = `${c._firstName || ""} ${lastName}`.trim();
           session.collected.preferredName = c._firstName || lastName;
           sessions.set(session.id, session);
-          dbg("sales", "detectSalesStepAnswer_lastName", "captured", {
-            lastName,
-            fullName: session.collected.name,
-          });
           advanceSalesStep("lastName");
-        } else {
-          dbg("sales", "detectSalesStepAnswer_lastName", "rejected", {
-            lastName,
-            reason: "invalid_or_reserved_word",
-          });
         }
       } else if (salesStep === "phone") {
         const digits = text.replace(/\D/g, "");
         if (digits.length >= 8) {
           session.collected.phone = digits;
           sessions.set(session.id, session);
-          dbg("sales", "detectSalesStepAnswer_phone", "captured", {
-            phone: digits,
-          });
           advanceSalesStep("phone");
         }
       }
+      // NOTE: email step is handled exclusively via pendingEmailConfirmation flow — not here
     }
 
     // ═══════════════════════════════════════════════════════════════
-    //  ElevenLabs Connection Management
+    //  ElevenLabs — persistent single connection
     // ═══════════════════════════════════════════════════════════════
     function openElevenLabsStream(force = false) {
       if (
         !force &&
         elevenLabsWs &&
-        (elevenLabsWs.readyState === WebSocket.OPEN ||
-          elevenLabsWs.readyState === WebSocket.CONNECTING)
-      ) {
-        return;
-      }
+        (elevenLabsWs.readyState === WebSocket.OPEN || elevenLabsWs.readyState === WebSocket.CONNECTING)
+      ) { return; }
+
       closeElevenLabsWs();
 
       const wsUrl = `wss://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}/stream-input?model_id=eleven_flash_v2_5&output_format=pcm_16000`;
@@ -5157,24 +806,19 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
 
       elWs.on("open", () => {
         console.log(`✅ [EL] ElevenLabs WebSocket connected`);
-        elWs.send(
-          JSON.stringify({
-            text: " ",
-            voice_settings: {
-              stability: 0.4,
-              similarity_boost: 0.75,
-              speed: 1.1,
-            },
-            xi_api_key: ELEVENLABS_API_KEY,
-          }),
-        );
+        elWs.send(JSON.stringify({
+          text: " ",
+          voice_settings: { stability: 0.4, similarity_boost: 0.75, speed: 1.1 },
+          xi_api_key: ELEVENLABS_API_KEY,
+        }));
+
         if (elevenLabsWs === elWs) {
           elevenLabsReady = true;
-          elevenLabsStreaming = true;
-          for (const text of textBuffer) {
-            sendTextToElevenLabs(text);
+          elevenLabsInitialized = true;
+          if (textBuffer.length > 0) {
+            for (const text of textBuffer) sendTextToElevenLabs(text);
+            textBuffer = [];
           }
-          textBuffer = [];
         }
       });
 
@@ -5182,22 +826,12 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
         try {
           const msg = JSON.parse(data.toString());
           if (msg.audio) {
-            socket.emit("audio_chunk_pcm", {
-              sampleRate: PCM_SAMPLE_RATE,
-              audio: msg.audio,
-            });
+            socket.emit("audio_chunk_pcm", { sampleRate: PCM_SAMPLE_RATE, audio: msg.audio });
           }
-          const isFinal =
-            msg.isFinal === true || msg.is_final === true || msg.final === true;
+          const isFinal = msg.isFinal === true || msg.is_final === true || msg.final === true;
           if (isFinal) {
-            console.log(
-              `🔊 [EL] TTS generation complete (isFinal) — waiting for client audio_done`,
-            );
-            elevenLabsStreaming = false;
+            safeSetElevenLabsStreaming(false);
             socket.emit("audio_stream_complete");
-            if (emailCaptureMode && !emailCaptureConfirmAsked) {
-              socket.emit("email_spelling_ready");
-            }
           }
         } catch (err) {
           console.error(`⚠️ [EL] Message parse error:`, err.message);
@@ -5205,13 +839,19 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
       });
 
       elWs.on("error", (err) => {
-        console.warn(`⚠️ [EL] ElevenLabs WS error: ${err.message}`);
+        console.warn(`⚠️ [EL] WS error: ${err.message}`);
         elevenLabsStreaming = false;
+        elevenLabsReady = false;
+        if (elevenLabsWs === elWs) {
+          setTimeout(() => { if (elevenLabsWs === elWs || !elevenLabsWs) openElevenLabsStream(true); }, 500);
+        }
       });
-      elWs.on("close", () => {
+
+      elWs.on("close", (code) => {
         if (elevenLabsWs === elWs) {
           elevenLabsReady = false;
           elevenLabsStreaming = false;
+          setTimeout(() => { if (!elevenLabsReady && elevenLabsWs === elWs) openElevenLabsStream(true); }, 200);
         }
       });
 
@@ -5219,64 +859,48 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
     }
 
     function interruptElevenLabsStream() {
-      elevenLabsStreaming = false;
+      safeSetElevenLabsStreaming(false);
+      textBuffer = [];
       if (!elevenLabsWs || elevenLabsWs.readyState !== WebSocket.OPEN) {
         openElevenLabsStream(true);
         return;
       }
       try {
-        elevenLabsWs.send(JSON.stringify({ text: "" }));
-      } catch (e) {
-        console.warn("[EL] interrupt flush failed:", e.message);
-      }
-      try {
-        elevenLabsWs.send(
-          JSON.stringify({
-            text: " ",
-            voice_settings: {
-              stability: 0.4,
-              similarity_boost: 0.75,
-              speed: 1.1,
-            },
-            xi_api_key: ELEVENLABS_API_KEY,
-          }),
-        );
+        elevenLabsWs.send(JSON.stringify({
+          text: " ",
+          voice_settings: { stability: 0.4, similarity_boost: 0.75, speed: 1.1 },
+          xi_api_key: ELEVENLABS_API_KEY,
+        }));
         elevenLabsReady = true;
-        elevenLabsStreaming = true;
+        elevenLabsStreaming = false;
       } catch (e) {
-        console.warn("[EL] re-prime failed:", e.message);
+        elevenLabsReady = false;
         openElevenLabsStream(true);
       }
     }
 
     function sendTextToElevenLabs(text) {
       if (!text) return;
-      if (elevenLabsWs?.readyState === WebSocket.OPEN) {
-        elevenLabsWs.send(
-          JSON.stringify({ text, try_trigger_generation: true }),
-        );
-      }
+      if (!elevenLabsWs || elevenLabsWs.readyState !== WebSocket.OPEN) { textBuffer.push(text); return; }
+      if (!elevenLabsReady) { textBuffer.push(text); return; }
+      elevenLabsWs.send(JSON.stringify({ text, try_trigger_generation: true }));
     }
 
     function flushElevenLabsStream() {
-      if (elevenLabsWs?.readyState === WebSocket.OPEN) {
-        elevenLabsWs.send(JSON.stringify({ text: "" }));
+      if (elevenLabsWs?.readyState === WebSocket.OPEN && elevenLabsReady) {
+        elevenLabsWs.send(JSON.stringify({ text: " ", flush: true }));
       }
     }
 
     function closeElevenLabsWs() {
       if (elevenLabsWs) {
         elevenLabsStreaming = false;
-        try {
-          if (elevenLabsWs.readyState === WebSocket.CONNECTING)
-            elevenLabsWs.terminate();
-          else if (elevenLabsWs.readyState === WebSocket.OPEN)
-            elevenLabsWs.close();
-        } catch (err) {
-          console.warn(`⚠️ [EL] Error closing WS: ${err.message}`);
-        }
-        elevenLabsWs = null;
         elevenLabsReady = false;
+        try {
+          if (elevenLabsWs.readyState === WebSocket.CONNECTING) elevenLabsWs.terminate();
+          else if (elevenLabsWs.readyState === WebSocket.OPEN) elevenLabsWs.close(1000);
+        } catch (err) { /* ignore */ }
+        elevenLabsWs = null;
         textBuffer = [];
       }
     }
@@ -5300,41 +924,35 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
             SYSTEM_PROMPT +
             "\n\nCRITICAL: Always respond in English only." +
             "\n\nFIELD COLLECTION RULE: Collect ONE field per turn. Wait for answer before moving on." +
-            "\n\nEMAIL — ABSOLUTE RULES:" +
-            "\n1. Email is ALWAYS mutable. Any new email input DISCARDS the previous one completely." +
-            "\n2. After parsing, you MUST read back the EXACT parsed email (the local part before @) using ONLY individual letters separated by hyphens." +
-            "\n3. CRITICAL: Use the ACTUAL letters from the parsed email. If parsed email is aun@bele.ai, say 'a-u-n' NOT 's-h-a-u-n'. NEVER hallucinate different letters." +
-            "\n4. NEVER say 'double X' for repeated letters. Always say each letter separately: l-l not double-l." +
-            "\n5. If user corrects ANY part, reconstruct the ENTIRE email from scratch. Never partial-edit." +
-            "\n6. Only call any tool with email AFTER the user explicitly says YES to the readback." +
-            "\n\nEMAIL COLLECTION — VOICE ONLY: Collect email by voice spelling only. Do NOT mention any text input box. Do NOT say 'you can also type it'. Voice spelling is the ONLY method." +
-            "\n\nEMAIL DUPLICATE PREVENTION: If [SYSTEM_CONTEXT] shows emailCaptureMode=true or email_state.value is already set, do NOT ask for email again." +
-            "\n\nCREATE_TICKET RULE: NEVER call create_ticket if createTicketBlockedForEmail=true in [SYSTEM_CONTEXT]. Only call it when email_state.is_confirmed=true is explicitly shown." +
-            "\n\nFIELD EXTRACTION RULE: Before calling create_ticket, you MUST first call extract_call_fields to save any name, phone, or other details the customer just provided. create_ticket does NOT save fields automatically — extract_call_fields must be called first." +
-            "\n\nLEAD INTEREST EXTRACTION RULE: When the customer selects a plan (e.g. 'I'll go with the 500/50 plan' or 'the first one'), you MUST immediately call extract_call_fields with leadInterest set to the exact plan name. This is MANDATORY before asking for the website check or any personal details." +
-            "\n\nWEBSITE CHECK RULE: In sales flow, ALWAYS ask 'have you had a chance to check out our website and seen the plans or pricing?' AFTER plan is selected and BEFORE collecting any personal details (name/phone/email). Never skip this step." +
-            "\n\nCUSTOMER_LOOKUP RULE: NEVER call customer_lookup for a new sales lead. customer_lookup is ONLY for existing customers in support/accounts/relocation flows. If the customer is new (has leadInterest, no customer_id), proceed directly to collect name/phone/email and then call create_ticket." +
-            "\n\nEMAIL SPELLING INSTRUCTIONS (ALL FLOWS): When asking for email, say: 'Please spell your email address letter by letter. For the @ symbol, say 'at'. For dots, say 'dot'. For example: s-h-a-u-n at b-e-l-e dot a-i.' Always read back the email using the same format to confirm.";
+            "\n\nPACKAGE PRESENTATION RULE (CRITICAL):" +
+            "\n- When presenting plans/packages to the customer, present ALL available options clearly." +
+            "\n- ABSOLUTELY DO NOT auto-select or assume which plan the customer wants." +
+            "\n- After presenting packages, ask explicitly: 'Which of these plans catches your eye?'" +
+            "\n- WAIT for the customer to explicitly say WHICH PLAN they choose." +
+            "\n\nEMAIL COLLECTION FLOW:" +
+            "\n1. Ask for email spelling letter by letter." +
+            "\n2. Parse and read back letter-by-letter: 'So that's s-h-a-u-n at b-e-l-e dot a-i — is that right?'" +
+            "\n3. Wait for YES or NO. If YES → call extract_call_fields with the email ONCE. If NO → ask to re-spell." +
+            "\n4. After extract_call_fields confirms email saved, do NOT call it again with the same email." +
+            "\n5. NEVER use NATO names when reading back. Spell s-h-a-u-n not sierra-hotel-alpha-uniform-november.";
 
-          openaiWs.send(
-            JSON.stringify({
-              type: "session.update",
-              session: {
-                instructions,
-                modalities: ["text"],
-                input_audio_format: "pcm16",
-                turn_detection: {
-                  type: "server_vad",
-                  threshold: 0.8,
-                  prefix_padding_ms: 300,
-                  silence_duration_ms: 1500,
-                },
-                tools: realtimeTools,
-                tool_choice: "auto",
-                input_audio_transcription: { model: "whisper-1" },
+          openaiWs.send(JSON.stringify({
+            type: "session.update",
+            session: {
+              instructions,
+              modalities: ["text"],
+              input_audio_format: "pcm16",
+              turn_detection: {
+                type: "server_vad",
+                threshold: 0.9,
+                prefix_padding_ms: 300,
+                silence_duration_ms: 1500,
               },
-            }),
-          );
+              tools: realtimeTools,
+              tool_choice: "auto",
+              input_audio_transcription: { model: "whisper-1" },
+            },
+          }));
 
           openElevenLabsStream();
         });
@@ -5343,22 +961,13 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
         openaiWs.on("message", (raw) => {
           try {
             const data = JSON.parse(raw.toString());
-            if (!resolved) {
-              resolved = true;
-              resolve();
-            }
+            if (!resolved) { resolved = true; resolve(); }
             handleOpenAIEvent(data);
-          } catch (e) {
-            console.error("[WS-1] parse error:", e.message);
-          }
+          } catch (e) { console.error("[WS-1] parse error:", e.message); }
         });
 
         openaiWs.on("error", (err) => {
-          console.error("[WS-1] error:", err.message);
-          if (!resolved) {
-            resolved = true;
-            reject(err);
-          }
+          if (!resolved) { resolved = true; reject(err); }
         });
         openaiWs.on("close", (code) => {
           console.log(`[WS-1] closed (${code})`);
@@ -5378,24 +987,13 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
 
       switch (event.type) {
         case "session.created":
-          break;
-
         case "session.updated":
-          console.log("✅ [WS-1] Session configured");
           break;
 
         case "input_audio_buffer.speech_started": {
-          if (
-            awaitingStructuredInput ||
-            pendingFunctionCalls > 0 ||
-            session.finalLock ||
-            finalMessageLock
-          ) {
-            console.log(`🔇 Speech ignored (locked)`);
+          if (awaitingStructuredInput || pendingFunctionCalls > 0 || session.finalLock || finalMessageLock) {
             if (openaiWs?.readyState === WebSocket.OPEN) {
-              openaiWs.send(
-                JSON.stringify({ type: "input_audio_buffer.clear" }),
-              );
+              openaiWs.send(JSON.stringify({ type: "input_audio_buffer.clear" }));
             }
             break;
           }
@@ -5406,7 +1004,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           socket.emit("audio_interrupt");
 
           TimerManager.resetSilence();
-          TimerManager.clearEmailConfirm();
           TimerManager.clearWatchdog();
 
           if (isResponseActive) {
@@ -5422,10 +1019,8 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           lastResponseWasPackage = false;
           emptyResponseCount = 0;
           responseCreatePending = false;
-          if (!emailCaptureConfirmAsked) {
-            pendingPostDoneCreate = false;
-            pendingPostDoneHint = null;
-          }
+          pendingPostDoneCreate = false;
+          pendingPostDoneHint = null;
           break;
         }
 
@@ -5439,9 +1034,7 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           const cleaned = normalizeText(event.transcript);
           if (!cleaned) break;
 
-          console.log(
-            `📊 [TRANSCRIPT] raw="${event.transcript}" cleaned="${cleaned}"`,
-          );
+          console.log(`📊 [TRANSCRIPT] "${cleaned}"`);
 
           TimerManager.clearWatchdog();
 
@@ -5449,122 +1042,80 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           const digitCount = (cleaned.match(/\d/g) || []).length;
           const looksLikePhone = digitCount >= 6;
           const looksLikeSpelling = looksLikeVoiceEmailSpelling(cleaned);
+          const isPurePhoneNumber = looksLikePhone && !looksLikeEmail && !looksLikeSpelling;
 
-          const isPurePhoneNumber =
-            looksLikePhone && !looksLikeEmail && !looksLikeSpelling;
+          if (pendingFunctionCalls > 0 || finalMessageLock || session.finalLock) { break; }
 
-          const isEmailConfirmResponse =
-            emailCaptureMode && emailCaptureConfirmAsked;
-          const isEmailSpelling =
-            emailCaptureMode && !emailCaptureConfirmAsked && looksLikeSpelling;
+          if (assistantSpeaking) { assistantSpeaking = false; }
 
-          dbg(
-            session.collected?.intent || "unknown",
-            "transcript_received",
-            "classified",
-            {
-              cleaned,
-              looksLikeEmail,
-              looksLikePhone,
-              looksLikeSpelling,
-              isPurePhoneNumber,
-              isEmailConfirmResponse,
-              isEmailSpelling,
-              emailCaptureMode,
-              salesStep,
-              assistantSpeaking,
-              pendingFunctionCalls,
-              finalMessageLock,
-            },
-          );
-
-          if (
-            pendingFunctionCalls > 0 ||
-            finalMessageLock ||
-            session.finalLock
-          ) {
-            dbg("unknown", "transcript_dropped", "locked", {
-              pendingFunctionCalls,
-              finalMessageLock,
-              sessionFinalLock: session.finalLock,
-            });
-            break;
-          }
-
-          if (assistantSpeaking) {
-            dbg(
-              session.collected?.intent || "unknown",
-              "assistantSpeaking_cleared",
-              "user_took_floor",
-              { cleaned: cleaned.substring(0, 50) },
-            );
-            assistantSpeaking = false;
-          }
-
-          // Buffer phone for verification
           if (awaitingPhoneVerification && looksLikePhone) {
             const digits = cleaned.replace(/\D/g, "");
             if (digits.length >= 6) {
               rawPhoneBuffer = digits;
               rawPhoneBufferTimestamp = Date.now();
-              dbg("support", "phone_verification_buffered", "ok", {
-                phone: rawPhoneBuffer,
-                timestamp: rawPhoneBufferTimestamp,
-              });
-            }
-          }
-
-          const willRouteToEmail =
-            !isPurePhoneNumber &&
-            (emailCaptureMode ||
-              (salesStep === "email" && (looksLikeEmail || looksLikeSpelling)));
-
-          dbg(
-            "sales",
-            "transcript_email_routing_decision",
-            willRouteToEmail ? "routing_to_email" : "routing_normal",
-            {
-              isPurePhoneNumber,
-              emailCaptureMode,
-              salesStep,
-              looksLikeEmail,
-              looksLikeSpelling,
-              willRouteToEmail,
-              "email_state.value": email_state.value,
-              "email_state.is_confirmed": email_state.is_confirmed,
-            },
-          );
-
-          if (willRouteToEmail) {
-            if (!emailCaptureMode) {
-              dbg(
-                "sales",
-                "transcript_activating_email_capture",
-                "auto_start",
-                {
-                  reason: "salesStep=email and input looks like email",
-                },
-              );
-              startEmailCapture();
-            }
-            const consumed = handleEmailCaptureTranscript(cleaned);
-            dbg("sales", "transcript_after_email_handle", "result", {
-              consumed,
-              emailCaptureMode,
-              "email_state.value": email_state.value,
-              "email_state.is_confirmed": email_state.is_confirmed,
-              salesStep,
-              createTicketBlockedForEmail,
-            });
-            if (consumed) {
-              socket.emit("user_transcript", cleaned);
-              TimerManager.clearSilence();
-              break;
             }
           }
 
           console.log(`👤 User: "${cleaned}"`);
           socket.emit("user_transcript", cleaned);
+
+          // ══════════════════════════════════════════════════════════
+          // FIX BUG 1 & 3: Handle email confirmation FIRST, before
+          // anything else. This is the authoritative gate — once user
+          // says YES here, we set _emailStepComplete and never re-ask.
+          // ══════════════════════════════════════════════════════════
+          if (salesStep === "email" && emailConfirmationAsked && pendingEmailConfirmation) {
+            const confirmationResult = detectEmailConfirmation(cleaned);
+            dbg("sales", "email_confirmation_check", confirmationResult || "not_a_confirmation", {
+              cleaned: cleaned.substring(0, 60),
+              pendingEmail: pendingEmailConfirmation.parsed,
+            });
+
+            if (confirmationResult === "yes") {
+              const confirmedEmail = pendingEmailConfirmation.parsed;
+              // FIX BUG 1: Set _emailStepComplete BEFORE clearing state so guard fires
+              session.collected.email = confirmedEmail;
+              session.collected._emailStepComplete = true;
+              pendingEmailConfirmation = null;
+              emailConfirmationAsked = false;
+              sessions.set(session.id, session);
+              dbg("sales", "email_confirmed_YES", "advancing", {
+                email: confirmedEmail,
+                _emailStepComplete: true,
+              });
+              advanceSalesStep("email");
+              session.messages.push({ role: "user", content: cleaned });
+              sessions.set(session.id, session);
+              TimerManager.resetSilence();
+              // FIX BUG 3: Tell LLM NOT to call extract_call_fields again
+              const nextStepHint = buildSalesStepHint() || "Proceed to the next step.";
+              scheduleResponseCreate(
+                `Email confirmed and saved as "${confirmedEmail}". ` +
+                `_emailStepComplete=true. Do NOT call extract_call_fields with this email again. ` +
+                `Do NOT ask about email again. ${nextStepHint}`
+              );
+              break;
+
+            } else if (confirmationResult === "no") {
+              // User rejected — clear confirmation state and ask to re-spell
+              pendingEmailConfirmation = null;
+              emailConfirmationAsked = false;
+              // Also clear the tentatively saved email so LLM re-asks
+              delete session.collected.email;
+              delete session.collected._emailStepComplete;
+              sessions.set(session.id, session);
+              dbg("sales", "email_confirmed_NO", "clearing_and_re_asking", {});
+              session.messages.push({ role: "user", content: cleaned });
+              sessions.set(session.id, session);
+              TimerManager.resetSilence();
+              scheduleResponseCreate(
+                `Email was REJECTED by user. Say "No worries, let me take that again" ` +
+                `and ask them to re-spell their email letter by letter from the beginning.`
+              );
+              break;
+            }
+            // Not a clear yes/no — fall through to normal handling but don't advance
+          }
 
           const mappedNetwork = mapOrdinalNetworkChoice(cleaned);
           if (mappedNetwork && wasLastMessageNetworkQuestion()) {
@@ -5573,46 +1124,35 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
             session.messages.push({ role: "user", content: clarified });
             sessions.set(session.id, session);
             if (openaiWs?.readyState === WebSocket.OPEN) {
-              openaiWs.send(
-                JSON.stringify({
-                  type: "conversation.item.create",
-                  item: {
-                    type: "message",
-                    role: "user",
-                    content: [{ type: "input_text", text: clarified }],
-                  },
-                }),
-              );
+              openaiWs.send(JSON.stringify({
+                type: "conversation.item.create",
+                item: {
+                  type: "message",
+                  role: "user",
+                  content: [{ type: "input_text", text: clarified }],
+                },
+              }));
               scheduleResponseCreate();
             }
             TimerManager.resetSilence();
             break;
           }
 
+          // FIX BUG 2 (partial): Website check detection uses last assistant message
+          // (wasLastAssistantMessageWebsiteCheck) — the `cleaned` variable IS in scope
+          // here so detectWebsiteCheckAnswer(cleaned) is correct in this handler.
           if (
             session.collected._websiteCheckRequired &&
             !session.collected._websiteCheckDone &&
-            detectWebsiteCheckAnswer(cleaned)
+            detectWebsiteCheckAnswer(cleaned) &&
+            wasLastAssistantMessageWebsiteCheck()
           ) {
-            const lastAiMsg = [...(session.messages || [])]
-              .reverse()
-              .find((m) => m.role === "assistant");
-            if (
-              lastAiMsg &&
-              detectWebsiteCheckQuestion(lastAiMsg.content || "")
-            ) {
-              session.collected._websiteCheckDone = true;
-              sessions.set(session.id, session);
-              dbg("sales", "website_check_answered", "done", {
-                answer: cleaned,
-                websiteCheckDone: true,
-              });
-              // FIX P1: Initialize sales step machine NOW, before detectSalesStepAnswer runs
-              initSalesStepMachine();
-            }
+            session.collected._websiteCheckDone = true;
+            sessions.set(session.id, session);
+            dbg("sales", "website_check_answered", "done", { answer: cleaned });
+            initSalesStepMachine();
           }
 
-          // FIX P1+P2: detectSalesStepAnswer now guards against pre-website-check execution internally
           detectSalesStepAnswer(cleaned);
 
           session.messages.push({ role: "user", content: cleaned });
@@ -5627,15 +1167,10 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           currentResponseId = event.response?.id || null;
           currentResponseHadOutput = false;
           cancelPending = false;
-          elevenLabsStreaming = true;
-          openElevenLabsStream();
-          if (!(emailCaptureMode && emailCaptureConfirmAsked)) {
-            assistantSpeaking = true;
-          }
-          transitionFSM(FSM_STATE.SPEAKING);
+          safeSetElevenLabsStreaming(true);
+          assistantSpeaking = true;
           socket.emit("status", "speaking");
           TimerManager.clearWatchdog();
-          console.log(`🔊 [FSM] speech_start`);
           break;
 
         case "response.text.delta":
@@ -5643,31 +1178,21 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
             currentResponseHadOutput = true;
             assistantTextBuffer += event.delta;
             socket.emit("assistant_text_delta", event.delta);
-            if (elevenLabsReady) sendTextToElevenLabs(event.delta);
-            else textBuffer.push(event.delta);
+            sendTextToElevenLabs(event.delta);
           }
           break;
 
         case "response.text.done":
           if (event.text) {
             currentResponseHadOutput = true;
-            const newTextNorm = event.text
-              .toLowerCase()
-              .replace(/[^a-z0-9\s]/g, "")
-              .trim();
-            const lastTextNorm = lastAssistantText
-              .toLowerCase()
-              .replace(/[^a-z0-9\s]/g, "")
-              .trim();
+            const newTextNorm = event.text.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
+            const lastTextNorm = lastAssistantText.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
             const isDuplicate =
               newTextNorm.length > 20 &&
               lastTextNorm.length > 20 &&
-              (newTextNorm === lastTextNorm ||
-                newTextNorm.includes(lastTextNorm) ||
-                lastTextNorm.includes(newTextNorm));
+              (newTextNorm === lastTextNorm || newTextNorm.includes(lastTextNorm) || lastTextNorm.includes(newTextNorm));
 
             if (isDuplicate) {
-              console.log(`🔁 DUPLICATE response detected — skipping`);
               assistantTextBuffer = "";
               break;
             }
@@ -5678,11 +1203,26 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
             sessions.set(session.id, session);
             socket.emit("assistant_text_done", event.text);
 
+            // Detect leadInterest from AI text if LLM skipped extract_call_fields
+            if (!session.collected.leadInterest) {
+              const planMatch =
+                event.text.match(/\bOptiComm\s+[\w\s]+(?:Residential|Business|plan)\b/i) ||
+                event.text.match(/\bNBN\s+[\w\s]+(?:Residential|Business|plan|Mbps)\b/i);
+              if (planMatch) {
+                const detectedPlan = planMatch[0].trim();
+                session.collected.leadInterest = detectedPlan;
+                session.collected._websiteCheckRequired = true;
+                if (session.collected._websiteCheckDone === undefined) {
+                  session.collected._websiteCheckDone = false;
+                }
+                sessions.set(session.id, session);
+              }
+            }
+
             flushElevenLabsStream();
 
             if (detectPlanPresentation(event.text)) {
               lastResponseWasPackage = true;
-              transitionFSM(FSM_STATE.PACKAGE_PRESENTATION);
             }
 
             if (detectPhoneVerificationRequest(event.text)) {
@@ -5691,70 +1231,34 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
               rawPhoneBufferTimestamp = 0;
             }
 
-            const emailSpellingDetected = detectEmailSpellingRequest(
-              event.text,
-            );
-            dbg("sales", "response_text_done_email_check", "evaluated", {
-              emailSpellingDetected,
-              salesStep,
-              emailCaptureMode,
-              emailCaptureConfirmPending,
-              emailCaptureConfirmAsked,
-              "email_state.value": email_state.value,
-              "email_state.is_confirmed": email_state.is_confirmed,
-              textSnippet: event.text.substring(0, 100),
-            });
-
+            // ── FIX BUG 2: Track website check question from AI OUTPUT text,
+            //    NOT from `cleaned` (which is undefined in this scope).
+            //    We detect when the AI has just ASKED the question.
             if (
-              emailSpellingDetected &&
-              salesStep === "email" &&
-              !emailCaptureMode &&
-              !emailCaptureConfirmPending &&
-              !emailCaptureConfirmAsked
-            ) {
-              dbg(
-                "sales",
-                "detectEmailSpellingRequest_TRIGGERED",
-                "activating_capture",
-                {
-                  salesStep,
-                  emailCaptureMode,
-                  emailCaptureConfirmPending,
-                  emailCaptureConfirmAsked,
-                },
-              );
-              startEmailCapture();
-            } else if (emailSpellingDetected) {
-              dbg(
-                "sales",
-                "detectEmailSpellingRequest_SUPPRESSED",
-                "conditions_not_met",
-                {
-                  salesStep,
-                  emailCaptureMode,
-                  emailCaptureConfirmPending,
-                  emailCaptureConfirmAsked,
-                  reason: emailCaptureMode
-                    ? "already_in_capture"
-                    : emailCaptureConfirmPending
-                      ? "confirm_pending"
-                      : emailCaptureConfirmAsked
-                        ? "confirm_asked"
-                        : "salesStep_not_email",
-                },
-              );
-            }
-
-            if (
-              session.collected.leadInterest &&
               session.collected._websiteCheckRequired &&
+              !session.collected._websiteCheckDone &&
               !session.collected._websiteCheckAsked &&
               detectWebsiteCheckQuestion(event.text)
             ) {
               session.collected._websiteCheckAsked = true;
               sessions.set(session.id, session);
-              dbg("sales", "website_check_question_detected", "marked_asked", {
-                websiteCheckAsked: true,
+              dbg("sales", "website_check_question_detected_from_ai_output", "marked_asked", {
+                aiText: event.text.substring(0, 80),
+              });
+            }
+
+            // ── FIX BUG 1: Detect when AI is reading email back asking for confirmation.
+            //    Only set emailConfirmationAsked if we actually have a pending email
+            //    AND the email step is not already complete.
+            if (
+              salesStep === "email" &&
+              !session.collected._emailStepComplete &&
+              detectEmailReadbackQuestion(event.text) &&
+              pendingEmailConfirmation
+            ) {
+              emailConfirmationAsked = true;
+              dbg("sales", "email_readback_detected", "awaiting_confirmation", {
+                pendingEmail: pendingEmailConfirmation.parsed,
               });
             }
           }
@@ -5763,7 +1267,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
         case "response.done": {
           isResponseActive = false;
           TimerManager.clearWatchdog();
-          console.log(`🔊 [FSM] speech_end`);
           debugState("response_done_snapshot");
 
           const outputItems = event.response?.output || [];
@@ -5773,49 +1276,16 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
                 item.type === "message" &&
                 item.content?.some((c) => c.type === "text" && c.text?.trim()),
             ) || currentResponseHadOutput;
-          const hasFunctionCall = outputItems.some(
-            (item) => item.type === "function_call",
-          );
+          const hasFunctionCall = outputItems.some((item) => item.type === "function_call");
 
-          dbg(
-            session.collected?.intent || "unknown",
-            "response_done",
-            "analysis",
-            {
-              hasTextOutput,
-              hasFunctionCall,
-              pendingFunctionCalls,
-              elevenLabsStreaming,
-              cancelPending,
-              pendingPostDoneCreate,
-            },
-          );
-
-          if (
-            !hasFunctionCall &&
-            pendingFunctionCalls === 0 &&
-            !elevenLabsStreaming
-          ) {
+          if (!hasFunctionCall && pendingFunctionCalls === 0 && !elevenLabsStreaming) {
             assistantSpeaking = false;
-            dbg(
-              "sales",
-              "assistantSpeaking_cleared_response_done",
-              "no_el_streaming",
-              {},
-            );
           }
 
-          if (
-            !hasFunctionCall &&
-            !hasTextOutput &&
-            pendingFunctionCalls === 0 &&
-            !finalMessageLock
-          ) {
+          if (!hasFunctionCall && !hasTextOutput && pendingFunctionCalls === 0 && !finalMessageLock) {
             if (cancelPending) {
-              console.log(`✅ response.done (cancelled) — no retry`);
               cancelPending = false;
               assistantSpeaking = false;
-              transitionFSM(FSM_STATE.LISTENING);
               socket.emit("status", "listening");
               if (pendingPostDoneCreate) {
                 pendingPostDoneCreate = false;
@@ -5826,33 +1296,16 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
               break;
             }
 
-            // FIX P3: Don't retry while ElevenLabs is still streaming audio
-            if (elevenLabsStreaming) {
-              dbg(
-                "sales",
-                "empty_response_retry_suppressed",
-                "el_still_streaming",
-                { emptyResponseCount },
-              );
-              break;
-            }
+            if (elevenLabsStreaming) { break; }
 
             emptyResponseCount++;
-            console.warn(
-              `⚠️ EMPTY RESPONSE: attempt ${emptyResponseCount}/${MAX_EMPTY_RETRIES}`,
-            );
             if (emptyResponseCount <= MAX_EMPTY_RETRIES) {
-              // FIX P3: Use longer exponential backoff to prevent flooding
               const retryDelay = 300 * Math.pow(2, emptyResponseCount - 1);
               assistantSpeaking = false;
               scheduleResponseCreate(null, retryDelay, true);
             } else {
-              console.warn(
-                `⚠️ Max retries (${MAX_EMPTY_RETRIES}) reached — stopping retry loop`,
-              );
               emptyResponseCount = 0;
               assistantSpeaking = false;
-              transitionFSM(FSM_STATE.LISTENING);
               socket.emit("status", "listening");
             }
             break;
@@ -5861,34 +1314,14 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           emptyResponseCount = 0;
 
           if (pendingPostDoneCreate && pendingFunctionCalls === 0) {
-            if (createTicketBlockedForEmail) {
-              dbg("sales", "post_done_create_blocked", "email_not_confirmed", {
-                createTicketBlockedForEmail,
-                "email_state.is_confirmed": email_state.is_confirmed,
-              });
-              pendingPostDoneCreate = false;
-              const emailHint = buildSalesStepHint() || "";
-              pendingPostDoneHint = null;
-              setTimeout(() => scheduleResponseCreate(emailHint, 0, true), 50);
-              break;
-            }
             pendingPostDoneCreate = false;
             const hint = pendingPostDoneHint;
             pendingPostDoneHint = null;
-            console.log(`📤 Firing queued post-done response.create`);
             setTimeout(() => scheduleResponseCreate(hint, 0, true), 50);
             break;
           }
 
-          if (!pendingFunctionCalls) {
-            if (
-              fsmState !== FSM_STATE.EMAIL_CAPTURE &&
-              fsmState !== FSM_STATE.EMAIL_CONFIRMATION
-            ) {
-              transitionFSM(FSM_STATE.LISTENING);
-            }
-            socket.emit("status", "listening");
-          }
+          if (!pendingFunctionCalls) socket.emit("status", "listening");
           assistantTextBuffer = "";
           currentResponseHadOutput = false;
           break;
@@ -5897,24 +1330,10 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
         case "response.output_item.added":
           if (event.item?.type === "function_call") {
             const fnName = event.item.name || event.item.function_call?.name;
-            dbg(
-              session.collected?.intent || "unknown",
-              "function_call_added",
-              "detected",
-              {
-                fnName,
-                createTicketBlockedForEmail,
-                "email_state.is_confirmed": email_state.is_confirmed,
-              },
-            );
             if (fnName === "create_ticket") {
-              if (!createTicketBlockedForEmail) {
-                TimerManager.startFinalLock(20000);
-              }
+              TimerManager.startFinalLock(20000);
               if (openaiWs?.readyState === WebSocket.OPEN) {
-                openaiWs.send(
-                  JSON.stringify({ type: "input_audio_buffer.clear" }),
-                );
+                openaiWs.send(JSON.stringify({ type: "input_audio_buffer.clear" }));
               }
             }
           }
@@ -5923,7 +1342,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
         case "response.output_item.done":
           if (event.item?.type === "function_call") {
             pendingFunctionCalls++;
-            transitionFSM(FSM_STATE.TOOL_EXECUTING);
             handleFunctionCall(event.item);
           }
           break;
@@ -5931,15 +1349,14 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
         case "error":
           console.error("[WS-1] OpenAI error:", JSON.stringify(event.error));
           socket.emit("error_msg", event.error?.message || "AI error");
-          if (isResponseActive) isResponseActive = false;
-          if (pendingFunctionCalls > 0) pendingFunctionCalls = 0;
+          isResponseActive = false;
+          pendingFunctionCalls = 0;
           emptyResponseCount = 0;
           responseCreatePending = false;
           pendingPostDoneCreate = false;
           elevenLabsStreaming = false;
           assistantSpeaking = false;
           TimerManager.clearWatchdog();
-          transitionFSM(FSM_STATE.LISTENING);
           socket.emit("status", "listening");
           break;
       }
@@ -5950,25 +1367,14 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
       const { call_id, name: fn, arguments: argsStr } = item;
       let args = safeParseJSON(argsStr) || {};
 
-      dbg(
-        session.collected?.intent || "unknown",
-        "handleFunctionCall_ENTRY",
-        "called",
-        {
-          fn,
-          argsPreview: JSON.stringify(args).substring(0, 150),
-          salesStep,
-          "email_state.is_confirmed": email_state.is_confirmed,
-          createTicketBlockedForEmail,
-          emailCaptureMode,
-        },
-      );
+      dbg(session.collected?.intent || "unknown", "handleFunctionCall_ENTRY", "called", {
+        fn,
+        argsPreview: JSON.stringify(args).substring(0, 150),
+        salesStep,
+      });
 
       // Redirect verify_phone for sales (non-verified) flow
-      if (
-        fn === "verify_phone" &&
-        !session.collected._emailVerifiedCustomerId
-      ) {
+      if (fn === "verify_phone" && !session.collected._emailVerifiedCustomerId) {
         const llmPhone = args.phone;
         const bufferPhone = rawPhoneBuffer;
         const phoneToSave = llmPhone || bufferPhone;
@@ -5976,57 +1382,29 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
         rawPhoneBufferTimestamp = 0;
         awaitingPhoneVerification = false;
         if (phoneToSave) {
-          session.collected.phone =
-            String(phoneToSave).replace(/\D/g, "") || phoneToSave;
+          session.collected.phone = String(phoneToSave).replace(/\D/g, "") || phoneToSave;
           sessions.set(session.id, session);
           if (salesStep === "phone") advanceSalesStep("phone");
-          dbg("sales", "verify_phone_redirected_to_save", "saved", {
-            phone: session.collected.phone,
-            salesStep,
-          });
         }
-        const fakeResult = JSON.stringify({
-          success: true,
-          _redirected: true,
-          message: "Phone number saved.",
-        });
+        const fakeResult = JSON.stringify({ success: true, _redirected: true, message: "Phone number saved." });
         if (openaiWs?.readyState === WebSocket.OPEN) {
-          openaiWs.send(
-            JSON.stringify({
-              type: "conversation.item.create",
-              item: {
-                type: "function_call_output",
-                call_id,
-                output: fakeResult,
-              },
-            }),
-          );
+          openaiWs.send(JSON.stringify({
+            type: "conversation.item.create",
+            item: { type: "function_call_output", call_id, output: fakeResult },
+          }));
         }
         pendingFunctionCalls = Math.max(0, pendingFunctionCalls - 1);
-        if (
-          pendingFunctionCalls === 0 &&
-          openaiWs?.readyState === WebSocket.OPEN
-        ) {
+        if (pendingFunctionCalls === 0 && openaiWs?.readyState === WebSocket.OPEN) {
           const salesHint = buildSalesStepHint() || "";
-          const hint = `Phone number has been saved. ${salesHint}\n\nIMPORTANT: Respond immediately — proceed to the next step.`;
-          openaiWs.send(
-            JSON.stringify({
-              type: "conversation.item.create",
-              item: {
-                type: "message",
-                role: "user",
-                content: [
-                  { type: "input_text", text: `[SYSTEM_CONTEXT]: ${hint}` },
-                ],
-              },
-            }),
-          );
-          if (
-            fsmState !== FSM_STATE.EMAIL_CAPTURE &&
-            fsmState !== FSM_STATE.EMAIL_CONFIRMATION
-          ) {
-            transitionFSM(FSM_STATE.LISTENING);
-          }
+          const hint = `Phone number has been saved. ${salesHint}\n\nProceed to the next step immediately.`;
+          openaiWs.send(JSON.stringify({
+            type: "conversation.item.create",
+            item: {
+              type: "message",
+              role: "user",
+              content: [{ type: "input_text", text: `[SYSTEM_CONTEXT]: ${hint}` }],
+            },
+          }));
           scheduleResponseCreate();
         }
         return;
@@ -6034,29 +1412,32 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
 
       if (fn === "verify_phone") {
         if (rawPhoneBuffer) {
-          const llmPhone = args.phone
-            ? String(args.phone).replace(/\D/g, "")
-            : null;
+          const llmPhone = args.phone ? String(args.phone).replace(/\D/g, "") : null;
           const bufPhone = String(rawPhoneBuffer).replace(/\D/g, "");
-          if (
-            !llmPhone ||
-            llmPhone === bufPhone ||
-            bufPhone.length === llmPhone.length
-          ) {
-            args = { ...args, phone: rawPhoneBuffer };
-            dbg("support", "verify_phone_using_buffer", "ok", {
-              rawPhoneBuffer,
-              llmPhone,
-            });
-          } else {
-            dbg("support", "verify_phone_trusting_llm", "ok", {
-              llmPhone,
-              discardedBuffer: rawPhoneBuffer,
-            });
+          const bufferAge = Date.now() - rawPhoneBufferTimestamp;
+          const bufferIsStale = bufferAge > 10000;
+          const llmHasFullNumber = llmPhone && llmPhone.length >= 10;
+          if (!bufferIsStale || !llmHasFullNumber) {
+            args = { ...args, phone: bufPhone };
           }
           rawPhoneBuffer = null;
           rawPhoneBufferTimestamp = 0;
           awaitingPhoneVerification = false;
+        } else if (!args.phone || String(args.phone).replace(/\D/g, "").length < 6) {
+          const noPhoneResult = JSON.stringify({
+            success: false,
+            verificationFailed: false,
+            message: "Could not extract phone number from speech. Ask the customer to repeat their number clearly.",
+          });
+          if (openaiWs?.readyState === WebSocket.OPEN) {
+            openaiWs.send(JSON.stringify({
+              type: "conversation.item.create",
+              item: { type: "function_call_output", call_id, output: noPhoneResult },
+            }));
+          }
+          pendingFunctionCalls = Math.max(0, pendingFunctionCalls - 1);
+          if (pendingFunctionCalls === 0) scheduleResponseCreate();
+          return;
         }
       }
 
@@ -6065,7 +1446,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
       let result;
       socket.emit("status", "processing");
       TimerManager.clearSilence();
-      TimerManager.clearEmailConfirm();
       TimerManager.clearWatchdog();
 
       if (openaiWs?.readyState === WebSocket.OPEN) {
@@ -6075,17 +1455,12 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
       const toolTimeout = setTimeout(() => {
         console.warn(`⚠️ Tool ${fn} timed out after 30s`);
         pendingFunctionCalls = Math.max(0, pendingFunctionCalls - 1);
-        if (pendingFunctionCalls === 0) {
-          transitionFSM(FSM_STATE.LISTENING);
-          socket.emit("status", "listening");
-        }
+        if (pendingFunctionCalls === 0) socket.emit("status", "listening");
       }, 30000);
 
       try {
         result = await execTool(fn, args);
-        console.log(
-          `🔧 [TOOL-END] ${fn} - result: ${result.substring(0, 200)}`,
-        );
+        console.log(`🔧 [TOOL-END] ${fn} - result: ${result.substring(0, 200)}`);
       } catch (err) {
         console.error(`🔧 [TOOL-ERROR] ${fn}:`, err.message);
         result = JSON.stringify({ success: false, error: err.message });
@@ -6095,33 +1470,17 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
 
       let systemHint = `[FLOW: ${session.collected?.intent || "unknown"}] Current collected fields: ${JSON.stringify(
         Object.fromEntries(
-          Object.entries(session.collected || {}).filter(
-            ([k]) => k !== "_registeredPhone" && k !== "_rp",
-          ),
+          Object.entries(session.collected || {}).filter(([k]) => k !== "_registeredPhone" && k !== "_rp"),
         ),
-      )}. email_state: { value: "${email_state.value}", is_confirmed: ${email_state.is_confirmed} }. createTicketBlockedForEmail: ${createTicketBlockedForEmail}. emailCaptureMode: ${emailCaptureMode}.`;
-
-      dbg(session.collected?.intent || "unknown", "tool_executed", fn, {
-        salesStep,
-        "email_state.value": email_state.value,
-        "email_state.is_confirmed": email_state.is_confirmed,
-        createTicketBlockedForEmail,
-        emailCaptureMode,
-        result: result.substring(0, 200),
-      });
+      )}.`;
 
       if (fn === "check_address_availability") {
         let parsedResult = null;
-        try {
-          parsedResult = JSON.parse(result);
-        } catch (_) {}
+        try { parsedResult = JSON.parse(result); } catch (_) {}
         if (parsedResult) {
           const networkLabel = parsedResult.network || "the available network";
-          const planCount = Array.isArray(parsedResult.availablePlans)
-            ? parsedResult.availablePlans.length
-            : 0;
-          const requiresFilter =
-            parsedResult.requiresResidentialFilter === true;
+          const planCount = Array.isArray(parsedResult.availablePlans) ? parsedResult.availablePlans.length : 0;
+          const requiresFilter = parsedResult.requiresResidentialFilter === true;
           if (parsedResult.orderable === false) {
             systemHint += `\nTOOL RESULT: Address not serviceable. Tell customer empathetically and offer to take their details.`;
           } else if (planCount > 0 && requiresFilter) {
@@ -6132,249 +1491,109 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
             systemHint += `\nTOOL RESULT: No plans returned. Tell customer and offer alternative help.`;
           }
           if (session.networkShown) {
-            systemHint += `\nNETWORK LOCK: Only ${session.networkShown} — NEVER mention ${session.networkShown === "OptiComm" ? "NBN" : "OptiComm"} again.`;
+            systemHint += `\nNETWORK LOCK: Only ${session.networkShown} — NEVER mention the other network again.`;
           }
         }
       }
 
       if (fn === "customer_lookup") {
         let parsedResult = null;
-        try {
-          parsedResult = JSON.parse(result);
-        } catch (_) {}
+        try { parsedResult = JSON.parse(result); } catch (_) {}
 
         if (parsedResult?._blocked && parsedResult?.reason === "sales_flow") {
-          systemHint += `\nTOOL RESULT: customer_lookup blocked — this is a new sales lead. Do NOT retry customer_lookup. Treat as a new customer. Collect name, phone, email one at a time, then call create_ticket.`;
+          systemHint += `\nTOOL RESULT: customer_lookup blocked — new sales lead. Treat as new customer. Collect name, phone, email one at a time, then call create_ticket.`;
         } else if (parsedResult?._invalidEmail) {
-          systemHint += `\nTOOL RESULT: Email format invalid — missing '@' symbol. Ask customer to spell email again: 'Please spell your email letter by letter, saying 'at' for @ and 'dot' for dots.'`;
+          systemHint += `\nTOOL RESULT: Email format invalid. Ask customer to spell the whole email from scratch, letter by letter.`;
         } else if (parsedResult?.success && parsedResult?.customer) {
-          systemHint += `\nTOOL RESULT: Email lookup succeeded. Say "Perfect, I can see that account." Then ask for their phone number. When they give it, call verify_phone.`;
+          systemHint += `\nTOOL RESULT: Email lookup succeeded. Say "Perfect, I can see that account." Then ask for phone number. When they give it, call verify_phone.`;
           awaitingPhoneVerification = true;
           rawPhoneBuffer = null;
           rawPhoneBufferTimestamp = 0;
         } else {
-          systemHint += `\nTOOL RESULT: Customer not found. Ask customer to double-check their email address.`;
-        }
-      }
-
-      if (fn === "verify_phone") {
-        const llmPhone = args.phone
-          ? String(args.phone).replace(/\D/g, "")
-          : null;
-        if (rawPhoneBuffer) {
-          const bufPhone = String(rawPhoneBuffer).replace(/\D/g, "");
-          // FIX: Always prefer rawPhoneBuffer when it exists — it comes directly from the
-          // transcript classification which is more reliable than LLM extraction from garbled speech.
-          // Only trust LLM if buffer is stale (> 10s old) AND LLM has a valid full number
-          const bufferAge = Date.now() - rawPhoneBufferTimestamp;
-          const bufferIsStale = bufferAge > 10000;
-          const llmHasFullNumber = llmPhone && llmPhone.length >= 10;
-
-          if (!bufferIsStale || !llmHasFullNumber) {
-            // Buffer is fresh OR LLM doesn't have a confident number — use buffer
-            args = { ...args, phone: bufPhone };
-            dbg("support", "verify_phone_using_buffer", "ok", {
-              bufPhone,
-              llmPhone,
-              bufferAge,
-              reason: bufferIsStale ? "llm_incomplete" : "buffer_fresh",
-            });
-          } else {
-            // Buffer is stale AND LLM has a full number — trust LLM
-            dbg("support", "verify_phone_trusting_llm", "ok", {
-              llmPhone,
-              discardedBuffer: bufPhone,
-              bufferAge,
-            });
-          }
-          rawPhoneBuffer = null;
-          rawPhoneBufferTimestamp = 0;
-          awaitingPhoneVerification = false;
-        } else if (!llmPhone || llmPhone.length < 6) {
-          // No buffer and LLM has no valid number — tell user to repeat
-          dbg("support", "verify_phone_no_number", "skipped", { llmPhone });
-          // Return early with a soft failure so AI asks again
-          const noPhoneResult = JSON.stringify({
-            success: false,
-            verificationFailed: false,
-            message:
-              "Could not extract phone number from speech. Ask the customer to repeat their number clearly.",
-          });
-          if (openaiWs?.readyState === WebSocket.OPEN) {
-            openaiWs.send(
-              JSON.stringify({
-                type: "conversation.item.create",
-                item: {
-                  type: "function_call_output",
-                  call_id,
-                  output: noPhoneResult,
-                },
-              }),
-            );
-          }
-          pendingFunctionCalls = Math.max(0, pendingFunctionCalls - 1);
-          if (pendingFunctionCalls === 0) scheduleResponseCreate();
-          return;
+          systemHint += `\nTOOL RESULT: Customer not found. Ask customer to re-spell their email from scratch.`;
         }
       }
 
       if (fn === "create_ticket") {
         let parsedResult = null;
-        try {
-          parsedResult = JSON.parse(result);
-        } catch (_) {}
+        try { parsedResult = JSON.parse(result); } catch (_) {}
 
-        dbg("sales", "create_ticket_result_processing", "evaluating", {
-          success: parsedResult?.success,
-          _blocked: parsedResult?._blocked,
-          reason: parsedResult?.reason,
-          ticket_id: parsedResult?.ticket_id,
-          _isSalesTicket: parsedResult?._isSalesTicket,
-          "email_state.is_confirmed": email_state.is_confirmed,
-          createTicketBlockedForEmail,
-        });
-
-        if (
-          parsedResult?._blocked &&
-          parsedResult?.reason === "email_missing"
-        ) {
+        if (parsedResult?._blocked && parsedResult?.reason === "email_missing") {
           TimerManager.releaseFinalLock();
           salesStep = "email";
-          createTicketBlockedForEmail = true;
-          if (!emailCaptureMode && !emailCaptureConfirmAsked) {
-            startEmailCapture();
-          } else {
-            dbg(
-              "sales",
-              "create_ticket_BLOCKED_capture_already_active",
-              "no_restart",
-              {
-                emailCaptureMode,
-                emailCaptureConfirmAsked,
-              },
-            );
-          }
-          dbg(
-            "sales",
-            "create_ticket_BLOCKED_email_missing",
-            "forcing_email_capture",
-            {
-              salesStep,
-              createTicketBlockedForEmail,
-              emailCaptureMode,
-              emailCaptureConfirmAsked,
-            },
-          );
-          systemHint += `\nTOOL RESULT: create_ticket BLOCKED — email not confirmed. salesStep is now "email". Ask for email NOW: "Could I grab your email address? Please spell it letter by letter — for @ say 'at', for dots say 'dot'. Example: s-h-a-u-n at b-e-l-e dot a-i." Do NOT call create_ticket again until email_state.is_confirmed=true.`;
+          systemHint += `\nTOOL RESULT: create_ticket BLOCKED — email missing. Ask for email NOW by voice spelling. Read back letter-by-letter. Confirm YES before proceeding.`;
         } else if (parsedResult?.success) {
           salesStep = "done";
-          createTicketBlockedForEmail = false;
           TimerManager.releaseFinalLock();
           const ticketId = parsedResult.ticket_id;
           const isSales = parsedResult._isSalesTicket === true || !ticketId;
-          dbg("sales", "create_ticket_SUCCESS", "ticket_created", {
-            isSales,
-            ticketId,
-            salesStep,
-          });
           if (isSales) {
-            systemHint += `\nTOOL RESULT: Sales enquiry submitted. Say: "Awesome, you're all set! I've submitted your enquiry and our sales team will be in touch via email shortly. Is there anything else you'd like to know?"`;
+            systemHint += `\nTOOL RESULT: Sales enquiry submitted. Say: "Awesome, you're all set! Our sales team will be in touch via email shortly."`;
           } else {
-            systemHint += `\nTOOL RESULT: Support ticket #${ticketId} created. Say: "Brilliant, all done! I've raised support ticket number ${ticketId} — you'll get details via email shortly. Is there anything else I can help with?"`;
+            systemHint += `\nTOOL RESULT: Support ticket #${ticketId} created. Say: "Brilliant, all done! Ticket #${ticketId} raised — details sent via email."`;
           }
-          transitionFSM(FSM_STATE.FINAL);
         } else {
           TimerManager.releaseFinalLock();
-          dbg("sales", "create_ticket_FAILED", "error", {
-            error: parsedResult?.error,
-          });
-          systemHint += `\nTOOL RESULT: Ticket FAILED — ${parsedResult?.error || "unknown error"}. Apologise and suggest calling 1300 101 414 or emailing support@infinetbroadband.com.au.`;
+          systemHint += `\nTOOL RESULT: Ticket FAILED — ${parsedResult?.error || "unknown error"}. Apologise and suggest calling 1300 101 414.`;
         }
-      }
-
-      if (fn === "send_portal_login_email") {
-        systemHint += `\nTOOL RESULT: Portal login email sent. Tell customer the request was sent and team will be in touch.`;
       }
 
       if (fn === "extract_call_fields") {
         const c = session.collected || {};
+
         const shouldGate =
           c.leadInterest &&
           c._websiteCheckRequired &&
           !c._websiteCheckAsked &&
           !c._websiteCheckDone;
         if (shouldGate) {
-          systemHint += `\nCRITICAL GATE: You MUST ask: "Just out of curiosity — have you had a chance to check out our website and seen the plans or pricing?" WAIT for their answer before collecting name/phone/email.`;
+          systemHint += `\nCRITICAL GATE: You MUST ask about website check first before collecting any other details.`;
         }
-        if (
-          c.leadInterest &&
-          c._websiteCheckRequired &&
-          (c._websiteCheckAsked || c._websiteCheckDone)
-        ) {
+        if (c.leadInterest && c._websiteCheckRequired && (c._websiteCheckAsked || c._websiteCheckDone)) {
           systemHint += `\nWEBSITE CHECK DONE: Do NOT ask again. Proceed with order collection.`;
         }
-        if (createTicketBlockedForEmail) {
-          systemHint += `\nEMAIL CAPTURE IN PROGRESS: email_state.is_confirmed=${email_state.is_confirmed}. Do NOT call create_ticket. Wait for email confirmation.`;
+
+        if (salesStep === "createTicket" && c.phone && c.email && c.leadInterest) {
+          systemHint += `\n\nCRITICAL: Call create_ticket RIGHT NOW. Do not say anything to the user first.`;
         }
-        systemHint += `\nEMAIL STATE: email_state.is_confirmed=${email_state.is_confirmed} email="${email_state.value}" createTicketBlockedForEmail=${createTicketBlockedForEmail}.`;
-        if (email_state.is_confirmed && salesStep === "createTicket") {
-          systemHint += ` Email is CONFIRMED. Call create_ticket NOW without asking for email again.`;
+
+        // ── FIX BUG 1+3: If email is already complete, tell LLM not to re-process it
+        if (c._emailStepComplete) {
+          systemHint += `\nEMAIL ALREADY CONFIRMED (_emailStepComplete=true). Do NOT ask about email again. Do NOT call extract_call_fields with email again.`;
+        } else if (pendingEmailConfirmation && salesStep === "email") {
+          systemHint += `\nEMAIL PARSED as "${pendingEmailConfirmation.parsed}". Read it back letter-by-letter and ask "Is that correct?" Do NOT proceed until user says YES.`;
         }
-        // FIX: Remove inner const c — use outer c already declared above
-        if (
-          salesStep === "createTicket" &&
-          email_state.is_confirmed &&
-          !createTicketBlockedForEmail &&
-          c.phone &&
-          c.email &&
-          c.leadInterest
-        ) {
-          systemHint += `\n\nCRITICAL: Do NOT say the order is submitted or complete. You MUST call the create_ticket tool RIGHT NOW. Do not say anything to the user first. Call the tool immediately.`;
-        }
+
         const stepHint = buildSalesStepHint();
         if (stepHint) systemHint += `\n\n${stepHint}`;
       }
 
+      if (fn === "send_portal_login_email") {
+        systemHint += `\nTOOL RESULT: Portal login email sent. Tell customer the request was sent and team will be in touch.`;
+      }
+
       if (openaiWs?.readyState === WebSocket.OPEN) {
         await Promise.resolve();
-        openaiWs.send(
-          JSON.stringify({
-            type: "conversation.item.create",
-            item: { type: "function_call_output", call_id, output: result },
-          }),
-        );
+        openaiWs.send(JSON.stringify({
+          type: "conversation.item.create",
+          item: { type: "function_call_output", call_id, output: result },
+        }));
       }
 
       pendingFunctionCalls = Math.max(0, pendingFunctionCalls - 1);
 
-      if (
-        pendingFunctionCalls === 0 &&
-        openaiWs?.readyState === WebSocket.OPEN
-      ) {
-        openaiWs.send(
-          JSON.stringify({
-            type: "conversation.item.create",
-            item: {
-              type: "message",
-              role: "user",
-              content: [
-                {
-                  type: "input_text",
-                  text: `[SYSTEM_CONTEXT]: ${systemHint}\n\nIMPORTANT: Respond immediately based on the tool result above.`,
-                },
-              ],
-            },
-          }),
-        );
-
-        if (
-          fsmState === FSM_STATE.TOOL_EXECUTING &&
-          fsmState !== FSM_STATE.EMAIL_CAPTURE &&
-          fsmState !== FSM_STATE.EMAIL_CONFIRMATION &&
-          fsmState !== FSM_STATE.FINAL
-        ) {
-          transitionFSM(FSM_STATE.LISTENING);
-        }
+      if (pendingFunctionCalls === 0 && openaiWs?.readyState === WebSocket.OPEN) {
+        openaiWs.send(JSON.stringify({
+          type: "conversation.item.create",
+          item: {
+            type: "message",
+            role: "user",
+            content: [{
+              type: "input_text",
+              text: `[SYSTEM_CONTEXT]: ${systemHint}\n\nIMPORTANT: Respond immediately based on the tool result above.`,
+            }],
+          },
+        }));
 
         console.log(`📤 Tool complete (${fn}) — triggering response.create`);
         scheduleResponseCreate();
@@ -6383,78 +1602,34 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
 
     async function execTool(fn, args) {
       if (fn === "extract_call_fields") {
+        // Parse email via voice parser before saving
         if (args.email && typeof args.email === "string") {
           const parsed = parseVoiceEmail(args.email);
-          dbg(
-            session.collected?.intent || "unknown",
-            "extract_call_fields_email_parse",
-            parsed ? "normalized" : "parse_failed",
-            { raw: args.email, parsed },
-          );
-          if (parsed) {
-            args.email = parsed;
-          }
+          if (parsed) args.email = parsed;
         }
+
         applyExtractionToSession(session, args);
         const c = session.collected || {};
 
         if (salesStep === "firstName" && (args.preferredName || args.name)) {
-          const firstName = (args.preferredName || args.name || "").split(
-            " ",
-          )[0];
-          // FIX P2: Validate firstName from LLM extraction too
-          const INVALID_NAME_WORDS = new Set([
-            "yes",
-            "yeah",
-            "yep",
-            "no",
-            "nope",
-            "ok",
-            "okay",
-            "sure",
-            "right",
-            "alright",
-            "correct",
-            "true",
-            "false",
-            "i",
-            "my",
-            "the",
-            "a",
-            "an",
-          ]);
-          if (
-            firstName &&
-            firstName.length >= 2 &&
-            !INVALID_NAME_WORDS.has(firstName.toLowerCase())
-          ) {
+          const firstName = (args.preferredName || args.name || "").split(" ")[0];
+          const INVALID_NAME_WORDS = new Set(["yes","yeah","yep","no","nope","ok","okay","sure","right","alright","correct","true","false","i","my","the","a","an"]);
+          if (firstName && firstName.length >= 2 && !INVALID_NAME_WORDS.has(firstName.toLowerCase())) {
             session.collected._firstName = firstName;
             sessions.set(session.id, session);
-            dbg("sales", "extract_firstName_captured", "ok", { firstName });
             advanceSalesStep("firstName");
-          } else {
-            dbg("sales", "extract_firstName_rejected", "invalid_word", {
-              firstName,
-            });
           }
         }
         if (salesStep === "lastName" && args.name && args.name.includes(" ")) {
           const parts = args.name.split(" ");
           session.collected._lastName = parts[parts.length - 1];
           sessions.set(session.id, session);
-          dbg("sales", "extract_lastName_captured", "ok", {
-            lastName: session.collected._lastName,
-          });
           advanceSalesStep("lastName");
         }
         if (salesStep === "phone" && args.phone) {
-          dbg("sales", "extract_phone_captured", "advancing", {
-            phone: args.phone,
-          });
           advanceSalesStep("phone");
         }
 
-        // FIX P1-D: When LLM extracts leadInterest, ensure salesStep machine initialises
         if (args.leadInterest && !c.leadInterest) {
           session.collected.leadInterest = args.leadInterest;
           session.collected._websiteCheckRequired = true;
@@ -6462,58 +1637,47 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
             session.collected._websiteCheckDone = false;
           }
           sessions.set(session.id, session);
-          dbg("sales", "extract_leadInterest_captured", "ok", {
-            leadInterest: args.leadInterest,
-            salesStep,
-            websiteCheckRequired: true,
-          });
         }
 
+        // ══════════════════════════════════════════════════════════
+        // FIX BUG 1: Guard email re-entry with _emailStepComplete.
+        // If user already said YES to this email, do NOT reset
+        // pendingEmailConfirmation. This is the core loop-breaker.
+        // ══════════════════════════════════════════════════════════
         if (args.email) {
           const parsedForExtract = parseVoiceEmail(args.email) || args.email;
-          // FIX: If email is already confirmed, do NOT call setEmailValue (which resets is_confirmed)
-          // Just make sure session.collected.email is set correctly
-          if (
-            email_state.is_confirmed &&
-            email_state.value === parsedForExtract
-          ) {
-            // Email already confirmed and matches — just ensure session has it, don't reset state
-            session.collected.email = parsedForExtract;
-            sessions.set(session.id, session);
-            dbg(
-              "sales",
-              "extract_email_already_confirmed_preserved",
-              "no_reset",
-              {
-                email: parsedForExtract,
-                "email_state.is_confirmed": email_state.is_confirmed,
-              },
-            );
-          } else if (!email_state.is_confirmed) {
-            // Not yet confirmed — safe to set
-            setEmailValue(parsedForExtract);
-            session.collected.email = parsedForExtract;
-            sessions.set(session.id, session);
-            dbg("sales", "extract_email_captured_by_llm", "set", {
-              email: parsedForExtract,
-              salesStep,
-              "email_state.is_confirmed": email_state.is_confirmed,
+
+          if (session.collected._emailStepComplete) {
+            // Email already confirmed by user — ignore any further LLM extractions
+            dbg("sales", "extract_email_GUARDED_step_complete", "no_op", {
+              parsedForExtract,
+              savedEmail: session.collected.email,
+              reason: "_emailStepComplete=true, not resetting confirmation state",
             });
-            if (salesStep === "email" && email_state.is_confirmed) {
-              advanceSalesStep("email");
+            // Do NOT overwrite, do NOT create pendingEmailConfirmation
+          } else if (salesStep === "email") {
+            // Email step is active — save and set up confirmation
+            session.collected.email = parsedForExtract;
+            sessions.set(session.id, session);
+
+            if (!pendingEmailConfirmation) {
+              // First time parsing this email
+              pendingEmailConfirmation = { raw: args.email, parsed: parsedForExtract };
+              emailConfirmationAsked = false;
+              dbg("sales", "email_saved_awaiting_confirmation", "new", { parsed: parsedForExtract });
+            } else if (pendingEmailConfirmation.parsed !== parsedForExtract) {
+              // Email was re-spelled with a different value (correction)
+              pendingEmailConfirmation = { raw: args.email, parsed: parsedForExtract };
+              emailConfirmationAsked = false;
+              dbg("sales", "email_updated_new_value", "updated", { parsed: parsedForExtract });
+            } else {
+              // Same email extracted again — do NOT reset emailConfirmationAsked
+              dbg("sales", "email_same_as_pending_SKIPPED", "no_op", {
+                parsed: parsedForExtract,
+                emailConfirmationAsked,
+                reason: "same email, preserving confirmation state",
+              });
             }
-          } else {
-            // Confirmed but LLM extracted a DIFFERENT email — log and ignore
-            dbg(
-              "sales",
-              "extract_email_ignored_confirmed_mismatch",
-              "skipped",
-              {
-                existing: email_state.value,
-                attempted: parsedForExtract,
-                reason: "email already confirmed, not overwriting",
-              },
-            );
           }
         }
 
@@ -6525,44 +1689,29 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           !!session.collected?.leadInterest &&
           !session.collected?._emailVerifiedCustomerId;
         if (isSalesFlow) {
-          dbg("sales", "customer_lookup_BLOCKED", "sales_flow_new_lead", {
-            leadInterest: session.collected.leadInterest,
-          });
           return JSON.stringify({
             success: false,
             _blocked: true,
             reason: "sales_flow",
-            message:
-              "New sales lead — customer lookup not performed. Treat as new customer. Collect name, phone, email, then call create_ticket.",
+            message: "New sales lead — treat as new customer. Collect name, phone, email, then call create_ticket.",
           });
         }
 
         const lookupArgs = { ...(args || {}) };
         delete lookupArgs.phone;
         if (!lookupArgs.email && !lookupArgs.name) {
-          return JSON.stringify({
-            success: false,
-            message: "Email is required for customer lookup",
-          });
+          return JSON.stringify({ success: false, message: "Email is required for customer lookup" });
         }
 
         if (lookupArgs.email && typeof lookupArgs.email === "string") {
           const parsed = parseVoiceEmail(lookupArgs.email);
           if (parsed) {
-            dbg("support", "customer_lookup_email_normalized", "ok", {
-              raw: lookupArgs.email,
-              parsed,
-            });
             lookupArgs.email = parsed;
           } else {
-            dbg("support", "customer_lookup_email_parse_failed", "invalid", {
-              email: lookupArgs.email,
-            });
             return JSON.stringify({
               success: false,
               _invalidEmail: true,
-              message:
-                "Invalid email format — could not parse. Ask customer to spell email letter by letter, saying 'at' for @ and 'dot' for dots.",
+              message: "Invalid email format — ask customer to spell the whole email from scratch.",
             });
           }
         }
@@ -6571,8 +1720,7 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           const result = await customerLookup(lookupArgs);
           if (result.success && result.customer) {
             session.collected._emailVerifiedCustomerId = result.customer.id;
-            session.collected._registeredPhone =
-              result.customer.phone || result.customer.phone_mobile || null;
+            session.collected._registeredPhone = result.customer.phone || result.customer.phone_mobile || null;
             session.collected._rp = session.collected._registeredPhone;
             session.collected._phoneVerified = false;
             session.collected.customer_id = result.customer.id;
@@ -6589,17 +1737,11 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           }
           delete session.collected.email;
           delete session.collected._emailVerifiedCustomerId;
-          email_state.value = "";
-          email_state.is_confirmed = false;
           sessions.set(session.id, session);
-          dbg("support", "customer_lookup_not_found", "email_cleared", {
-            email: lookupArgs.email,
-          });
           return JSON.stringify({
             ...result,
             _emailCleared: true,
-            message:
-              "No account found with that email. Please check and try again.",
+            message: "No account found with that email. Please check and try again.",
           });
         } catch (e) {
           return JSON.stringify({ success: false, error: e.message });
@@ -6608,55 +1750,24 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
 
       if (fn === "verify_phone") {
         const { phone } = args || {};
-        if (!phone)
-          return JSON.stringify({
-            success: false,
-            verificationFailed: true,
-            message: "No phone number provided.",
-          });
+        if (!phone) return JSON.stringify({ success: false, verificationFailed: true, message: "No phone number provided." });
         const emailCustomerId = session.collected._emailVerifiedCustomerId;
-        if (!emailCustomerId)
-          return JSON.stringify({
-            success: false,
-            verificationFailed: true,
-            message: "Email verification must be completed first.",
-          });
-        const registeredPhone =
-          session.collected._registeredPhone || session.collected._rp;
+        if (!emailCustomerId) return JSON.stringify({ success: false, verificationFailed: true, message: "Email verification must be completed first." });
+        const registeredPhone = session.collected._registeredPhone || session.collected._rp;
         if (!registeredPhone) {
-          return JSON.stringify({
-            success: false,
-            verificationFailed: true,
-            message: "No phone number registered on this account.",
-          });
+          return JSON.stringify({ success: false, verificationFailed: true, message: "No phone number registered on this account." });
         }
-        const normalize =
-          normalizePhone && typeof normalizePhone === "function"
-            ? normalizePhone
-            : (p) =>
-                String(p || "")
-                  .replace(/\D/g, "")
-                  .replace(/^61(\d{9})$/, "0$1");
+        const normalize = normalizePhone && typeof normalizePhone === "function"
+          ? normalizePhone
+          : (p) => String(p || "").replace(/\D/g, "").replace(/^61(\d{9})$/, "0$1");
         const normalizedInput = normalize(phone);
         const normalizedRegistered = normalize(registeredPhone);
         if (normalizedInput !== normalizedRegistered) {
-          dbg("support", "verify_phone_FAILED", "mismatch", {
-            inputNormalized: normalizedInput,
-            registeredNormalized: normalizedRegistered,
-          });
-          return JSON.stringify({
-            success: false,
-            verificationFailed: true,
-            message: "Phone number does not match the registered number.",
-          });
+          return JSON.stringify({ success: false, verificationFailed: true, message: "Phone number does not match." });
         }
         session.collected._phoneVerified = true;
         sessions.set(session.id, session);
-        return JSON.stringify({
-          success: true,
-          verified: true,
-          customer_id: emailCustomerId,
-        });
+        return JSON.stringify({ success: true, verified: true, customer_id: emailCustomerId });
       }
 
       if (fn === "check_address_availability") {
@@ -6664,179 +1775,73 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           if (args.address) session.collected.address = args.address;
           return await checkAddressAvailability(args, session);
         } catch (err) {
-          return JSON.stringify({
-            success: false,
-            error: err.message,
-            address: args.address,
-          });
+          return JSON.stringify({ success: false, error: err.message, address: args.address });
         }
       }
 
       if (fn === "create_ticket") {
         let fa = { ...args };
-        if (typeof fa.message === "string")
-          fa.message = { message: fa.message };
+        if (typeof fa.message === "string") fa.message = { message: fa.message };
         const collected = session.collected || {};
         const hasCustomerId = !!(fa.customer_id || collected.customer_id);
         const hasLeadInterest = !!(collected.leadInterest || fa.leadInterest);
         const isSupportTicket = hasCustomerId && !hasLeadInterest;
 
-        dbg("sales", "execTool_create_ticket_GUARD_CHECK", "evaluating", {
-          isSupportTicket,
-          "collected.email": collected.email || "MISSING",
-          "email_state.value": email_state.value,
-          "email_state.is_confirmed": email_state.is_confirmed,
-          createTicketBlockedForEmail,
-          salesStep,
-          hasCustomerId,
-          hasLeadInterest,
-          emailCaptureMode,
-          emailCaptureConfirmAsked,
-        });
-
-        if (
-          !isSupportTicket &&
-          (!collected.email || !email_state.is_confirmed)
-        ) {
-          dbg(
-            "sales",
-            "execTool_create_ticket_BLOCKED",
-            "email_not_confirmed",
-            {
-              reason: `isSupportTicket=${isSupportTicket} collected.email="${collected.email || "MISSING"}" email_state.is_confirmed=${email_state.is_confirmed}`,
-              action: "forcing_salesStep=email + startEmailCapture",
-            },
-          );
+        if (!isSupportTicket && !collected.email) {
           salesStep = "email";
-          createTicketBlockedForEmail = true;
           TimerManager.releaseFinalLock();
           finalMessageLock = false;
           session.finalLock = false;
-          if (!emailCaptureMode && !emailCaptureConfirmAsked) {
-            startEmailCapture();
-          } else {
-            dbg(
-              "sales",
-              "execTool_create_ticket_BLOCKED_capture_already_active",
-              "no_restart",
-              {
-                emailCaptureMode,
-                emailCaptureConfirmAsked,
-              },
-            );
-          }
           return JSON.stringify({
             success: false,
             _blocked: true,
             reason: "email_missing",
-            message:
-              "SALES STEP [email]: Ask for email by voice spelling mode. Do NOT retry create_ticket until email_state.is_confirmed=true.",
+            message: "Ask for email by voice spelling. Read back letter-by-letter and confirm with user before proceeding.",
           });
         }
 
         const detailLines = [];
         const fullName =
-          [collected._firstName, collected._lastName]
-            .filter(Boolean)
-            .join(" ") ||
+          [collected._firstName, collected._lastName].filter(Boolean).join(" ") ||
           collected.name ||
           collected.preferredName;
         if (fullName) detailLines.push(`Name: ${fullName}`);
         if (collected.email) detailLines.push(`Email: ${collected.email}`);
         if (collected.phone) detailLines.push(`Phone: ${collected.phone}`);
-        if (collected.address)
-          detailLines.push(`Address: ${collected.address}`);
-        if (collected.networkPreference)
-          detailLines.push(`Network: ${collected.networkPreference}`);
-        if (collected.residentialPreference)
-          detailLines.push(`Type: ${collected.residentialPreference}`);
-        if (collected.leadInterest || fa.leadInterest)
-          detailLines.push(
-            `Selected Plan: ${collected.leadInterest || fa.leadInterest}`,
-          );
+        if (collected.address) detailLines.push(`Address: ${collected.address}`);
+        if (collected.networkPreference) detailLines.push(`Network: ${collected.networkPreference}`);
+        if (collected.residentialPreference) detailLines.push(`Type: ${collected.residentialPreference}`);
+        if (collected.leadInterest || fa.leadInterest) detailLines.push(`Selected Plan: ${collected.leadInterest || fa.leadInterest}`);
 
-        const detailsBlock =
-          detailLines.length > 0
-            ? `\n\n--- Customer Details ---\n${detailLines.join("\n")}`
-            : "";
+        const detailsBlock = detailLines.length > 0
+          ? `\n\n--- Customer Details ---\n${detailLines.join("\n")}`
+          : "";
         if (fa.message?.message) fa.message.message += detailsBlock;
         else if (detailsBlock) fa.message = { message: detailsBlock.trim() };
 
         let ticketResult;
         try {
           if (isSupportTicket) {
-            const r = await splynx.request(
-              "POST",
-              "admin/support/tickets",
-              objectToUrlEncoded(fa),
-            );
-            const emailResult = await sendTicketEmail(
-              r.id,
-              fa,
-              collected,
-              true,
-            );
-            ticketResult = {
-              success: true,
-              ticket_id: r.id,
-              email_sent: emailResult.sent,
-              email_error: emailResult.reason || null,
-              _isSalesTicket: false,
-              _ticketCompleted: true,
-            };
+            const r = await splynx.request("POST", "admin/support/tickets", objectToUrlEncoded(fa));
+            const emailResult = await sendTicketEmail(r.id, fa, collected, true);
+            ticketResult = { success: true, ticket_id: r.id, email_sent: emailResult.sent, _isSalesTicket: false, _ticketCompleted: true };
           } else {
-            const emailResult = await sendTicketEmail(
-              null,
-              fa,
-              collected,
-              false,
-            );
-            ticketResult = {
-              success: true,
-              message: "Sales inquiry submitted successfully",
-              email_sent: emailResult.sent,
-              email_error: emailResult.reason || null,
-              _isSalesTicket: true,
-              _ticketCompleted: true,
-            };
+            const emailResult = await sendTicketEmail(null, fa, collected, false);
+            ticketResult = { success: true, message: "Sales inquiry submitted successfully", email_sent: emailResult.sent, _isSalesTicket: true, _ticketCompleted: true };
           }
-          dbg("sales", "execTool_create_ticket_SUCCESS", "submitted", {
-            isSupportTicket,
-            ticket_id: ticketResult.ticket_id,
-            email_sent: ticketResult.email_sent,
-          });
         } catch (err) {
-          dbg("sales", "execTool_create_ticket_ERROR", "failed", {
-            error: err.message,
-          });
-          ticketResult = {
-            success: false,
-            error: err.message || "Failed to process request",
-            _ticketCompleted: true,
-          };
+          ticketResult = { success: false, error: err.message || "Failed to process request", _ticketCompleted: true };
         }
 
         return JSON.stringify(ticketResult);
       }
 
       if (fn === "get_ticket_types")
-        return JSON.stringify({
-          success: true,
-          types: await splynx.request("GET", "admin/support/tickets-types"),
-        });
+        return JSON.stringify({ success: true, types: await splynx.request("GET", "admin/support/tickets-types") });
       if (fn === "get_ticket_groups")
-        return JSON.stringify({
-          success: true,
-          groups: await splynx.request("GET", "admin/support/tickets-groups"),
-        });
+        return JSON.stringify({ success: true, groups: await splynx.request("GET", "admin/support/tickets-groups") });
       if (fn === "get_ticket_statuses")
-        return JSON.stringify({
-          success: true,
-          statuses: await splynx.request(
-            "GET",
-            "admin/support/tickets-statuses",
-          ),
-        });
+        return JSON.stringify({ success: true, statuses: await splynx.request("GET", "admin/support/tickets-statuses") });
 
       return JSON.stringify({ error: `Unknown tool: ${fn}` });
     }
@@ -6852,118 +1857,76 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
       if (shouldSuppress) return;
       const now = Date.now();
       if (now - lastAudioLog > 2000) {
-        const state =
-          ["CONNECTING", "OPEN", "CLOSING", "CLOSED"][openaiWs?.readyState] ||
-          "UNKNOWN";
+        const state = ["CONNECTING", "OPEN", "CLOSING", "CLOSED"][openaiWs?.readyState] || "UNKNOWN";
         console.log(`🎤 [${socket.id}] [OpenAI: ${state}]`);
         lastAudioLog = now;
       }
       if (openaiWs?.readyState === WebSocket.OPEN) {
-        openaiWs.send(
-          JSON.stringify({ type: "input_audio_buffer.append", audio: b64 }),
-        );
+        openaiWs.send(JSON.stringify({ type: "input_audio_buffer.append", audio: b64 }));
       }
     });
 
     socket.on("audio_done", () => {
       console.log(`🔊 [FSM] Client audio_done — browser playback complete`);
       assistantSpeaking = false;
-
-      dbg(
-        session.collected?.intent || "unknown",
-        "audio_done",
-        "playback_complete",
-        {
-          fsmState,
-          emailCaptureMode,
-          emailCaptureConfirmAsked,
-          salesStep,
-          "email_state.is_confirmed": email_state.is_confirmed,
-          lastResponseWasPackage,
-        },
-      );
-
-      if (
-        fsmState !== FSM_STATE.EMAIL_CAPTURE &&
-        fsmState !== FSM_STATE.EMAIL_CONFIRMATION &&
-        fsmState !== FSM_STATE.FINAL
-      ) {
-        transitionFSM(FSM_STATE.LISTENING);
-      }
+      elevenLabsStreaming = false;
 
       const isPackage = lastResponseWasPackage;
       lastResponseWasPackage = false;
-      console.log(
-        `⏱️  [TMgr] TTS finished → silence timer starting (${isPackage ? "20s package" : "15s normal"})`,
-      );
       TimerManager.startSilence(isPackage);
     });
 
-    // ═══════════════ Structured Input (email/phone typed by user) ══
+    // ═══════════════ Structured Input ══════════════════
     socket.on("structured_input", (payload) => {
       if (!payload || !payload.field || !payload.value) return;
       const { field, value } = payload;
 
       if (field === "email") {
-        dbg("sales", "structured_input_email", "received", {
-          value,
-          salesStep,
-          "email_state.is_confirmed": email_state.is_confirmed,
-          createTicketBlockedForEmail,
-        });
-
-        setEmailValue(value);
-        confirmEmail();
+        const parsedEmail = parseVoiceEmail(value) || value;
+        session.collected.email = parsedEmail;
+        // FIX BUG 1: Typed email is pre-verified — mark complete immediately
+        session.collected._emailStepComplete = true;
+        pendingEmailConfirmation = null;
+        emailConfirmationAsked = false;
+        sessions.set(session.id, session);
         if (salesStep === "email") advanceSalesStep("email");
-        createTicketBlockedForEmail = false;
-        resetEmailCapture();
+
         awaitingStructuredInput = false;
         structuredInputField = null;
 
-        const userMessage = `My email is ${value}`;
+        const userMessage = `My email is ${parsedEmail}`;
         session.messages.push({ role: "user", content: userMessage });
         sessions.set(session.id, session);
         socket.emit("user_transcript", userMessage);
 
         if (openaiWs?.readyState === WebSocket.OPEN) {
-          openaiWs.send(
-            JSON.stringify({
-              type: "conversation.item.create",
-              item: {
-                type: "message",
-                role: "user",
-                content: [{ type: "input_text", text: userMessage }],
-              },
-            }),
-          );
+          openaiWs.send(JSON.stringify({
+            type: "conversation.item.create",
+            item: {
+              type: "message",
+              role: "user",
+              content: [{ type: "input_text", text: userMessage }],
+            },
+          }));
           const salesHint = buildSalesStepHint() || "";
-          const hint = `Customer email confirmed via typed input: ${value}. email_state.is_confirmed=true. createTicketBlockedForEmail=false. ${salesHint} Proceed immediately.`;
-          openaiWs.send(
-            JSON.stringify({
-              type: "conversation.item.create",
-              item: {
-                type: "message",
-                role: "user",
-                content: [
-                  { type: "input_text", text: `[SYSTEM_CONTEXT]: ${hint}` },
-                ],
-              },
-            }),
-          );
+          const hint =
+            `Customer email confirmed via typed input: ${parsedEmail}. _emailStepComplete=true. ` +
+            `Do NOT ask about email again. Do NOT call extract_call_fields with email. ${salesHint}`;
+          openaiWs.send(JSON.stringify({
+            type: "conversation.item.create",
+            item: {
+              type: "message",
+              role: "user",
+              content: [{ type: "input_text", text: `[SYSTEM_CONTEXT]: ${hint}` }],
+            },
+          }));
           scheduleResponseCreate();
         }
 
-        socket.emit("structured_input_accepted", { field, value });
+        socket.emit("structured_input_accepted", { field, value: parsedEmail });
         socket.emit("status", "listening");
         return;
       }
-
-      dbg(
-        session.collected?.intent || "unknown",
-        "structured_input_other",
-        "received",
-        { field, value },
-      );
 
       TimerManager.clearSilence();
       awaitingStructuredInput = false;
@@ -6975,16 +1938,14 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
       socket.emit("user_transcript", userMessage);
 
       if (openaiWs?.readyState === WebSocket.OPEN) {
-        openaiWs.send(
-          JSON.stringify({
-            type: "conversation.item.create",
-            item: {
-              type: "message",
-              role: "user",
-              content: [{ type: "input_text", text: userMessage }],
-            },
-          }),
-        );
+        openaiWs.send(JSON.stringify({
+          type: "conversation.item.create",
+          item: {
+            type: "message",
+            role: "user",
+            content: [{ type: "input_text", text: userMessage }],
+          },
+        }));
         scheduleResponseCreate();
       }
 
@@ -6995,17 +1956,9 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
     // ═══════════════ Cleanup ════════════════
     socket.on("disconnect", () => {
       console.log(`🔌 Disconnected: ${socket.id}`);
-      dbg(session?.collected?.intent || "unknown", "disconnect", "cleanup", {
-        "email_state.value": email_state.value,
-        "email_state.is_confirmed": email_state.is_confirmed,
-        collected: JSON.stringify(session?.collected || {}),
-      });
       TimerManager.clearAll();
       closeElevenLabsWs();
-      if (openaiWs)
-        try {
-          openaiWs.close();
-        } catch (_) {}
+      if (openaiWs) try { openaiWs.close(); } catch (_) {}
       sessions.delete(session.id);
     });
 
@@ -7013,27 +1966,26 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
     (async () => {
       try {
         console.log("⏳ Connecting OpenAI Realtime...");
-        dbg("init", "connect", "pending", { sessionId: session.id });
         await connectOpenAI();
-        console.log(
-          "✅ OpenAI connected! ElevenLabs pre-warmed. Waiting 200ms...",
-        );
+        console.log("✅ OpenAI connected! Waiting for ElevenLabs...");
         socket.emit("connections_ready");
-        await new Promise((r) => setTimeout(r, 200));
+
+        let elWaitMs = 0;
+        while (!elevenLabsReady && elWaitMs < 3000) {
+          await new Promise(r => setTimeout(r, 100));
+          elWaitMs += 100;
+        }
+        if (!elevenLabsReady) {
+          console.warn(`⚠️ ElevenLabs not ready after ${elWaitMs}ms — proceeding anyway`);
+        }
 
         if (!session.hasGreeted) {
           session.hasGreeted = true;
-          dbg("init", "greeting", "sending", { sessionId: session.id });
           if (openaiWs?.readyState === WebSocket.OPEN) {
             openaiWs.send(JSON.stringify({ type: "response.create" }));
-          } else {
-            console.warn(
-              `⚠️ OpenAI WS not open for greeting (state: ${openaiWs?.readyState})`,
-            );
           }
           sessions.set(session.id, session);
         } else {
-          transitionFSM(FSM_STATE.LISTENING);
           socket.emit("status", "listening");
         }
       } catch (err) {
