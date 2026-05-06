@@ -95,6 +95,16 @@ function parseVoiceEmail(transcript) {
 
   for (let i = 0; i < tokens.length; i++) {
     const tok = tokens[i];
+    // Handle "at" for @ symbol
+    if (tok === "at") {
+      parts.push("@");
+      continue;
+    }
+    // Handle "dot", "period", "point" for .
+    if (tok === "dot" || tok === "period" || tok === "point") {
+      parts.push(".");
+      continue;
+    }
     if (/^[a-z0-9._@+-]+\.[a-z]{2,}$/.test(tok)) {
       parts.push(tok);
       continue;
@@ -164,20 +174,6 @@ function looksLikeVoiceEmailSpelling(text) {
   if (hyphenSpellingCount >= 2 && hasAt) return true;
   return false;
 }
-
-// ═══════════════════════════════════════════════════════════════════════════
-//  FSM STATES
-// ═══════════════════════════════════════════════════════════════════════════
-const FSM_STATE = {
-  IDLE: "IDLE",
-  SPEAKING: "SPEAKING",
-  LISTENING: "LISTENING",
-  EMAIL_CAPTURE: "EMAIL_CAPTURE",
-  EMAIL_CONFIRMATION: "EMAIL_CONFIRMATION",
-  PACKAGE_PRESENTATION: "PACKAGE_PRESENTATION",
-  TOOL_EXECUTING: "TOOL_EXECUTING",
-  FINAL: "FINAL",
-};
 
 // ═══════════════════════════════════════════════════════════════════════════
 export function setupRealtimeVoice(io, deps) {
@@ -250,61 +246,12 @@ export function setupRealtimeVoice(io, deps) {
     let lastResponseWasPackage = false;
 
     // ═══════════════════════════════════════════════════════════════
-    //  UNIFIED EMAIL STATE
+    //  DEBUG STATE
     // ═══════════════════════════════════════════════════════════════
-    const email_state = {
-      value: "",
-      is_confirmed: false,
-    };
-
-    function setEmailValue(newEmail) {
-      const prev = email_state.value;
-      email_state.value = newEmail;
-      email_state.is_confirmed = false;
-      dbg("sales", "email_state_set", "overwrite", {
-        prev,
-        next: newEmail,
-        confirmed: false,
-        salesStep,
-        createTicketBlockedForEmail: "see_closure",
-      });
-    }
-
-    function confirmEmail() {
-      email_state.is_confirmed = true;
-      session.collected.email = email_state.value;
-      sessions.set(session.id, session);
-      dbg("sales", "email_confirmed", "success", {
-        email: email_state.value,
-        is_confirmed: true,
-        session_email: session.collected.email,
-        salesStep,
-      });
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    //  FINITE STATE MACHINE
-    // ═══════════════════════════════════════════════════════════════
-    let fsmState = FSM_STATE.IDLE;
-
-    function transitionFSM(newState) {
-      const prev = fsmState;
-      fsmState = newState;
-      dbg(session?.collected?.intent || "unknown", "fsm_transition", "ok", {
-        from: prev,
-        to: newState,
-      });
-      socket.emit("fsm_state", newState);
-    }
-
     function debugState(label = "state_snapshot") {
       const c = session.collected || {};
       dbg(c.intent || "unknown", label, "snapshot", {
-        fsmState,
         salesStep,
-        "email_state.value": email_state.value,
-        "email_state.is_confirmed": email_state.is_confirmed,
-        createTicketBlockedForEmail,
         pendingFunctionCalls,
         isResponseActive,
         assistantSpeaking,
@@ -324,13 +271,11 @@ export function setupRealtimeVoice(io, deps) {
     // ═══════════════════════════════════════════════════════════════
     const TimerManager = (() => {
       let _silenceTimer = null;
-      let _emailConfirmTimer = null;
       let _finalMessageTimer = null;
       let _watchdogTimer = null;
 
       const SILENCE_NORMAL_MS = 15000;
       const SILENCE_PACKAGE_MS = 20000;
-      const EMAIL_CONFIRM_MS = 30000;
       const WATCHDOG_MS = 8000;
 
       function _clearSilence() {
@@ -338,13 +283,6 @@ export function setupRealtimeVoice(io, deps) {
           clearTimeout(_silenceTimer);
           _silenceTimer = null;
           console.log(`⏱️  [TMgr] Silence timer CLEARED`);
-        }
-      }
-      function _clearEmailConfirm() {
-        if (_emailConfirmTimer) {
-          clearTimeout(_emailConfirmTimer);
-          _emailConfirmTimer = null;
-          console.log(`⏱️  [TMgr] Email confirm timer CLEARED`);
         }
       }
       function _clearFinalMessage() {
@@ -366,39 +304,30 @@ export function setupRealtimeVoice(io, deps) {
           console.log(
             `⏱️  [TMgr] startSilence called - isPackage=${isPackage}`,
           );
-          if (
-            fsmState === FSM_STATE.EMAIL_CAPTURE ||
-            fsmState === FSM_STATE.EMAIL_CONFIRMATION ||
-            fsmState === FSM_STATE.SPEAKING ||
-            fsmState === FSM_STATE.TOOL_EXECUTING ||
-            fsmState === FSM_STATE.FINAL
-          ) {
+          if (assistantSpeaking) {
             console.log(
-              `⏱️  [TMgr] Silence timer suppressed (FSM: ${fsmState})`,
+              `⏱️  [TMgr] Silence timer suppressed (assistant speaking)`,
             );
+            return;
+          }
+          if (pendingFunctionCalls > 0) {
+            console.log(`⏱️  [TMgr] Silence timer suppressed (tool executing)`);
             return;
           }
           if (awaitingStructuredInput) return;
           if (finalMessageLock || session.finalLock) return;
-          if (pendingFunctionCalls > 0) return;
           if (elevenLabsStreaming) {
             console.log(`⏱️  [TMgr] Silence timer suppressed (EL streaming)`);
             return;
           }
-          if (assistantSpeaking) return;
 
           const timeoutMs = isPackage ? SILENCE_PACKAGE_MS : SILENCE_NORMAL_MS;
           console.log(
-            `⏱️  [TMgr] Silence timer START: ${timeoutMs / 1000}s (${isPackage ? "package" : "normal"}) [FSM: ${fsmState}]`,
+            `⏱️  [TMgr] Silence timer START: ${timeoutMs / 1000}s (${isPackage ? "package" : "normal"})`,
           );
 
           _silenceTimer = setTimeout(() => {
             _silenceTimer = null;
-            if (fsmState === FSM_STATE.EMAIL_CAPTURE) return;
-            if (fsmState === FSM_STATE.EMAIL_CONFIRMATION) return;
-            if (fsmState === FSM_STATE.SPEAKING) return;
-            if (fsmState === FSM_STATE.TOOL_EXECUTING) return;
-            if (fsmState === FSM_STATE.FINAL) return;
             if (awaitingStructuredInput) return;
             if (finalMessageLock || session.finalLock) return;
             if (pendingFunctionCalls > 0) return;
@@ -433,38 +362,6 @@ export function setupRealtimeVoice(io, deps) {
           console.log(`⏱️  [TMgr] User input detected → timer reset`);
         },
         clearSilence: _clearSilence,
-
-        startEmailConfirm() {
-          _clearEmailConfirm();
-          console.log(
-            `⏱️  [TMgr] Email confirm timer START (${EMAIL_CONFIRM_MS / 1000}s)`,
-          );
-          _emailConfirmTimer = setTimeout(() => {
-            _emailConfirmTimer = null;
-            if (fsmState !== FSM_STATE.EMAIL_CONFIRMATION) return;
-            console.log(`⏰ [TMgr] Email confirm timeout — re-asking`);
-            if (openaiWs?.readyState === WebSocket.OPEN) {
-              openaiWs.send(
-                JSON.stringify({
-                  type: "conversation.item.create",
-                  item: {
-                    type: "message",
-                    role: "user",
-                    content: [
-                      {
-                        type: "input_text",
-                        text: `[SYSTEM_CONTEXT]: The customer hasn't responded to the email confirmation. Re-read the email back: "${email_state.value}" — spell each letter individually with hyphens, say "at" for @, say "dot" for full stops. Never say "double X". Ask again if it's correct.`,
-                      },
-                    ],
-                  },
-                }),
-              );
-              scheduleResponseCreate();
-            }
-          }, EMAIL_CONFIRM_MS);
-        },
-
-        clearEmailConfirm: _clearEmailConfirm,
 
         startWatchdog() {
           _clearWatchdog();
@@ -524,7 +421,6 @@ export function setupRealtimeVoice(io, deps) {
 
         clearAll() {
           _clearSilence();
-          _clearEmailConfirm();
           _clearFinalMessage();
           _clearWatchdog();
         },
@@ -532,314 +428,11 @@ export function setupRealtimeVoice(io, deps) {
         get hasSilenceTimer() {
           return _silenceTimer !== null;
         },
-        get hasEmailConfirmTimer() {
-          return _emailConfirmTimer !== null;
-        },
       };
     })();
 
     // ─── Final message lock flags ──────────────────────────────────
     let finalMessageLock = false;
-
-    // ═══════════════════════════════════════════════════════════════
-    //  EMAIL CAPTURE — Simplified. System prompt handles logic based on salesStep.
-    //  Only email_state (value + is_confirmed) is tracked here.
-    // ═══════════════════════════════════════════════════════════════
-    let createTicketBlockedForEmail = false;
-
-    function startEmailCapture() {
-      dbg("sales", "startEmailCapture", "initiated", {
-        current_email: email_state.value,
-        is_confirmed: email_state.is_confirmed,
-        salesStep,
-      });
-
-      // If email not yet confirmed, reset and ask for it fresh
-      if (!email_state.is_confirmed) {
-        email_state.value = "";
-        email_state.is_confirmed = false;
-      }
-      // If already confirmed, preserve it (won't be called in this state anyway)
-
-      createTicketBlockedForEmail = true;
-      TimerManager.clearSilence();
-      TimerManager.clearEmailConfirm();
-      transitionFSM(FSM_STATE.EMAIL_CAPTURE);
-      socket.emit("email_spelling_mode", { active: true });
-    }
-
-    function resetEmailCapture() {
-      dbg("sales", "resetEmailCapture", "cleared", {
-        email: email_state.value,
-        is_confirmed: email_state.is_confirmed,
-      });
-      TimerManager.clearEmailConfirm();
-      transitionFSM(FSM_STATE.LISTENING);
-      socket.emit("email_spelling_mode", { active: false });
-    }
-
-    function handleEmailCaptureTranscript(text) {
-      if (
-        fsmState !== FSM_STATE.EMAIL_CAPTURE &&
-        fsmState !== FSM_STATE.EMAIL_CONFIRMATION
-      ) {
-        dbg("sales", "handleEmailCaptureTranscript", "skipped", {
-          reason: "not_in_email_fsm_state",
-          fsmState,
-        });
-        return false;
-      }
-
-      const cleaned = normalizeText(text);
-      if (!cleaned) {
-        dbg("sales", "handleEmailCaptureTranscript", "skipped", {
-          reason: "empty_transcript",
-        });
-        return true;
-      }
-
-      dbg("sales", "handleEmailCaptureTranscript", "processing", {
-        input: cleaned,
-        fsmState,
-        email_confirmed: email_state.is_confirmed,
-        email_value: email_state.value,
-      });
-
-      // ── Phase 2: Waiting for YES/NO confirmation (fsmState = EMAIL_CONFIRMATION) ────
-      if (fsmState === FSM_STATE.EMAIL_CONFIRMATION) {
-        dbg("sales", "email_confirmation_phase", "awaiting_yesno", {
-          email: email_state.value,
-          input: cleaned,
-        });
-        TimerManager.clearEmailConfirm();
-
-        const lower = cleaned.toLowerCase().trim();
-        const isYes =
-          /\b(yes|yeah|yep|yup|correct|that'?s right|that is correct|right|confirm|confirmed|affirmative|go ahead|sounds good)\b/.test(
-            lower,
-          );
-        const isNo =
-          /\b(no|nope|wrong|incorrect|that'?s wrong|not right|try again|redo|different|change|mistake)\b/.test(
-            lower,
-          );
-
-        dbg("sales", "email_yesno_detection", "result", {
-          input: lower,
-          isYes,
-          isNo,
-          email: email_state.value,
-        });
-
-        if (isYes) {
-          dbg("sales", "emailCapture_YES", "confirmed", {
-            email: email_state.value,
-            salesStep,
-          });
-
-          confirmEmail();
-          createTicketBlockedForEmail = false;
-
-          if (salesStep === "email") advanceSalesStep("email");
-
-          const userMsg = `My email address is ${email_state.value}`;
-          session.messages.push({ role: "user", content: userMsg });
-          sessions.set(session.id, session);
-          socket.emit("user_transcript", userMsg);
-
-          resetEmailCapture();
-
-          if (openaiWs?.readyState === WebSocket.OPEN) {
-            openaiWs.send(
-              JSON.stringify({
-                type: "conversation.item.create",
-                item: {
-                  type: "message",
-                  role: "user",
-                  content: [{ type: "input_text", text: userMsg }],
-                },
-              }),
-            );
-            scheduleResponseCreate();
-          }
-          return true;
-        }
-
-        if (isNo) {
-          dbg("sales", "email_confirmation_rejected", "user_said_no", {
-            rejectedEmail: email_state.value,
-          });
-
-          email_state.value = "";
-          email_state.is_confirmed = false;
-          createTicketBlockedForEmail = true;
-
-          // Check if user provided inline correction
-          const afterNo = cleaned
-            .replace(
-              /^.*?\b(no|nope|wrong|incorrect|that'?s wrong|not right)\b[,.]?\s*/i,
-              "",
-            )
-            .trim();
-          const strippedAfterNo = stripEmailFillers(afterNo);
-
-          if (strippedAfterNo && looksLikeVoiceEmailSpelling(strippedAfterNo)) {
-            dbg("sales", "email_no_with_inline_correction", "parsing_inline", {
-              afterNo: strippedAfterNo,
-            });
-            const parsedInline = parseVoiceEmail(strippedAfterNo);
-            if (parsedInline) {
-              setEmailValue(parsedInline);
-              socket.emit("email_spelling_confirmation", {
-                email: parsedInline,
-              });
-              transitionFSM(FSM_STATE.EMAIL_CONFIRMATION);
-              TimerManager.startEmailConfirm();
-              if (openaiWs?.readyState === WebSocket.OPEN) {
-                const [local, domain] = parsedInline.split("@");
-                openaiWs.send(
-                  JSON.stringify({
-                    type: "conversation.item.create",
-                    item: {
-                      type: "message",
-                      role: "user",
-                      content: [
-                        {
-                          type: "input_text",
-                          text: `[SYSTEM_CONTEXT]: Customer corrected email inline to "${parsedInline}". Read back exact letters only: local="${local}" spell with hyphens, say "at", domain="${domain}" spell with dots. Ask "is that correct?" ONLY.`,
-                        },
-                      ],
-                    },
-                  }),
-                );
-                scheduleResponseCreate();
-              }
-              return true;
-            }
-          }
-
-          // No inline correction — ask to spell again
-          if (openaiWs?.readyState === WebSocket.OPEN) {
-            openaiWs.send(
-              JSON.stringify({
-                type: "conversation.item.create",
-                item: {
-                  type: "message",
-                  role: "user",
-                  content: [
-                    {
-                      type: "input_text",
-                      text: `[SYSTEM_CONTEXT]: Customer said the email was wrong. Ask them to spell the COMPLETE email again from the beginning, one letter at a time. For @ say 'at', for . say 'dot'. Never say "double X" — always spell each letter separately.`,
-                    },
-                  ],
-                },
-              }),
-            );
-            scheduleResponseCreate();
-          }
-          transitionFSM(FSM_STATE.EMAIL_CAPTURE);
-          return true;
-        }
-
-        // Ambiguous response — re-ask yes/no
-        dbg("sales", "email_confirmation_ambiguous", "re_asking_yesno", {
-          input: cleaned,
-        });
-        if (openaiWs?.readyState === WebSocket.OPEN) {
-          openaiWs.send(
-            JSON.stringify({
-              type: "conversation.item.create",
-              item: {
-                type: "message",
-                role: "user",
-                content: [
-                  {
-                    type: "input_text",
-                    text: `[SYSTEM_CONTEXT]: Customer's response was unclear ("${cleaned}"). Pending email: "${email_state.value}". Read it back using individual letters and ask ONLY "is that correct?" Wait for yes or no.`,
-                  },
-                ],
-              },
-            }),
-          );
-          scheduleResponseCreate();
-        }
-        return true;
-      }
-
-      // ── Phase 1: Parse the spoken email (fsmState = EMAIL_CAPTURE) ───
-      const cleanedForEmail = stripEmailFillers(cleaned);
-      dbg("sales", "email_filler_stripped", "result", {
-        original: cleaned,
-        stripped: cleanedForEmail,
-      });
-
-      if (!cleanedForEmail || cleanedForEmail.length < 2) {
-        dbg("sales", "email_parse_skipped", "empty_after_strip");
-        return true;
-      }
-
-      const parsed = parseVoiceEmail(cleanedForEmail);
-
-      dbg("sales", "email_parse_result", parsed ? "success" : "failed", {
-        parsed,
-        raw: cleanedForEmail,
-      });
-
-      if (!parsed) {
-        dbg("sales", "email_parse_failed", "no_email_found", {
-          combined: cleanedForEmail,
-        });
-        if (openaiWs?.readyState === WebSocket.OPEN) {
-          openaiWs.send(
-            JSON.stringify({
-              type: "conversation.item.create",
-              item: {
-                type: "message",
-                role: "user",
-                content: [
-                  {
-                    type: "input_text",
-                    text: `[SYSTEM_CONTEXT]: Couldn't parse email from: "${cleanedForEmail}". Ask customer to repeat from the beginning, one letter at a time. For @ say 'at', for . say 'dot'.`,
-                  },
-                ],
-              },
-            }),
-          );
-          scheduleResponseCreate();
-        }
-        return true;
-      }
-
-      setEmailValue(parsed);
-      dbg("sales", "email_parsed_requesting_confirmation", "ok", {
-        email: parsed,
-      });
-
-      socket.emit("email_spelling_confirmation", { email: parsed });
-      transitionFSM(FSM_STATE.EMAIL_CONFIRMATION);
-      TimerManager.startEmailConfirm();
-
-      if (openaiWs?.readyState === WebSocket.OPEN) {
-        const [local, domain] = parsed.split("@");
-        openaiWs.send(
-          JSON.stringify({
-            type: "conversation.item.create",
-            item: {
-              type: "message",
-              role: "user",
-              content: [
-                {
-                  type: "input_text",
-                  text: `[SYSTEM_CONTEXT]: Email parsed as "${parsed}". Read back exact letters only: "${local}" spelled with hyphens (e.g. s-h-a-u-n), say "at", then "${domain}" with "dot" for periods (e.g. b-e-l-e dot a-i). Format: "I've got s-h-a-u-n at b-e-l-e dot a-i — is that correct?" Wait for yes or no ONLY. Never say "double X".`,
-                },
-              ],
-            },
-          }),
-        );
-        scheduleResponseCreate();
-      }
-
-      return true;
-    }
 
     // ─── Sales step machine ────────────────────────────────────────
     function initSalesStepMachine() {
@@ -864,7 +457,7 @@ export function setupRealtimeVoice(io, deps) {
         if (!hasFirstName) salesStep = "firstName";
         else if (!hasLastName) salesStep = "lastName";
         else if (!c.phone) salesStep = "phone";
-        else if (!c.email || !email_state.is_confirmed) salesStep = "email";
+        else if (!c.email) salesStep = "email";
         else salesStep = "createTicket";
         dbg("sales", "initSalesStepMachine", "initialized", {
           startStep: salesStep,
@@ -873,7 +466,6 @@ export function setupRealtimeVoice(io, deps) {
           _lastName: c._lastName || "",
           phone: c.phone || "",
           email: c.email || "",
-          emailConfirmed: email_state.is_confirmed,
         });
       } else {
         dbg("sales", "initSalesStepMachine", "blocked", {
@@ -888,7 +480,6 @@ export function setupRealtimeVoice(io, deps) {
       dbg("sales", "advanceSalesStep_ENTRY", "called", {
         completedStep,
         salesStep,
-        "email_state.is_confirmed": email_state.is_confirmed,
         "session.collected.email": c.email || "",
         "session.collected.phone": c.phone || "",
         _firstName: c._firstName || "",
@@ -940,10 +531,9 @@ export function setupRealtimeVoice(io, deps) {
         advanceSalesStep("phone");
         return;
       }
-      if (next === "email" && c.email && email_state.is_confirmed) {
-        dbg("sales", "advanceSalesStep_SKIP", "email_already_confirmed", {
+      if (next === "email" && c.email) {
+        dbg("sales", "advanceSalesStep_SKIP", "email_already_collected", {
           email: c.email,
-          is_confirmed: email_state.is_confirmed,
         });
         advanceSalesStep("email");
         return;
@@ -955,13 +545,7 @@ export function setupRealtimeVoice(io, deps) {
         (c._firstName && c.name) ||
         c.preferredName;
 
-      if (
-        next === "createTicket" &&
-        hasName &&
-        c.phone &&
-        c.email &&
-        email_state.is_confirmed
-      ) {
+      if (next === "createTicket" && hasName && c.phone && c.email) {
         salesStep = "createTicket";
       } else {
         salesStep = next;
@@ -975,7 +559,6 @@ export function setupRealtimeVoice(io, deps) {
           _lastName: c._lastName || "",
           phone: c.phone || "",
           email: c.email || "",
-          emailConfirmed: email_state.is_confirmed,
         },
       });
     }
@@ -986,10 +569,6 @@ export function setupRealtimeVoice(io, deps) {
       const _logAndReturn = (label, val) => {
         dbg("sales", "buildSalesStepHint_RETURN", label, {
           salesStep,
-          "email_state.value": email_state.value,
-          "email_state.is_confirmed": email_state.is_confirmed,
-          createTicketBlockedForEmail,
-          fsmState,
           leadInterest: c.leadInterest || "",
           websiteCheckDone: c._websiteCheckDone || false,
           hint: String(val || "").substring(0, 150),
@@ -1120,59 +699,22 @@ export function setupRealtimeVoice(io, deps) {
           );
 
         case "email":
-          if (email_state.value && email_state.is_confirmed) {
+          if (c.email) {
             dbg(
               "sales",
               "buildSalesStepHint_email",
-              "already_confirmed_skipping",
-              { email: email_state.value },
+              "already_collected_skipping",
+              { email: c.email },
             );
             advanceSalesStep("email");
             return buildSalesStepHint();
           }
-          if (
-            fsmState === FSM_STATE.EMAIL_CONFIRMATION &&
-            !email_state.is_confirmed
-          ) {
-            return _logAndReturn(
-              "step_email_confirm_pending",
-              `[FLOW: sales][STEP: email][STATUS: awaiting_confirmation] Email value is "${email_state.value}". Read it back using individual letters and ask "is that correct?" Do NOT ask for email again. Wait for yes or no ONLY.`,
-            );
-          }
-          if (fsmState === FSM_STATE.EMAIL_CAPTURE) {
-            return _logAndReturn(
-              "step_email_capture_active",
-              `[FLOW: sales][STEP: email][STATUS: capture_active] Email capture already active. Do NOT ask for email again. Wait for customer to finish spelling.`,
-            );
-          }
           return _logAndReturn(
             "step_email_ask",
-            `[FLOW: sales][STEP: email][STATUS: pending] Ask for email: "Could I grab your email address? Please spell it letter by letter — for @ say 'at', for dots say 'dot'. Example: s-h-a-u-n at b-e-l-e dot a-i." Then STOP and wait.`,
+            `[FLOW: sales][STEP: email][STATUS: pending] Ask for email: "Could I grab your email address? Please spell it letter by letter — for @ say 'at', for dots say 'dot'. Example: s-h-a-u-n at b-e-l-e dot a-i." Then read it back and ask "is that correct?" Only proceed after user confirms YES.`,
           );
 
         case "createTicket": {
-          if (createTicketBlockedForEmail) {
-            dbg(
-              "sales",
-              "buildSalesStepHint_createTicket",
-              "blocked_by_email",
-              {
-                createTicketBlockedForEmail,
-                "email_state.is_confirmed": email_state.is_confirmed,
-              },
-            );
-            if (!email_state.is_confirmed) {
-              return _logAndReturn(
-                "step_createTicket_email_blocked",
-                `[FLOW: sales][STEP: email][STATUS: capture_required] Email not yet confirmed. Do NOT call create_ticket. email_state.is_confirmed=${email_state.is_confirmed}. Ask for email NOW using VOICE SPELLING MODE. Say: "Could I grab your email? Please spell it letter by letter."`,
-              );
-            }
-            return _logAndReturn(
-              "step_createTicket_email_confirmed",
-              `[FLOW: sales][STEP: create_ticket][STATUS: ready] Email confirmed. Proceed with create_ticket.`,
-            );
-          }
-
           const missing = [];
           if (!c._firstName && !c.name && !c.preferredName)
             missing.push("name");
@@ -1204,7 +746,6 @@ export function setupRealtimeVoice(io, deps) {
 - Email: ${c.email}
 - Plan: ${c.leadInterest}
 - Address: ${c.address || "provided earlier"}
-- email_state.is_confirmed: true
 
 STEP 1: Call extract_call_fields to save any recently collected details.
 STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user first. CALL THE TOOLS.`,
@@ -1234,9 +775,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
         pendingPostDoneCreate = true;
         dbg("sales", "scheduleResponseCreate", "queued_post_done", {
           salesStep,
-          fsmState,
-          "email_state.is_confirmed": email_state.is_confirmed,
-          createTicketBlockedForEmail,
           hint: (contextHint || "").substring(0, 100),
         });
         return;
@@ -1284,9 +822,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
 
         dbg("sales", "scheduleResponseCreate_FIRING", "sending", {
           salesStep,
-          fsmState,
-          "email_state.is_confirmed": email_state.is_confirmed,
-          createTicketBlockedForEmail,
           isResponseActive,
           pendingFunctionCalls,
           force,
@@ -1585,9 +1120,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
             );
             elevenLabsStreaming = false;
             socket.emit("audio_stream_complete");
-            if (fsmState === FSM_STATE.EMAIL_CAPTURE) {
-              socket.emit("email_spelling_ready");
-            }
           }
         } catch (err) {
           console.error(`⚠️ [EL] Message parse error:`, err.message);
@@ -1706,8 +1238,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
             "\n6. Only call any tool with email AFTER the user explicitly says YES to the readback." +
             "\n7. When confirming email, spell it back letter-by-letter: 's-h-a-u-n at b-e-l-e dot a-i' (not phonetic names)." +
             "\n\nEMAIL COLLECTION — VOICE ONLY: Collect email by voice spelling only. Do NOT mention any text input box. Do NOT say 'you can also type it'. Voice spelling is the ONLY method." +
-            "\n\nEMAIL DUPLICATE PREVENTION: If [SYSTEM_CONTEXT] shows email_state.value is already set and confirmed, do NOT ask for email again." +
-            "\n\nCREATE_TICKET RULE: NEVER call create_ticket if createTicketBlockedForEmail=true in [SYSTEM_CONTEXT]. Only call it when email_state.is_confirmed=true is explicitly shown." +
             "\n\nFIELD EXTRACTION RULE: Before calling create_ticket, you MUST first call extract_call_fields to save any name, phone, or other details the customer just provided. create_ticket does NOT save fields automatically — extract_call_fields must be called first." +
             "\n\nLEAD INTEREST EXTRACTION RULE: When the customer selects a plan (e.g. 'I'll go with the 500/50 plan' or 'the first one'), you MUST immediately call extract_call_fields with leadInterest set to the exact plan name. This is MANDATORY before asking for the website check or any personal details." +
             "\n\nWEBSITE CHECK RULE: In sales flow, ALWAYS ask 'have you had a chance to check out our website and seen the plans or pricing?' AFTER plan is selected and BEFORE collecting any personal details (name/phone/email). Never skip this step." +
@@ -1804,7 +1334,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           socket.emit("audio_interrupt");
 
           TimerManager.resetSilence();
-          TimerManager.clearEmailConfirm();
           TimerManager.clearWatchdog();
 
           if (isResponseActive) {
@@ -1820,10 +1349,8 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           lastResponseWasPackage = false;
           emptyResponseCount = 0;
           responseCreatePending = false;
-          if (fsmState !== FSM_STATE.EMAIL_CONFIRMATION) {
-            pendingPostDoneCreate = false;
-            pendingPostDoneHint = null;
-          }
+          pendingPostDoneCreate = false;
+          pendingPostDoneHint = null;
           break;
         }
 
@@ -1851,11 +1378,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           const isPurePhoneNumber =
             looksLikePhone && !looksLikeEmail && !looksLikeSpelling;
 
-          const isEmailConfirmResponse =
-            fsmState === FSM_STATE.EMAIL_CONFIRMATION;
-          const isEmailSpelling =
-            fsmState === FSM_STATE.EMAIL_CAPTURE && looksLikeSpelling;
-
           dbg(
             session.collected?.intent || "unknown",
             "transcript_received",
@@ -1866,9 +1388,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
               looksLikePhone,
               looksLikeSpelling,
               isPurePhoneNumber,
-              isEmailConfirmResponse,
-              isEmailSpelling,
-              fsmState,
               salesStep,
               assistantSpeaking,
               pendingFunctionCalls,
@@ -1909,59 +1428,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
                 phone: rawPhoneBuffer,
                 timestamp: rawPhoneBufferTimestamp,
               });
-            }
-          }
-
-          const willRouteToEmail =
-            !isPurePhoneNumber &&
-            (fsmState === FSM_STATE.EMAIL_CAPTURE ||
-              fsmState === FSM_STATE.EMAIL_CONFIRMATION ||
-              (salesStep === "email" && (looksLikeEmail || looksLikeSpelling)));
-
-          dbg(
-            "sales",
-            "transcript_email_routing_decision",
-            willRouteToEmail ? "routing_to_email" : "routing_normal",
-            {
-              isPurePhoneNumber,
-              fsmState,
-              salesStep,
-              looksLikeEmail,
-              looksLikeSpelling,
-              willRouteToEmail,
-              "email_state.value": email_state.value,
-              "email_state.is_confirmed": email_state.is_confirmed,
-            },
-          );
-
-          if (willRouteToEmail) {
-            if (
-              fsmState !== FSM_STATE.EMAIL_CAPTURE &&
-              fsmState !== FSM_STATE.EMAIL_CONFIRMATION
-            ) {
-              dbg(
-                "sales",
-                "transcript_activating_email_capture",
-                "auto_start",
-                {
-                  reason: "salesStep=email and input looks like email",
-                },
-              );
-              startEmailCapture();
-            }
-            const consumed = handleEmailCaptureTranscript(cleaned);
-            dbg("sales", "transcript_after_email_handle", "result", {
-              consumed,
-              fsmState,
-              "email_state.value": email_state.value,
-              "email_state.is_confirmed": email_state.is_confirmed,
-              salesStep,
-              createTicketBlockedForEmail,
-            });
-            if (consumed) {
-              socket.emit("user_transcript", cleaned);
-              TimerManager.clearSilence();
-              break;
             }
           }
 
@@ -2031,13 +1497,10 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           cancelPending = false;
           elevenLabsStreaming = true;
           openElevenLabsStream();
-          if (fsmState !== FSM_STATE.EMAIL_CONFIRMATION) {
-            assistantSpeaking = true;
-          }
-          transitionFSM(FSM_STATE.SPEAKING);
+          assistantSpeaking = true;
           socket.emit("status", "speaking");
           TimerManager.clearWatchdog();
-          console.log(`🔊 [FSM] speech_start`);
+          console.log(`🔊 Assistant started speaking`);
           break;
 
         case "response.text.delta":
@@ -2084,58 +1547,12 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
 
             if (detectPlanPresentation(event.text)) {
               lastResponseWasPackage = true;
-              transitionFSM(FSM_STATE.PACKAGE_PRESENTATION);
             }
 
             if (detectPhoneVerificationRequest(event.text)) {
               awaitingPhoneVerification = true;
               rawPhoneBuffer = null;
               rawPhoneBufferTimestamp = 0;
-            }
-
-            const emailSpellingDetected = detectEmailSpellingRequest(
-              event.text,
-            );
-            dbg("sales", "response_text_done_email_check", "evaluated", {
-              emailSpellingDetected,
-              salesStep,
-              fsmState,
-              "email_state.value": email_state.value,
-              "email_state.is_confirmed": email_state.is_confirmed,
-              textSnippet: event.text.substring(0, 100),
-            });
-
-            if (
-              emailSpellingDetected &&
-              salesStep === "email" &&
-              fsmState !== FSM_STATE.EMAIL_CAPTURE &&
-              fsmState !== FSM_STATE.EMAIL_CONFIRMATION
-            ) {
-              dbg(
-                "sales",
-                "detectEmailSpellingRequest_TRIGGERED",
-                "activating_capture",
-                {
-                  salesStep,
-                  fsmState,
-                },
-              );
-              startEmailCapture();
-            } else if (emailSpellingDetected) {
-              dbg(
-                "sales",
-                "detectEmailSpellingRequest_SUPPRESSED",
-                "conditions_not_met",
-                {
-                  salesStep,
-                  fsmState,
-                  reason:
-                    fsmState === FSM_STATE.EMAIL_CAPTURE ||
-                    fsmState === FSM_STATE.EMAIL_CONFIRMATION
-                      ? "already_in_email_fsm"
-                      : "salesStep_not_email",
-                },
-              );
             }
 
             if (
@@ -2156,7 +1573,7 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
         case "response.done": {
           isResponseActive = false;
           TimerManager.clearWatchdog();
-          console.log(`🔊 [FSM] speech_end`);
+          console.log(`🔊 Assistant finished speaking`);
           debugState("response_done_snapshot");
 
           const outputItems = event.response?.output || [];
@@ -2208,7 +1625,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
               console.log(`✅ response.done (cancelled) — no retry`);
               cancelPending = false;
               assistantSpeaking = false;
-              transitionFSM(FSM_STATE.LISTENING);
               socket.emit("status", "listening");
               if (pendingPostDoneCreate) {
                 pendingPostDoneCreate = false;
@@ -2245,7 +1661,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
               );
               emptyResponseCount = 0;
               assistantSpeaking = false;
-              transitionFSM(FSM_STATE.LISTENING);
               socket.emit("status", "listening");
             }
             break;
@@ -2254,17 +1669,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           emptyResponseCount = 0;
 
           if (pendingPostDoneCreate && pendingFunctionCalls === 0) {
-            if (createTicketBlockedForEmail) {
-              dbg("sales", "post_done_create_blocked", "email_not_confirmed", {
-                createTicketBlockedForEmail,
-                "email_state.is_confirmed": email_state.is_confirmed,
-              });
-              pendingPostDoneCreate = false;
-              const emailHint = buildSalesStepHint() || "";
-              pendingPostDoneHint = null;
-              setTimeout(() => scheduleResponseCreate(emailHint, 0, true), 50);
-              break;
-            }
             pendingPostDoneCreate = false;
             const hint = pendingPostDoneHint;
             pendingPostDoneHint = null;
@@ -2274,12 +1678,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           }
 
           if (!pendingFunctionCalls) {
-            if (
-              fsmState !== FSM_STATE.EMAIL_CAPTURE &&
-              fsmState !== FSM_STATE.EMAIL_CONFIRMATION
-            ) {
-              transitionFSM(FSM_STATE.LISTENING);
-            }
             socket.emit("status", "listening");
           }
           assistantTextBuffer = "";
@@ -2294,16 +1692,10 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
               session.collected?.intent || "unknown",
               "function_call_added",
               "detected",
-              {
-                fnName,
-                createTicketBlockedForEmail,
-                "email_state.is_confirmed": email_state.is_confirmed,
-              },
+              { fnName },
             );
             if (fnName === "create_ticket") {
-              if (!createTicketBlockedForEmail) {
-                TimerManager.startFinalLock(20000);
-              }
+              TimerManager.startFinalLock(20000);
               if (openaiWs?.readyState === WebSocket.OPEN) {
                 openaiWs.send(
                   JSON.stringify({ type: "input_audio_buffer.clear" }),
@@ -2316,7 +1708,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
         case "response.output_item.done":
           if (event.item?.type === "function_call") {
             pendingFunctionCalls++;
-            transitionFSM(FSM_STATE.TOOL_EXECUTING);
             handleFunctionCall(event.item);
           }
           break;
@@ -2332,7 +1723,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           elevenLabsStreaming = false;
           assistantSpeaking = false;
           TimerManager.clearWatchdog();
-          transitionFSM(FSM_STATE.LISTENING);
           socket.emit("status", "listening");
           break;
       }
@@ -2351,9 +1741,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           fn,
           argsPreview: JSON.stringify(args).substring(0, 150),
           salesStep,
-          "email_state.is_confirmed": email_state.is_confirmed,
-          createTicketBlockedForEmail,
-          fsmState,
         },
       );
 
@@ -2414,12 +1801,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
               },
             }),
           );
-          if (
-            fsmState !== FSM_STATE.EMAIL_CAPTURE &&
-            fsmState !== FSM_STATE.EMAIL_CONFIRMATION
-          ) {
-            transitionFSM(FSM_STATE.LISTENING);
-          }
           scheduleResponseCreate();
         }
         return;
@@ -2458,7 +1839,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
       let result;
       socket.emit("status", "processing");
       TimerManager.clearSilence();
-      TimerManager.clearEmailConfirm();
       TimerManager.clearWatchdog();
 
       if (openaiWs?.readyState === WebSocket.OPEN) {
@@ -2469,7 +1849,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
         console.warn(`⚠️ Tool ${fn} timed out after 30s`);
         pendingFunctionCalls = Math.max(0, pendingFunctionCalls - 1);
         if (pendingFunctionCalls === 0) {
-          transitionFSM(FSM_STATE.LISTENING);
           socket.emit("status", "listening");
         }
       }, 30000);
@@ -2492,14 +1871,10 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
             ([k]) => k !== "_registeredPhone" && k !== "_rp",
           ),
         ),
-      )}. email_state: { value: "${email_state.value}", is_confirmed: ${email_state.is_confirmed} }. createTicketBlockedForEmail: ${createTicketBlockedForEmail}. fsmState: ${fsmState}.`;
+      )}.`;
 
       dbg(session.collected?.intent || "unknown", "tool_executed", fn, {
         salesStep,
-        "email_state.value": email_state.value,
-        "email_state.is_confirmed": email_state.is_confirmed,
-        createTicketBlockedForEmail,
-        fsmState,
         result: result.substring(0, 200),
       });
 
@@ -2623,8 +1998,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           reason: parsedResult?.reason,
           ticket_id: parsedResult?.ticket_id,
           _isSalesTicket: parsedResult?._isSalesTicket,
-          "email_state.is_confirmed": email_state.is_confirmed,
-          createTicketBlockedForEmail,
         });
 
         if (
@@ -2633,36 +2006,15 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
         ) {
           TimerManager.releaseFinalLock();
           salesStep = "email";
-          createTicketBlockedForEmail = true;
-          if (
-            fsmState !== FSM_STATE.EMAIL_CAPTURE &&
-            fsmState !== FSM_STATE.EMAIL_CONFIRMATION
-          ) {
-            startEmailCapture();
-          } else {
-            dbg(
-              "sales",
-              "create_ticket_BLOCKED_capture_already_active",
-              "no_restart",
-              {
-                fsmState,
-              },
-            );
-          }
           dbg(
             "sales",
             "create_ticket_BLOCKED_email_missing",
             "forcing_email_capture",
-            {
-              salesStep,
-              createTicketBlockedForEmail,
-              fsmState,
-            },
+            { salesStep },
           );
-          systemHint += `\nTOOL RESULT: create_ticket BLOCKED — email not confirmed. salesStep is now "email". Ask for email NOW: "Could I grab your email address? Please spell it letter by letter — for @ say 'at', for dots say 'dot'. Example: s-h-a-u-n at b-e-l-e dot a-i." Do NOT call create_ticket again until email_state.is_confirmed=true.`;
+          systemHint += `\nTOOL RESULT: create_ticket BLOCKED — email missing. salesStep is now "email". Ask for email NOW: "Could I grab your email address? Please spell it letter by letter — for @ say 'at', for dots say 'dot'. Example: s-h-a-u-n at b-e-l-e dot a-i." Read it back letter by letter and ask "is that correct?" Only proceed after user confirms YES.`;
         } else if (parsedResult?.success) {
           salesStep = "done";
-          createTicketBlockedForEmail = false;
           TimerManager.releaseFinalLock();
           const ticketId = parsedResult.ticket_id;
           const isSales = parsedResult._isSalesTicket === true || !ticketId;
@@ -2676,7 +2028,7 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           } else {
             systemHint += `\nTOOL RESULT: Support ticket #${ticketId} created. Say: "Brilliant, all done! I've raised support ticket number ${ticketId} — you'll get details via email shortly. Is there anything else I can help with?"`;
           }
-          transitionFSM(FSM_STATE.FINAL);
+          // Ticket created successfully - conversation complete
         } else {
           TimerManager.releaseFinalLock();
           dbg("sales", "create_ticket_FAILED", "error", {
@@ -2684,10 +2036,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           });
           systemHint += `\nTOOL RESULT: Ticket FAILED — ${parsedResult?.error || "unknown error"}. Apologise and suggest calling 1300 101 414 or emailing support@infinetbroadband.com.au.`;
         }
-      }
-
-      if (fn === "send_portal_login_email") {
-        systemHint += `\nTOOL RESULT: Portal login email sent. Tell customer the request was sent and team will be in touch.`;
       }
 
       if (fn === "extract_call_fields") {
@@ -2707,18 +2055,9 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
         ) {
           systemHint += `\nWEBSITE CHECK DONE: Do NOT ask again. Proceed with order collection.`;
         }
-        if (createTicketBlockedForEmail) {
-          systemHint += `\nEMAIL CAPTURE IN PROGRESS: email_state.is_confirmed=${email_state.is_confirmed}. Do NOT call create_ticket. Wait for email confirmation.`;
-        }
-        systemHint += `\nEMAIL STATE: email_state.is_confirmed=${email_state.is_confirmed} email="${email_state.value}" createTicketBlockedForEmail=${createTicketBlockedForEmail}.`;
-        if (email_state.is_confirmed && salesStep === "createTicket") {
-          systemHint += ` Email is CONFIRMED. Call create_ticket NOW without asking for email again.`;
-        }
         // FIX: Remove inner const c — use outer c already declared above
         if (
           salesStep === "createTicket" &&
-          email_state.is_confirmed &&
-          !createTicketBlockedForEmail &&
           c.phone &&
           c.email &&
           c.leadInterest
@@ -2727,6 +2066,10 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
         }
         const stepHint = buildSalesStepHint();
         if (stepHint) systemHint += `\n\n${stepHint}`;
+      }
+
+      if (fn === "send_portal_login_email") {
+        systemHint += `\nTOOL RESULT: Portal login email sent. Tell customer the request was sent and team will be in touch.`;
       }
 
       if (openaiWs?.readyState === WebSocket.OPEN) {
@@ -2760,15 +2103,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
             },
           }),
         );
-
-        if (
-          fsmState === FSM_STATE.TOOL_EXECUTING &&
-          fsmState !== FSM_STATE.EMAIL_CAPTURE &&
-          fsmState !== FSM_STATE.EMAIL_CONFIRMATION &&
-          fsmState !== FSM_STATE.FINAL
-        ) {
-          transitionFSM(FSM_STATE.LISTENING);
-        }
 
         console.log(`📤 Tool complete (${fn}) — triggering response.create`);
         scheduleResponseCreate();
@@ -2865,60 +2199,14 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
 
         if (args.email) {
           const parsedForExtract = parseVoiceEmail(args.email) || args.email;
-          // FIX: If email is already confirmed, do NOT call setEmailValue (which resets is_confirmed)
-          // Just make sure session.collected.email is set correctly
-          if (
-            email_state.is_confirmed &&
-            email_state.value === parsedForExtract
-          ) {
-            // Email already confirmed and matches — just ensure session has it, don't reset state
-            session.collected.email = parsedForExtract;
-            sessions.set(session.id, session);
-            dbg(
-              "sales",
-              "extract_email_already_confirmed_preserved",
-              "no_reset",
-              {
-                email: parsedForExtract,
-                "email_state.is_confirmed": email_state.is_confirmed,
-              },
-            );
-          } else if (!email_state.is_confirmed) {
-            // Not yet confirmed — safe to set
-            setEmailValue(parsedForExtract);
-            session.collected.email = parsedForExtract;
-            sessions.set(session.id, session);
-            dbg("sales", "extract_email_captured_by_llm", "set", {
-              email: parsedForExtract,
-              salesStep,
-              "email_state.is_confirmed": email_state.is_confirmed,
-            });
-            if (salesStep === "email") {
-              socket.emit("email_spelling_confirmation", {
-                email: parsedForExtract,
-              });
-              transitionFSM(FSM_STATE.EMAIL_CONFIRMATION);
-              TimerManager.startEmailConfirm();
-              dbg("sales", "extract_email_confirmation_wait_setup", "pending", {
-                email: parsedForExtract,
-                waitingForUserConfirmation: true,
-              });
-            }
-            if (salesStep === "email" && email_state.is_confirmed) {
-              advanceSalesStep("email");
-            }
-          } else {
-            // Confirmed but LLM extracted a DIFFERENT email — log and ignore
-            dbg(
-              "sales",
-              "extract_email_ignored_confirmed_mismatch",
-              "skipped",
-              {
-                existing: email_state.value,
-                attempted: parsedForExtract,
-                reason: "email already confirmed, not overwriting",
-              },
-            );
+          session.collected.email = parsedForExtract;
+          sessions.set(session.id, session);
+          dbg("sales", "extract_email_captured_by_llm", "set", {
+            email: parsedForExtract,
+            salesStep,
+          });
+          if (salesStep === "email") {
+            advanceSalesStep("email");
           }
         }
 
@@ -2994,8 +2282,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           }
           delete session.collected.email;
           delete session.collected._emailVerifiedCustomerId;
-          email_state.value = "";
-          email_state.is_confirmed = false;
           sessions.set(session.id, session);
           dbg("support", "customer_lookup_not_found", "email_cleared", {
             email: lookupArgs.email,
@@ -3089,54 +2375,26 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
         dbg("sales", "execTool_create_ticket_GUARD_CHECK", "evaluating", {
           isSupportTicket,
           "collected.email": collected.email || "MISSING",
-          "email_state.value": email_state.value,
-          "email_state.is_confirmed": email_state.is_confirmed,
-          createTicketBlockedForEmail,
           salesStep,
           hasCustomerId,
           hasLeadInterest,
-          fsmState,
         });
 
-        if (
-          !isSupportTicket &&
-          (!collected.email || !email_state.is_confirmed)
-        ) {
-          dbg(
-            "sales",
-            "execTool_create_ticket_BLOCKED",
-            "email_not_confirmed",
-            {
-              reason: `isSupportTicket=${isSupportTicket} collected.email="${collected.email || "MISSING"}" email_state.is_confirmed=${email_state.is_confirmed}`,
-              action: "forcing_salesStep=email + startEmailCapture",
-            },
-          );
+        if (!isSupportTicket && !collected.email) {
+          dbg("sales", "execTool_create_ticket_BLOCKED", "email_missing", {
+            reason: `isSupportTicket=${isSupportTicket} collected.email="${collected.email || "MISSING"}"`,
+            action: "forcing_salesStep=email",
+          });
           salesStep = "email";
-          createTicketBlockedForEmail = true;
           TimerManager.releaseFinalLock();
           finalMessageLock = false;
           session.finalLock = false;
-          if (
-            fsmState !== FSM_STATE.EMAIL_CAPTURE &&
-            fsmState !== FSM_STATE.EMAIL_CONFIRMATION
-          ) {
-            startEmailCapture();
-          } else {
-            dbg(
-              "sales",
-              "execTool_create_ticket_BLOCKED_capture_already_active",
-              "no_restart",
-              {
-                fsmState,
-              },
-            );
-          }
           return JSON.stringify({
             success: false,
             _blocked: true,
             reason: "email_missing",
             message:
-              "SALES STEP [email]: Ask for email by voice spelling mode. Do NOT retry create_ticket until email_state.is_confirmed=true.",
+              "SALES STEP [email]: Ask for email by voice spelling. Read it back letter-by-letter and confirm with user before proceeding.",
           });
         }
 
@@ -3280,20 +2538,10 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
         "audio_done",
         "playback_complete",
         {
-          fsmState,
           salesStep,
-          "email_state.is_confirmed": email_state.is_confirmed,
           lastResponseWasPackage,
         },
       );
-
-      if (
-        fsmState !== FSM_STATE.EMAIL_CAPTURE &&
-        fsmState !== FSM_STATE.EMAIL_CONFIRMATION &&
-        fsmState !== FSM_STATE.FINAL
-      ) {
-        transitionFSM(FSM_STATE.LISTENING);
-      }
 
       const isPackage = lastResponseWasPackage;
       lastResponseWasPackage = false;
@@ -3312,15 +2560,11 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
         dbg("sales", "structured_input_email", "received", {
           value,
           salesStep,
-          "email_state.is_confirmed": email_state.is_confirmed,
-          createTicketBlockedForEmail,
         });
 
-        setEmailValue(value);
-        confirmEmail();
+        session.collected.email = value;
+        sessions.set(session.id, session);
         if (salesStep === "email") advanceSalesStep("email");
-        createTicketBlockedForEmail = false;
-        resetEmailCapture();
         awaitingStructuredInput = false;
         structuredInputField = null;
 
@@ -3341,7 +2585,7 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
             }),
           );
           const salesHint = buildSalesStepHint() || "";
-          const hint = `Customer email confirmed via typed input: ${value}. email_state.is_confirmed=true. createTicketBlockedForEmail=false. ${salesHint} Proceed immediately.`;
+          const hint = `Customer email confirmed via typed input: ${value}. ${salesHint} Proceed immediately.`;
           openaiWs.send(
             JSON.stringify({
               type: "conversation.item.create",
@@ -3400,8 +2644,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
     socket.on("disconnect", () => {
       console.log(`🔌 Disconnected: ${socket.id}`);
       dbg(session?.collected?.intent || "unknown", "disconnect", "cleanup", {
-        "email_state.value": email_state.value,
-        "email_state.is_confirmed": email_state.is_confirmed,
         collected: JSON.stringify(session?.collected || {}),
       });
       TimerManager.clearAll();
@@ -3437,7 +2679,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           }
           sessions.set(session.id, session);
         } else {
-          transitionFSM(FSM_STATE.LISTENING);
           socket.emit("status", "listening");
         }
       } catch (err) {
