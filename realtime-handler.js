@@ -4715,7 +4715,7 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
       socket.emit("status", "listening");
     });
 
-    // ═══════════════ Cleanupp ════════════════
+    // ═══════════════ Cleanup ════════════════
     socket.on("disconnect", () => {
       console.log(`🔌 Disconnected: ${socket.id}`);
       TimerManager.clearAll();
