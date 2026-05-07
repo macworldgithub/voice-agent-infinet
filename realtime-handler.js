@@ -1995,6 +1995,7 @@
 //     })();
 //   });
 // }
+
 import WebSocket from "ws";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2076,7 +2077,6 @@ function parseVoiceEmail(transcript) {
   const directEmail = raw.match(/\b([^\s@]+@[^\s@]+\.[^\s@]{2,})\b/);
   if (directEmail) return directEmail[1].toLowerCase();
 
-  // Expand hyphenated spelled-out letter sequences FIRST
   raw = raw.replace(
     /(?<![a-z0-9])([a-z])(?:-([a-z]))+(?![a-z0-9])/gi,
     (match) => match.toLowerCase().split("-").join(" "),
@@ -2271,8 +2271,12 @@ export function setupRealtimeVoice(io, deps) {
     let lastResponseWasPackage = false;
 
     // ─── Email confirmation state ──────────────────────────────────
-    let pendingEmailConfirmation = null; // { raw: string, parsed: string }
+    let pendingEmailConfirmation = null;
     let emailConfirmationAsked = false;
+
+    // ─── Ticket confirmation state (ALL FLOWS) ────────────────────
+    let pendingTicketConfirmation = false;
+    let pendingTicketArgs = null;
 
     // ═══════════════════════════════════════════════════════════════
     //  DEBUG STATE
@@ -2297,8 +2301,8 @@ export function setupRealtimeVoice(io, deps) {
         _emailStepComplete: c._emailStepComplete || false,
         pendingEmailConfirmation: pendingEmailConfirmation?.parsed || "",
         emailConfirmationAsked,
-        issueSummary: c.issueSummary || "",
-        _phoneVerified: c._phoneVerified || false,
+        pendingTicketConfirmation,
+        _ticketConfirmed: c._ticketConfirmed || false,
       });
     }
 
@@ -2473,6 +2477,7 @@ export function setupRealtimeVoice(io, deps) {
         else if (!hasLastName) salesStep = "lastName";
         else if (!c.phone) salesStep = "phone";
         else if (!c.email || !c._emailStepComplete) salesStep = "email";
+        else if (!c._ticketConfirmed) salesStep = "confirmTicket";
         else salesStep = "createTicket";
 
         dbg("sales", "initSalesStepMachine", "initialized", {
@@ -2481,14 +2486,10 @@ export function setupRealtimeVoice(io, deps) {
       }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // FIX: advanceSalesStep now returns a flag indicating if we just
-    // reached "createTicket" so callers can auto-trigger the LLM.
-    // ═══════════════════════════════════════════════════════════════
     function advanceSalesStep(completedStep) {
       const c = session.collected || {};
       if (salesStep !== completedStep) {
-        return false;
+        return;
       }
 
       const order = [
@@ -2496,33 +2497,39 @@ export function setupRealtimeVoice(io, deps) {
         "lastName",
         "phone",
         "email",
+        "confirmTicket",
         "createTicket",
         "done",
       ];
       const idx = order.indexOf(completedStep);
       if (idx === -1) {
-        return false;
+        return;
       }
       const next = order[idx + 1];
       if (!next) {
         salesStep = "done";
-        return false;
+        return;
       }
 
       if (next === "lastName" && c._lastName) {
         salesStep = "lastName";
         advanceSalesStep("lastName");
-        return false;
+        return;
       }
       if (next === "phone" && c.phone) {
         salesStep = "phone";
         advanceSalesStep("phone");
-        return false;
+        return;
       }
       if (next === "email" && c.email && c._emailStepComplete) {
         salesStep = "email";
         advanceSalesStep("email");
-        return false;
+        return;
+      }
+      if (next === "confirmTicket" && c._ticketConfirmed) {
+        salesStep = "confirmTicket";
+        advanceSalesStep("confirmTicket");
+        return;
       }
 
       const hasName =
@@ -2536,13 +2543,18 @@ export function setupRealtimeVoice(io, deps) {
         hasName &&
         c.phone &&
         c.email &&
-        c._emailStepComplete
+        c._emailStepComplete &&
+        c._ticketConfirmed
       ) {
         salesStep = "createTicket";
-        dbg("sales", "advanceSalesStep_RESULT", "reached_createTicket", {
-          from: completedStep,
-        });
-        return true; // ← FIX: signal caller that ticket creation is ready
+      } else if (
+        next === "confirmTicket" &&
+        hasName &&
+        c.phone &&
+        c.email &&
+        c._emailStepComplete
+      ) {
+        salesStep = "confirmTicket";
       } else {
         salesStep = next;
       }
@@ -2551,124 +2563,6 @@ export function setupRealtimeVoice(io, deps) {
         from: completedStep,
         to: salesStep,
       });
-      return false;
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // FIX: Helper to auto-fire create_ticket when all fields ready.
-    // Called after any step advance that might land on "createTicket".
-    // ═══════════════════════════════════════════════════════════════
-    function maybeAutoFireCreateTicket(extraHint = "") {
-      const c = session.collected || {};
-      if (salesStep !== "createTicket") return false;
-
-      const hasName = c._firstName || c.name || c.preferredName;
-      const hasPhone = !!c.phone;
-      const hasEmail = !!(c.email && c._emailStepComplete);
-      const hasPlan = !!c.leadInterest;
-
-      if (!hasName || !hasPhone || !hasEmail || !hasPlan) {
-        dbg("sales", "maybeAutoFireCreateTicket", "missing_fields", {
-          hasName,
-          hasPhone,
-          hasEmail,
-          hasPlan,
-        });
-        return false;
-      }
-
-      dbg("sales", "maybeAutoFireCreateTicket", "AUTO_FIRING", {
-        name: c._firstName || c.name,
-        phone: c.phone,
-        email: c.email,
-        plan: c.leadInterest,
-      });
-
-      const autoHint =
-        `[AUTO_TICKET] ALL sales details are now collected:\n` +
-        `- Name: ${[c._firstName, c._lastName].filter(Boolean).join(" ") || c.name || c.preferredName}\n` +
-        `- Phone: ${c.phone}\n` +
-        `- Email: ${c.email}\n` +
-        `- Plan: ${c.leadInterest}\n` +
-        `- Address: ${c.address || "provided"}\n\n` +
-        `MANDATORY: You MUST now:\n` +
-        `1. Say something warm like "Brilliant, just give me one moment while I get that all submitted for you!"\n` +
-        `2. IMMEDIATELY call create_ticket with all the details above.\n` +
-        `DO NOT wait for user input. DO NOT ask any more questions. CALL create_ticket NOW.\n` +
-        (extraHint ? `\n${extraHint}` : "");
-
-      if (openaiWs?.readyState === WebSocket.OPEN) {
-        openaiWs.send(
-          JSON.stringify({
-            type: "conversation.item.create",
-            item: {
-              type: "message",
-              role: "user",
-              content: [
-                { type: "input_text", text: `[SYSTEM_CONTEXT]: ${autoHint}` },
-              ],
-            },
-          }),
-        );
-        scheduleResponseCreate(null, 0, true);
-      }
-      return true;
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // FIX: Helper to auto-fire create_ticket for support/account flow.
-    // Called after verify_phone succeeds and issueSummary is present,
-    // OR when extract_call_fields is called with issueSummary while
-    // _phoneVerified is already true.
-    // ═══════════════════════════════════════════════════════════════
-    function maybeAutoFireSupportTicket(extraHint = "") {
-      const c = session.collected || {};
-      const isSupportFlow = c.intent === "support" || c.intent === "account";
-      const isVerified = !!c._phoneVerified;
-      const hasIssue = !!(c.issueSummary && c.issueSummary.trim().length > 3);
-      const hasCustomerId = !!c.customer_id;
-
-      if (!isSupportFlow || !isVerified || !hasIssue || !hasCustomerId)
-        return false;
-      // Don't double-fire — check if we already sent a ticket recently
-      if (c._supportTicketFired) return false;
-
-      dbg("support", "maybeAutoFireSupportTicket", "AUTO_FIRING", {
-        intent: c.intent,
-        issueSummary: c.issueSummary?.substring(0, 60),
-        customer_id: c.customer_id,
-      });
-
-      // Mark so we don't double-fire
-      session.collected._supportTicketFired = true;
-      sessions.set(session.id, session);
-
-      const autoHint =
-        `[AUTO_SUPPORT_TICKET] All details collected for a support ticket:\n` +
-        `- Customer ID: ${c.customer_id}\n` +
-        `- Email: ${c.email || "on file"}\n` +
-        `- Issue: ${c.issueSummary}\n` +
-        `- Priority: ${c.priority || "medium"}\n\n` +
-        `MANDATORY: Say something warm like "Alright, I've got all the details — just one moment while I raise that ticket for you!" ` +
-        `then IMMEDIATELY call create_ticket. DO NOT wait for user input. CALL create_ticket NOW.\n` +
-        (extraHint ? `\n${extraHint}` : "");
-
-      if (openaiWs?.readyState === WebSocket.OPEN) {
-        openaiWs.send(
-          JSON.stringify({
-            type: "conversation.item.create",
-            item: {
-              type: "message",
-              role: "user",
-              content: [
-                { type: "input_text", text: `[SYSTEM_CONTEXT]: ${autoHint}` },
-              ],
-            },
-          }),
-        );
-        scheduleResponseCreate(null, 0, true);
-      }
-      return true;
     }
 
     function buildSalesStepHint() {
@@ -2825,6 +2719,20 @@ export function setupRealtimeVoice(io, deps) {
           );
         }
 
+        case "confirmTicket": {
+          const fullName =
+            [c._firstName, c._lastName].filter(Boolean).join(" ") ||
+            c.name ||
+            c.preferredName ||
+            "N/A";
+          return _logAndReturn(
+            "step_confirmTicket",
+            `[FLOW: sales][STEP: confirmTicket][STATUS: pending] ALL details have been collected. Now you MUST summarise and ask for confirmation before creating the ticket.
+Say something like: "Alright, so just to confirm — I have your name as ${fullName}, phone number ${c.phone || "on file"}, email ${c.email || "on file"}, and you're interested in the ${c.leadInterest || "selected plan"}${c.address ? " at " + c.address : ""}. Shall I go ahead and submit this for you?"
+WAIT for the customer to say YES or NO. Do NOT call create_ticket until they confirm.`,
+          );
+        }
+
         case "createTicket": {
           const missing = [];
           if (!c._firstName && !c.name && !c.preferredName)
@@ -2841,7 +2749,7 @@ export function setupRealtimeVoice(io, deps) {
 
           return _logAndReturn(
             "step_createTicket_execute",
-            `[FLOW: sales][STEP: create_ticket][STATUS: execute] ALL required details collected:
+            `[FLOW: sales][STEP: create_ticket][STATUS: execute] Customer has CONFIRMED they want to proceed. ALL required details collected:
 - Name: ${c._firstName || ""} ${c._lastName || ""} / ${c.name || ""}
 - Phone: ${c.phone}
 - Email: ${c.email}
@@ -2856,6 +2764,49 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
         default:
           return _logAndReturn("unknown_step", null);
       }
+    }
+
+    // ─── Ticket confirmation detection helpers ─────────────────────
+    function detectTicketConfirmation(text) {
+      if (!text) return null;
+      const lower = text.toLowerCase().trim();
+      if (
+        /\b(yes|yeah|yep|yup|sure|go ahead|go for it|submit|do it|please|absolutely|definitely|correct|confirmed|confirm|that's right|sounds good|perfect|let's do it|proceed)\b/.test(
+          lower,
+        )
+      )
+        return "yes";
+      if (
+        /\b(no|nope|wait|hold on|cancel|stop|don't|not yet|change|actually|hang on|let me think)\b/.test(
+          lower,
+        )
+      )
+        return "no";
+      return null;
+    }
+
+    function detectTicketConfirmationQuestion(text) {
+      if (!text) return false;
+      const lower = text.toLowerCase();
+      return (
+        (lower.includes("shall i") &&
+          (lower.includes("submit") ||
+            lower.includes("go ahead") ||
+            lower.includes("create"))) ||
+        (lower.includes("want me to") &&
+          (lower.includes("submit") ||
+            lower.includes("go ahead") ||
+            lower.includes("create"))) ||
+        (lower.includes("ready to") && lower.includes("submit")) ||
+        (lower.includes("go ahead and") &&
+          (lower.includes("submit") ||
+            lower.includes("create") ||
+            lower.includes("raise"))) ||
+        (lower.includes("should i") &&
+          (lower.includes("submit") ||
+            lower.includes("create") ||
+            lower.includes("raise")))
+      );
     }
 
     // ─── Raw phone buffer ──────────────────────────────────────────
@@ -3062,7 +3013,12 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
     }
 
     function detectSalesStepAnswer(text) {
-      if (!salesStep || salesStep === "done" || salesStep === "createTicket")
+      if (
+        !salesStep ||
+        salesStep === "done" ||
+        salesStep === "createTicket" ||
+        salesStep === "confirmTicket"
+      )
         return;
 
       const c = session.collected || {};
@@ -3309,14 +3265,18 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
             "\n- ABSOLUTELY DO NOT auto-select or assume which plan the customer wants." +
             "\n- After presenting packages, ask explicitly: 'Which of these plans catches your eye?'" +
             "\n- WAIT for the customer to explicitly say WHICH PLAN they choose." +
+            "\n\nTICKET CONFIRMATION RULE (CRITICAL - ALL FLOWS):" +
+            "\n- Before calling create_ticket, you MUST summarise ALL collected details and ask: 'Shall I go ahead and submit this for you?'" +
+            "\n- WAIT for the customer to explicitly say YES before calling create_ticket." +
+            "\n- If customer says NO or wants to change something, ask what they'd like to change." +
+            "\n- This applies to ALL flows: sales, support, accounts, and moving/relocating." +
+            "\n- NEVER call create_ticket without explicit customer confirmation." +
             "\n\nEMAIL COLLECTION FLOW:" +
             "\n1. Ask for email spelling letter by letter." +
             "\n2. Parse and read back letter-by-letter: 'So that's s-h-a-u-n at b-e-l-e dot a-i — is that right?'" +
             "\n3. Wait for YES or NO. If YES → call extract_call_fields with the email ONCE. If NO → ask to re-spell." +
             "\n4. After extract_call_fields confirms email saved, do NOT call it again with the same email." +
-            "\n5. NEVER use NATO names when reading back. Spell s-h-a-u-n not sierra-hotel-alpha-uniform-november." +
-            "\n\nAUTO-TICKET RULE: When you receive a [AUTO_TICKET] or [AUTO_SUPPORT_TICKET] system message, " +
-            "you MUST call create_ticket immediately without asking the user anything further.";
+            "\n5. NEVER use NATO names when reading back. Spell s-h-a-u-n not sierra-hotel-alpha-uniform-november.";
 
           openaiWs.send(
             JSON.stringify({
@@ -3468,7 +3428,64 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           socket.emit("user_transcript", cleaned);
 
           // ══════════════════════════════════════════════════════════
-          // Handle email confirmation FIRST
+          // TICKET CONFIRMATION CHECK (ALL FLOWS) — runs FIRST
+          // ══════════════════════════════════════════════════════════
+          if (pendingTicketConfirmation) {
+            const ticketConfResult = detectTicketConfirmation(cleaned);
+            dbg(
+              session.collected?.intent || "unknown",
+              "ticket_confirmation_check",
+              ticketConfResult || "not_clear",
+              {
+                cleaned: cleaned.substring(0, 60),
+              },
+            );
+
+            if (ticketConfResult === "yes") {
+              session.collected._ticketConfirmed = true;
+              pendingTicketConfirmation = false;
+              sessions.set(session.id, session);
+              dbg("ticket", "ticket_confirmed_YES", "proceeding", {});
+
+              if (salesStep === "confirmTicket") {
+                advanceSalesStep("confirmTicket");
+              }
+
+              session.messages.push({ role: "user", content: cleaned });
+              sessions.set(session.id, session);
+              TimerManager.resetSilence();
+
+              if (pendingTicketArgs) {
+                // Re-trigger create_ticket via LLM
+                const hint = `Customer has CONFIRMED ticket creation. Call create_ticket NOW immediately. Do NOT ask anything else.`;
+                scheduleResponseCreate(hint);
+              } else {
+                const nextHint =
+                  buildSalesStepHint() ||
+                  "Customer confirmed. Call create_ticket NOW.";
+                scheduleResponseCreate(nextHint);
+              }
+              break;
+            } else if (ticketConfResult === "no") {
+              pendingTicketConfirmation = false;
+              pendingTicketArgs = null;
+              delete session.collected._ticketConfirmed;
+              sessions.set(session.id, session);
+              dbg("ticket", "ticket_confirmed_NO", "asking_what_to_change", {});
+
+              session.messages.push({ role: "user", content: cleaned });
+              sessions.set(session.id, session);
+              TimerManager.resetSilence();
+              scheduleResponseCreate(
+                `Customer said NO to ticket creation. Ask warmly: "No worries at all! What would you like to change?" Wait for their answer.`,
+              );
+              break;
+            }
+            // Not a clear yes/no — fall through
+          }
+
+          // ══════════════════════════════════════════════════════════
+          // EMAIL CONFIRMATION CHECK
           // ══════════════════════════════════════════════════════════
           if (
             salesStep === "email" &&
@@ -3497,28 +3514,17 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
                 email: confirmedEmail,
                 _emailStepComplete: true,
               });
-
-              const reachedTicket = advanceSalesStep("email");
+              advanceSalesStep("email");
               session.messages.push({ role: "user", content: cleaned });
               sessions.set(session.id, session);
               TimerManager.resetSilence();
-
-              // ═══════════════════════════════════════════════════
-              // FIX: Auto-fire create_ticket if we just hit that step
-              // ═══════════════════════════════════════════════════
-              if (reachedTicket || salesStep === "createTicket") {
-                maybeAutoFireCreateTicket(
-                  `Email was just confirmed as "${confirmedEmail}". All fields collected.`,
-                );
-              } else {
-                const nextStepHint =
-                  buildSalesStepHint() || "Proceed to the next step.";
-                scheduleResponseCreate(
-                  `Email confirmed and saved as "${confirmedEmail}". ` +
-                    `_emailStepComplete=true. Do NOT call extract_call_fields with this email again. ` +
-                    `Do NOT ask about email again. ${nextStepHint}`,
-                );
-              }
+              const nextStepHint =
+                buildSalesStepHint() || "Proceed to the next step.";
+              scheduleResponseCreate(
+                `Email confirmed and saved as "${confirmedEmail}". ` +
+                  `_emailStepComplete=true. Do NOT call extract_call_fields with this email again. ` +
+                  `Do NOT ask about email again. ${nextStepHint}`,
+              );
               break;
             } else if (confirmationResult === "no") {
               pendingEmailConfirmation = null;
@@ -3691,6 +3697,22 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
                 pendingEmail: pendingEmailConfirmation.parsed,
               });
             }
+
+            // Detect when AI asks ticket confirmation question
+            if (
+              detectTicketConfirmationQuestion(event.text) &&
+              !session.collected._ticketConfirmed
+            ) {
+              pendingTicketConfirmation = true;
+              dbg(
+                "ticket",
+                "ticket_confirmation_question_detected",
+                "awaiting_answer",
+                {
+                  aiText: event.text.substring(0, 80),
+                },
+              );
+            }
           }
           break;
 
@@ -3801,6 +3823,9 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           pendingPostDoneCreate = false;
           elevenLabsStreaming = false;
           assistantSpeaking = false;
+          // Clear ticket confirmation state on error
+          pendingTicketConfirmation = false;
+          pendingTicketArgs = null;
           TimerManager.clearWatchdog();
           socket.emit("status", "listening");
           break;
@@ -3822,6 +3847,98 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           salesStep,
         },
       );
+
+      // ══════════════════════════════════════════════════════════════
+      // TICKET CONFIRMATION GATE (ALL FLOWS)
+      // Intercept create_ticket calls if user hasn't confirmed yet
+      // ══════════════════════════════════════════════════════════════
+      if (fn === "create_ticket" && !session.collected._ticketConfirmed) {
+        dbg("ticket", "create_ticket_BLOCKED", "awaiting_confirmation", {
+          argsPreview: JSON.stringify(args).substring(0, 150),
+        });
+
+        // Store the args for later re-execution
+        pendingTicketArgs = { call_id, args };
+        pendingTicketConfirmation = true;
+
+        // Release the final lock since we're not creating yet
+        TimerManager.releaseFinalLock();
+        finalMessageLock = false;
+        session.finalLock = false;
+
+        // Send a fake successful result so LLM doesn't retry
+        const fakeResult = JSON.stringify({
+          success: false,
+          _blocked: true,
+          reason: "confirmation_required",
+          message:
+            "You MUST ask the customer to confirm before creating the ticket. Summarise all details and ask: 'Shall I go ahead and submit this for you?'",
+        });
+
+        if (openaiWs?.readyState === WebSocket.OPEN) {
+          openaiWs.send(
+            JSON.stringify({
+              type: "conversation.item.create",
+              item: {
+                type: "function_call_output",
+                call_id,
+                output: fakeResult,
+              },
+            }),
+          );
+        }
+
+        pendingFunctionCalls = Math.max(0, pendingFunctionCalls - 1);
+
+        // Build a summary of collected details for the confirmation prompt
+        const c = session.collected || {};
+        const fullName =
+          [c._firstName, c._lastName].filter(Boolean).join(" ") ||
+          c.name ||
+          c.preferredName ||
+          "";
+        const detailSummary = [
+          fullName ? `Name: ${fullName}` : null,
+          c.phone ? `Phone: ${c.phone}` : null,
+          c.email ? `Email: ${c.email}` : null,
+          c.leadInterest ? `Plan: ${c.leadInterest}` : null,
+          c.address ? `Address: ${c.address}` : null,
+          c.issueSummary ? `Issue: ${c.issueSummary}` : null,
+        ]
+          .filter(Boolean)
+          .join(", ");
+
+        const confirmHint =
+          `[TICKET CONFIRMATION REQUIRED] create_ticket was blocked because customer has NOT confirmed yet. ` +
+          `You MUST summarise the details (${detailSummary}) and ask: "Shall I go ahead and submit this for you?" ` +
+          `WAIT for the customer to say YES. Do NOT call create_ticket again until they confirm.`;
+
+        if (openaiWs?.readyState === WebSocket.OPEN) {
+          openaiWs.send(
+            JSON.stringify({
+              type: "conversation.item.create",
+              item: {
+                type: "message",
+                role: "user",
+                content: [
+                  {
+                    type: "input_text",
+                    text: `[SYSTEM_CONTEXT]: ${confirmHint}`,
+                  },
+                ],
+              },
+            }),
+          );
+          scheduleResponseCreate();
+        }
+        return;
+      }
+
+      // If create_ticket passes the gate (user confirmed), clear pending state
+      if (fn === "create_ticket" && session.collected._ticketConfirmed) {
+        pendingTicketArgs = null;
+        pendingTicketConfirmation = false;
+      }
 
       // Redirect verify_phone for sales (non-verified) flow
       if (
@@ -4008,35 +4125,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
         }
       }
 
-      if (fn === "verify_phone") {
-        let parsedResult = null;
-        try {
-          parsedResult = JSON.parse(result);
-        } catch (_) {}
-
-        // ═══════════════════════════════════════════════════════
-        // FIX: After phone verified, check if support ticket can
-        // be auto-fired (issueSummary already collected).
-        // ═══════════════════════════════════════════════════════
-        if (parsedResult?.success && parsedResult?.verified) {
-          awaitingPhoneVerification = false;
-          const c = session.collected || {};
-          systemHint += `\nTOOL RESULT: Phone verified. Customer fully authenticated.`;
-
-          if (
-            c.issueSummary &&
-            c.issueSummary.trim().length > 3 &&
-            c.customer_id
-          ) {
-            systemHint += ` Issue summary already collected. Call create_ticket NOW.`;
-          } else {
-            systemHint += ` Now collect the issue details if not yet gathered, then call create_ticket.`;
-          }
-        } else if (parsedResult?.verificationFailed) {
-          systemHint += `\nTOOL RESULT: Phone verification FAILED. Tell customer the number doesn't match and ask to try again.`;
-        }
-      }
-
       if (fn === "create_ticket") {
         let parsedResult = null;
         try {
@@ -4052,6 +4140,9 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           systemHint += `\nTOOL RESULT: create_ticket BLOCKED — email missing. Ask for email NOW by voice spelling. Read back letter-by-letter. Confirm YES before proceeding.`;
         } else if (parsedResult?.success) {
           salesStep = "done";
+          // Clear ticket confirmation state after success
+          pendingTicketConfirmation = false;
+          pendingTicketArgs = null;
           TimerManager.releaseFinalLock();
           const ticketId = parsedResult.ticket_id;
           const isSales = parsedResult._isSalesTicket === true || !ticketId;
@@ -4085,29 +4176,24 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           systemHint += `\nWEBSITE CHECK DONE: Do NOT ask again. Proceed with order collection.`;
         }
 
+        if (
+          salesStep === "createTicket" &&
+          c.phone &&
+          c.email &&
+          c.leadInterest &&
+          c._ticketConfirmed
+        ) {
+          systemHint += `\n\nCRITICAL: Customer has CONFIRMED. Call create_ticket RIGHT NOW. Do not say anything to the user first.`;
+        }
+
         if (c._emailStepComplete) {
           systemHint += `\nEMAIL ALREADY CONFIRMED (_emailStepComplete=true). Do NOT ask about email again. Do NOT call extract_call_fields with email again.`;
         } else if (pendingEmailConfirmation && salesStep === "email") {
           systemHint += `\nEMAIL PARSED as "${pendingEmailConfirmation.parsed}". Read it back letter-by-letter and ask "Is that correct?" Do NOT proceed until user says YES.`;
         }
 
-        // ═══════════════════════════════════════════════════════
-        // FIX: After extract_call_fields, check if we should
-        // auto-fire support ticket (issueSummary + verified)
-        // ═══════════════════════════════════════════════════════
-        if (!maybeAutoFireSupportTicket()) {
-          if (
-            salesStep === "createTicket" &&
-            c.phone &&
-            c.email &&
-            c.leadInterest
-          ) {
-            systemHint += `\n\nCRITICAL: Call create_ticket RIGHT NOW. Do not say anything to the user first.`;
-          }
-
-          const stepHint = buildSalesStepHint();
-          if (stepHint) systemHint += `\n\n${stepHint}`;
-        }
+        const stepHint = buildSalesStepHint();
+        if (stepHint) systemHint += `\n\n${stepHint}`;
       }
 
       if (fn === "send_portal_login_email") {
@@ -4130,40 +4216,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
         pendingFunctionCalls === 0 &&
         openaiWs?.readyState === WebSocket.OPEN
       ) {
-        // ═══════════════════════════════════════════════════════
-        // FIX: After verify_phone for support, auto-fire support
-        // ticket if conditions met (avoids waiting for user input)
-        // ═══════════════════════════════════════════════════════
-        if (fn === "verify_phone") {
-          const c = session.collected || {};
-          if (c._phoneVerified && c.issueSummary && c.customer_id) {
-            if (
-              !maybeAutoFireSupportTicket(
-                "Phone just verified and issue already known.",
-              )
-            ) {
-              // fallthrough to normal response
-              openaiWs.send(
-                JSON.stringify({
-                  type: "conversation.item.create",
-                  item: {
-                    type: "message",
-                    role: "user",
-                    content: [
-                      {
-                        type: "input_text",
-                        text: `[SYSTEM_CONTEXT]: ${systemHint}\n\nIMPORTANT: Respond immediately based on the tool result above.`,
-                      },
-                    ],
-                  },
-                }),
-              );
-              scheduleResponseCreate();
-            }
-            return;
-          }
-        }
-
         openaiWs.send(
           JSON.stringify({
             type: "conversation.item.create",
@@ -4288,34 +4340,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
               });
             }
           }
-        }
-
-        // ═══════════════════════════════════════════════════════
-        // FIX: After extract_call_fields, check if support ticket
-        // is now ready to fire (issueSummary + _phoneVerified)
-        // ═══════════════════════════════════════════════════════
-        const freshC = session.collected || {};
-        if (
-          freshC._phoneVerified &&
-          freshC.issueSummary &&
-          freshC.customer_id &&
-          !freshC._supportTicketFired &&
-          (freshC.intent === "support" || freshC.intent === "account")
-        ) {
-          dbg(
-            "support",
-            "execTool_extract_fields_support_autofire",
-            "triggering",
-            {
-              issueSummary: freshC.issueSummary?.substring(0, 50),
-            },
-          );
-          // We'll let handleFunctionCall do the actual fire via maybeAutoFireSupportTicket
-          // Return early with a signal
-          return JSON.stringify({
-            success: true,
-            _readyForSupportTicket: true,
-          });
         }
 
         return JSON.stringify({ success: true });
@@ -4620,40 +4644,7 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
         pendingEmailConfirmation = null;
         emailConfirmationAsked = false;
         sessions.set(session.id, session);
-        if (salesStep === "email") {
-          const reachedTicket = advanceSalesStep("email");
-          if (reachedTicket || salesStep === "createTicket") {
-            // ═══════════════════════════════════════════════════
-            // FIX: Auto-fire for typed email input too
-            // ═══════════════════════════════════════════════════
-            const userMessage = `My email is ${parsedEmail}`;
-            session.messages.push({ role: "user", content: userMessage });
-            sessions.set(session.id, session);
-            socket.emit("user_transcript", userMessage);
-            socket.emit("structured_input_accepted", {
-              field,
-              value: parsedEmail,
-            });
-            socket.emit("status", "listening");
-
-            if (openaiWs?.readyState === WebSocket.OPEN) {
-              openaiWs.send(
-                JSON.stringify({
-                  type: "conversation.item.create",
-                  item: {
-                    type: "message",
-                    role: "user",
-                    content: [{ type: "input_text", text: userMessage }],
-                  },
-                }),
-              );
-            }
-            maybeAutoFireCreateTicket(
-              `Email provided via typed input: ${parsedEmail}`,
-            );
-            return;
-          }
-        }
+        if (salesStep === "email") advanceSalesStep("email");
 
         awaitingStructuredInput = false;
         structuredInputField = null;
