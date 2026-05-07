@@ -4764,6 +4764,7 @@
 // }
 //////////////////////////////////////////
 import WebSocket from "ws";
+
 // ═══════════════════════════════════════════════════════════════════════════
 //  DEBUG LOGGER — structured, timestamped, flow-aware
 // ═══════════════════════════════════════════════════════════════════════════
@@ -5039,7 +5040,6 @@ export function setupRealtimeVoice(io, deps) {
     // ─── Email confirmation state ──────────────────────────────────
     let pendingEmailConfirmation = null;
     let emailConfirmationAsked = false;
-    let emailConfirmationAskedAt = 0;
 
     // ─── Ticket confirmation state (ALL FLOWS) ────────────────────
     let pendingTicketConfirmation = false;
@@ -5587,14 +5587,14 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
     function scheduleResponseCreate(
       contextHint = null,
       delayMs = 0,
-      forceNow = false,
+      force = false,
     ) {
-      if (isResponseActive && !forceNow) {
+      if (isResponseActive && !force) {
         if (contextHint) pendingPostDoneHint = contextHint;
         pendingPostDoneCreate = true;
         return;
       }
-      if (responseCreatePending && !forceNow) {
+      if (responseCreatePending && !force) {
         return;
       }
       responseCreatePending = true;
@@ -5602,7 +5602,7 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
       const send = () => {
         responseCreatePending = false;
         if (openaiWs?.readyState !== WebSocket.OPEN) return;
-        if (isResponseActive && !forceNow) {
+        if (isResponseActive && !force) {
           pendingPostDoneCreate = true;
           if (contextHint) pendingPostDoneHint = contextHint;
           return;
@@ -6271,23 +6271,11 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
             );
 
             if (confirmationResult === "yes") {
-              const confirmationAgeMs = emailConfirmationAskedAt
-                ? Date.now() - emailConfirmationAskedAt
-                : Number.POSITIVE_INFINITY;
-              if (confirmationAgeMs > 20000) {
-                dbg("sales", "email_confirmed_STALE", "ignored", {
-                  confirmationAgeMs,
-                  pendingEmail: pendingEmailConfirmation.parsed,
-                });
-                break;
-              }
-
               const confirmedEmail = pendingEmailConfirmation.parsed;
               session.collected.email = confirmedEmail;
               session.collected._emailStepComplete = true;
               pendingEmailConfirmation = null;
               emailConfirmationAsked = false;
-              emailConfirmationAskedAt = 0;
               sessions.set(session.id, session);
               dbg("sales", "email_confirmed_YES", "advancing", {
                 email: confirmedEmail,
@@ -6297,22 +6285,17 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
               session.messages.push({ role: "user", content: cleaned });
               sessions.set(session.id, session);
               TimerManager.resetSilence();
-              pendingPostDoneCreate = false;
-              pendingPostDoneHint = null;
               const nextStepHint =
                 buildSalesStepHint() || "Proceed to the next step.";
               scheduleResponseCreate(
                 `Email confirmed and saved as "${confirmedEmail}". ` +
                   `_emailStepComplete=true. Do NOT call extract_call_fields with this email again. ` +
                   `Do NOT ask about email again. ${nextStepHint}`,
-                0,
-                true,
               );
               break;
             } else if (confirmationResult === "no") {
               pendingEmailConfirmation = null;
               emailConfirmationAsked = false;
-              emailConfirmationAskedAt = 0;
               delete session.collected.email;
               delete session.collected._emailStepComplete;
               sessions.set(session.id, session);
@@ -6320,13 +6303,9 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
               session.messages.push({ role: "user", content: cleaned });
               sessions.set(session.id, session);
               TimerManager.resetSilence();
-              pendingPostDoneCreate = false;
-              pendingPostDoneHint = null;
               scheduleResponseCreate(
                 `Email was REJECTED by user. Say "No worries, let me take that again" ` +
                   `and ask them to re-spell their email letter by letter from the beginning.`,
-                0,
-                true,
               );
               break;
             }
@@ -6481,7 +6460,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
               pendingEmailConfirmation
             ) {
               emailConfirmationAsked = true;
-              emailConfirmationAskedAt = Date.now();
               dbg("sales", "email_readback_detected", "awaiting_confirmation", {
                 pendingEmail: pendingEmailConfirmation.parsed,
               });
@@ -7109,7 +7087,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
                 parsed: parsedForExtract,
               };
               emailConfirmationAsked = false;
-              emailConfirmationAskedAt = 0;
               dbg("sales", "email_saved_awaiting_confirmation", "new", {
                 parsed: parsedForExtract,
               });
@@ -7119,7 +7096,6 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
                 parsed: parsedForExtract,
               };
               emailConfirmationAsked = false;
-              emailConfirmationAskedAt = 0;
               dbg("sales", "email_updated_new_value", "updated", {
                 parsed: parsedForExtract,
               });
