@@ -4762,6 +4762,7 @@
 //     })();
 //   });
 // }
+
 import WebSocket from "ws";
 // ═══════════════════════════════════════════════════════════════════════════
 //  DEBUG LOGGER — structured, timestamped, flow-aware
@@ -5039,9 +5040,7 @@ export function setupRealtimeVoice(io, deps) {
     let pendingEmailConfirmation = null;
     let emailConfirmationAsked = false;
 
-    // ─── Ticket confirmation state — SALES ONLY uses auto-confirm ─
-    // For support/accounts, pendingTicketConfirmation stays active.
-    // For sales, we skip the gate entirely (auto-proceed after email).
+    // ─── Ticket confirmation state (ALL FLOWS) ────────────────────
     let pendingTicketConfirmation = false;
     let pendingTicketArgs = null;
 
@@ -5225,13 +5224,6 @@ export function setupRealtimeVoice(io, deps) {
 
     let finalMessageLock = false;
 
-    // ─── Helper: is current flow a sales (new customer) flow? ─────
-    function isSalesFlow() {
-      const c = session.collected || {};
-      // Sales = has lead interest AND no existing customer ID verified
-      return !!(c.leadInterest && !c._emailVerifiedCustomerId);
-    }
-
     // ─── Sales step machine ────────────────────────────────────────
     function initSalesStepMachine() {
       if (salesStep !== null) {
@@ -5251,12 +5243,13 @@ export function setupRealtimeVoice(io, deps) {
         else if (!hasLastName) salesStep = "lastName";
         else if (!c.phone) salesStep = "phone";
         else if (!c.email || !c._emailStepComplete) salesStep = "email";
-        else salesStep = "createTicket"; // sales flow skips confirmTicket step
-      }
+        else if (!c._ticketConfirmed) salesStep = "confirmTicket";
+        else salesStep = "createTicket";
 
-      dbg("sales", "initSalesStepMachine", "initialized", {
-        startStep: salesStep,
-      });
+        dbg("sales", "initSalesStepMachine", "initialized", {
+          startStep: salesStep,
+        });
+      }
     }
 
     function advanceSalesStep(completedStep) {
@@ -5265,12 +5258,12 @@ export function setupRealtimeVoice(io, deps) {
         return;
       }
 
-      // Sales flow order — no confirmTicket step (auto-proceeds)
       const order = [
         "firstName",
         "lastName",
         "phone",
         "email",
+        "confirmTicket",
         "createTicket",
         "done",
       ];
@@ -5299,6 +5292,11 @@ export function setupRealtimeVoice(io, deps) {
         advanceSalesStep("email");
         return;
       }
+      if (next === "confirmTicket" && c._ticketConfirmed) {
+        salesStep = "confirmTicket";
+        advanceSalesStep("confirmTicket");
+        return;
+      }
 
       const hasName =
         (c._firstName && c._lastName) ||
@@ -5311,9 +5309,18 @@ export function setupRealtimeVoice(io, deps) {
         hasName &&
         c.phone &&
         c.email &&
-        c._emailStepComplete
+        c._emailStepComplete &&
+        c._ticketConfirmed
       ) {
         salesStep = "createTicket";
+      } else if (
+        next === "confirmTicket" &&
+        hasName &&
+        c.phone &&
+        c.email &&
+        c._emailStepComplete
+      ) {
+        salesStep = "confirmTicket";
       } else {
         salesStep = next;
       }
@@ -5478,6 +5485,20 @@ export function setupRealtimeVoice(io, deps) {
           );
         }
 
+        case "confirmTicket": {
+          const fullName =
+            [c._firstName, c._lastName].filter(Boolean).join(" ") ||
+            c.name ||
+            c.preferredName ||
+            "N/A";
+          return _logAndReturn(
+            "step_confirmTicket",
+            `[FLOW: sales][STEP: confirmTicket][STATUS: pending] ALL details have been collected. Now you MUST summarise and ask for confirmation before creating the ticket.
+Say something like: "Alright, so just to confirm — I have your name as ${fullName}, phone number ${c.phone || "on file"}, email ${c.email || "on file"}, and you're interested in the ${c.leadInterest || "selected plan"}${c.address ? " at " + c.address : ""}. Shall I go ahead and submit this for you?"
+WAIT for the customer to say YES or NO. Do NOT call create_ticket until they confirm.`,
+          );
+        }
+
         case "createTicket": {
           const missing = [];
           if (!c._firstName && !c.name && !c.preferredName)
@@ -5494,17 +5515,15 @@ export function setupRealtimeVoice(io, deps) {
 
           return _logAndReturn(
             "step_createTicket_execute",
-            `[FLOW: sales][STEP: create_ticket][STATUS: execute] Email has been CONFIRMED. ALL required details collected:
+            `[FLOW: sales][STEP: create_ticket][STATUS: execute] Customer has CONFIRMED they want to proceed. ALL required details collected:
 - Name: ${c._firstName || ""} ${c._lastName || ""} / ${c.name || ""}
 - Phone: ${c.phone}
 - Email: ${c.email}
 - Plan: ${c.leadInterest}
 - Address: ${c.address || "provided earlier"}
 
-SAY THIS MESSAGE IMMEDIATELY (before calling tools): "Perfect, I've got all the details I need! Let me get that sorted for you right now and initiate a sales enquiry."
 STEP 1: Call extract_call_fields to save any recently collected details.
-STEP 2: THEN call create_ticket IMMEDIATELY.
-Do NOT wait for any user input. Do NOT ask for confirmation. Just say the message and call the tools.`,
+STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user first. CALL THE TOOLS.`,
           );
         }
 
@@ -5513,7 +5532,7 @@ Do NOT wait for any user input. Do NOT ask for confirmation. Just say the messag
       }
     }
 
-    // ─── Ticket confirmation detection helpers (support/accounts only) ─
+    // ─── Ticket confirmation detection helpers ─────────────────────
     function detectTicketConfirmation(text) {
       if (!text) return null;
       const lower = text.toLowerCase().trim();
@@ -5760,7 +5779,12 @@ Do NOT wait for any user input. Do NOT ask for confirmation. Just say the messag
     }
 
     function detectSalesStepAnswer(text) {
-      if (!salesStep || salesStep === "done" || salesStep === "createTicket")
+      if (
+        !salesStep ||
+        salesStep === "done" ||
+        salesStep === "createTicket" ||
+        salesStep === "confirmTicket"
+      )
         return;
 
       const c = session.collected || {};
@@ -6007,15 +6031,12 @@ Do NOT wait for any user input. Do NOT ask for confirmation. Just say the messag
             "\n- ABSOLUTELY DO NOT auto-select or assume which plan the customer wants." +
             "\n- After presenting packages, ask explicitly: 'Which of these plans catches your eye?'" +
             "\n- WAIT for the customer to explicitly say WHICH PLAN they choose." +
-            "\n\nSALES TICKET FLOW (CRITICAL — NO CONFIRMATION NEEDED):" +
-            "\n- In the SALES flow, once email is confirmed, you MUST immediately say:" +
-            "\n  'Perfect, I've got all the details I need! Let me get that sorted for you right now and initiate a sales enquiry.'" +
-            "\n- Then IMMEDIATELY call extract_call_fields then create_ticket WITHOUT asking for any confirmation." +
-            "\n- Do NOT ask 'Shall I go ahead?' or any confirmation in sales flow." +
-            "\n- After ticket created say: 'Awesome, you're all set! Our sales team will be in touch via email shortly to get everything finalised. Is there anything else I can help you with?'" +
-            "\n\nSUPPORT/ACCOUNTS TICKET CONFIRMATION (non-sales flows only):" +
-            "\n- For support and accounts flows ONLY: before calling create_ticket, summarise details and ask: 'Shall I go ahead and submit this for you?'" +
-            "\n- WAIT for explicit YES before calling create_ticket in support/accounts." +
+            "\n\nTICKET CONFIRMATION RULE (CRITICAL - ALL FLOWS):" +
+            "\n- Before calling create_ticket, you MUST summarise ALL collected details and ask: 'Shall I go ahead and submit this for you?'" +
+            "\n- WAIT for the customer to explicitly say YES before calling create_ticket." +
+            "\n- If customer says NO or wants to change something, ask what they'd like to change." +
+            "\n- This applies to ALL flows: sales, support, accounts, and moving/relocating." +
+            "\n- NEVER call create_ticket without explicit customer confirmation." +
             "\n\nEMAIL COLLECTION FLOW:" +
             "\n1. Ask for email spelling letter by letter." +
             "\n2. Parse and read back letter-by-letter: 'So that's s-h-a-u-n at b-e-l-e dot a-i — is that right?'" +
@@ -6173,10 +6194,9 @@ Do NOT wait for any user input. Do NOT ask for confirmation. Just say the messag
           socket.emit("user_transcript", cleaned);
 
           // ══════════════════════════════════════════════════════════
-          // TICKET CONFIRMATION CHECK — support/accounts flows ONLY
-          // In sales flow, tickets are auto-created after email confirm
+          // TICKET CONFIRMATION CHECK (ALL FLOWS) — runs FIRST
           // ══════════════════════════════════════════════════════════
-          if (pendingTicketConfirmation && !isSalesFlow()) {
+          if (pendingTicketConfirmation) {
             const ticketConfResult = detectTicketConfirmation(cleaned);
             dbg(
               session.collected?.intent || "unknown",
@@ -6193,11 +6213,16 @@ Do NOT wait for any user input. Do NOT ask for confirmation. Just say the messag
               sessions.set(session.id, session);
               dbg("ticket", "ticket_confirmed_YES", "proceeding", {});
 
+              if (salesStep === "confirmTicket") {
+                advanceSalesStep("confirmTicket");
+              }
+
               session.messages.push({ role: "user", content: cleaned });
               sessions.set(session.id, session);
               TimerManager.resetSilence();
 
               if (pendingTicketArgs) {
+                // Re-trigger create_ticket via LLM
                 const hint = `Customer has CONFIRMED ticket creation. Call create_ticket NOW immediately. Do NOT ask anything else.`;
                 scheduleResponseCreate(hint);
               } else {
@@ -6226,7 +6251,7 @@ Do NOT wait for any user input. Do NOT ask for confirmation. Just say the messag
           }
 
           // ══════════════════════════════════════════════════════════
-          // EMAIL CONFIRMATION CHECK (sales flow)
+          // EMAIL CONFIRMATION CHECK
           // ══════════════════════════════════════════════════════════
           if (
             salesStep === "email" &&
@@ -6244,14 +6269,39 @@ Do NOT wait for any user input. Do NOT ask for confirmation. Just say the messag
               },
             );
 
+            // if (confirmationResult === "yes") {
+            //   const confirmedEmail = pendingEmailConfirmation.parsed;
+            //   session.collected.email = confirmedEmail;
+            //   session.collected._emailStepComplete = true;
+            //   pendingEmailConfirmation = null;
+            //   emailConfirmationAsked = false;
+            //   sessions.set(session.id, session);
+            //   dbg("sales", "email_confirmed_YES", "advancing", {
+            //     email: confirmedEmail,
+            //     _emailStepComplete: true,
+            //   });
+            //   advanceSalesStep("email");
+            //   session.messages.push({ role: "user", content: cleaned });
+            //   sessions.set(session.id, session);
+            //   TimerManager.resetSilence();
+            //   const nextStepHint =
+            //     buildSalesStepHint() || "Proceed to the next step.";
+            //   scheduleResponseCreate(
+            //     `Email confirmed and saved as "${confirmedEmail}". ` +
+            //       `_emailStepComplete=true. Do NOT call extract_call_fields with this email again. ` +
+            //       `Do NOT ask about email again. ${nextStepHint}`,
+            //   );
+            //   break;
+            // }
             if (confirmationResult === "yes") {
               const confirmedEmail = pendingEmailConfirmation.parsed;
               session.collected.email = confirmedEmail;
               session.collected._emailStepComplete = true;
+              session.collected._ticketConfirmed = true; // skip the confirm step for sales
               pendingEmailConfirmation = null;
               emailConfirmationAsked = false;
               sessions.set(session.id, session);
-              dbg("sales", "email_confirmed_YES", "advancing_to_createTicket", {
+              dbg("sales", "email_confirmed_YES", "advancing", {
                 email: confirmedEmail,
                 _emailStepComplete: true,
               });
@@ -6260,25 +6310,44 @@ Do NOT wait for any user input. Do NOT ask for confirmation. Just say the messag
               sessions.set(session.id, session);
               TimerManager.resetSilence();
 
-              // ── SALES: auto-proceed to create ticket immediately ──
-              // Set confirmed flag so gate passes, then trigger
-              session.collected._ticketConfirmed = true;
-              sessions.set(session.id, session);
-              salesStep = "createTicket";
+              // ── SALES FLOW ONLY: all info collected, auto-create ticket ──
+              const c = session.collected || {};
+              const isSalesFlow =
+                !!c.leadInterest && !c._emailVerifiedCustomerId;
+              const hasAllFields =
+                (c._firstName || c.name || c.preferredName) &&
+                c.phone &&
+                c.email &&
+                c.leadInterest;
 
-              const autoTicketHint =
-                `Email confirmed as "${confirmedEmail}". _emailStepComplete=true. _ticketConfirmed=true. ` +
-                `ALL sales details collected:\n` +
-                `- Name: ${session.collected._firstName || ""} ${session.collected._lastName || ""}\n` +
-                `- Phone: ${session.collected.phone || ""}\n` +
-                `- Email: ${confirmedEmail}\n` +
-                `- Plan: ${session.collected.leadInterest || ""}\n` +
-                `- Address: ${session.collected.address || "provided earlier"}\n\n` +
-                `IMMEDIATELY say: "Perfect, I've got all the details I need! Let me get that sorted for you right now and initiate a sales enquiry." ` +
-                `Then call extract_call_fields to save the final details, then call create_ticket immediately. ` +
-                `Do NOT ask for any confirmation. Do NOT wait for user input. Just speak and call the tools.`;
-
-              scheduleResponseCreate(autoTicketHint);
+              if (isSalesFlow && hasAllFields) {
+                // Tell the AI to say a warm bridging message then call create_ticket
+                const fullName =
+                  [c._firstName, c._lastName].filter(Boolean).join(" ") ||
+                  c.name ||
+                  c.preferredName ||
+                  "";
+                scheduleResponseCreate(
+                  `Email confirmed as "${confirmedEmail}". ALL sales details collected:\n` +
+                    `- Name: ${fullName}\n` +
+                    `- Phone: ${c.phone}\n` +
+                    `- Email: ${confirmedEmail}\n` +
+                    `- Plan: ${c.leadInterest}\n` +
+                    `- Address: ${c.address || "provided earlier"}\n\n` +
+                    `CRITICAL INSTRUCTION: Customer has confirmed their email. You now have ALL required information.\n` +
+                    `Step 1: Say something warm like "Perfect, thanks for that! Let me get that submitted for you now..." or "Awesome, I've got everything I need — just give me one second while I send that through!"\n` +
+                    `Step 2: IMMEDIATELY call create_ticket with all the details above. Do NOT ask any more questions. Do NOT ask for confirmation again. Just say the warm line and call the tool.`,
+                );
+              } else {
+                // Missing something — fall back to normal next step
+                const nextStepHint =
+                  buildSalesStepHint() || "Proceed to the next step.";
+                scheduleResponseCreate(
+                  `Email confirmed and saved as "${confirmedEmail}". ` +
+                    `_emailStepComplete=true. Do NOT call extract_call_fields with this email again. ` +
+                    `Do NOT ask about email again. ${nextStepHint}`,
+                );
+              }
               break;
             } else if (confirmationResult === "no") {
               pendingEmailConfirmation = null;
@@ -6452,9 +6521,8 @@ Do NOT wait for any user input. Do NOT ask for confirmation. Just say the messag
               });
             }
 
-            // Detect ticket confirmation question — support/accounts only
+            // Detect when AI asks ticket confirmation question
             if (
-              !isSalesFlow() &&
               detectTicketConfirmationQuestion(event.text) &&
               !session.collected._ticketConfirmed
             ) {
@@ -6578,6 +6646,7 @@ Do NOT wait for any user input. Do NOT ask for confirmation. Just say the messag
           pendingPostDoneCreate = false;
           elevenLabsStreaming = false;
           assistantSpeaking = false;
+          // Clear ticket confirmation state on error
           pendingTicketConfirmation = false;
           pendingTicketArgs = null;
           TimerManager.clearWatchdog();
@@ -6599,36 +6668,28 @@ Do NOT wait for any user input. Do NOT ask for confirmation. Just say the messag
           fn,
           argsPreview: JSON.stringify(args).substring(0, 150),
           salesStep,
-          isSalesFlow: isSalesFlow(),
-          _ticketConfirmed: session.collected._ticketConfirmed || false,
         },
       );
 
       // ══════════════════════════════════════════════════════════════
-      // TICKET CONFIRMATION GATE — support/accounts only
-      // Sales flow bypasses this gate (auto-confirmed after email)
+      // TICKET CONFIRMATION GATE (ALL FLOWS)
+      // Intercept create_ticket calls if user hasn't confirmed yet
       // ══════════════════════════════════════════════════════════════
-      if (
-        fn === "create_ticket" &&
-        !isSalesFlow() &&
-        !session.collected._ticketConfirmed
-      ) {
-        dbg(
-          "ticket",
-          "create_ticket_BLOCKED_support",
-          "awaiting_confirmation",
-          {
-            argsPreview: JSON.stringify(args).substring(0, 150),
-          },
-        );
+      if (fn === "create_ticket" && !session.collected._ticketConfirmed) {
+        dbg("ticket", "create_ticket_BLOCKED", "awaiting_confirmation", {
+          argsPreview: JSON.stringify(args).substring(0, 150),
+        });
 
+        // Store the args for later re-execution
         pendingTicketArgs = { call_id, args };
         pendingTicketConfirmation = true;
 
+        // Release the final lock since we're not creating yet
         TimerManager.releaseFinalLock();
         finalMessageLock = false;
         session.finalLock = false;
 
+        // Send a fake successful result so LLM doesn't retry
         const fakeResult = JSON.stringify({
           success: false,
           _blocked: true,
@@ -6652,6 +6713,7 @@ Do NOT wait for any user input. Do NOT ask for confirmation. Just say the messag
 
         pendingFunctionCalls = Math.max(0, pendingFunctionCalls - 1);
 
+        // Build a summary of collected details for the confirmation prompt
         const c = session.collected || {};
         const fullName =
           [c._firstName, c._lastName].filter(Boolean).join(" ") ||
@@ -6662,14 +6724,16 @@ Do NOT wait for any user input. Do NOT ask for confirmation. Just say the messag
           fullName ? `Name: ${fullName}` : null,
           c.phone ? `Phone: ${c.phone}` : null,
           c.email ? `Email: ${c.email}` : null,
+          c.leadInterest ? `Plan: ${c.leadInterest}` : null,
+          c.address ? `Address: ${c.address}` : null,
           c.issueSummary ? `Issue: ${c.issueSummary}` : null,
         ]
           .filter(Boolean)
           .join(", ");
 
         const confirmHint =
-          `[TICKET CONFIRMATION REQUIRED for support/accounts] create_ticket was blocked. ` +
-          `Summarise the details (${detailSummary}) and ask: "Shall I go ahead and submit this for you?" ` +
+          `[TICKET CONFIRMATION REQUIRED] create_ticket was blocked because customer has NOT confirmed yet. ` +
+          `You MUST summarise the details (${detailSummary}) and ask: "Shall I go ahead and submit this for you?" ` +
           `WAIT for the customer to say YES. Do NOT call create_ticket again until they confirm.`;
 
         if (openaiWs?.readyState === WebSocket.OPEN) {
@@ -6693,22 +6757,8 @@ Do NOT wait for any user input. Do NOT ask for confirmation. Just say the messag
         return;
       }
 
-      // Sales flow: if _ticketConfirmed is set (auto-set after email), just proceed
-      if (fn === "create_ticket" && isSalesFlow()) {
-        // Always auto-confirm in sales — no gate needed
-        session.collected._ticketConfirmed = true;
-        pendingTicketArgs = null;
-        pendingTicketConfirmation = false;
-        sessions.set(session.id, session);
-        dbg("ticket", "create_ticket_SALES_auto_confirmed", "proceeding", {});
-      }
-
-      // Non-sales confirmed ticket — clear state
-      if (
-        fn === "create_ticket" &&
-        !isSalesFlow() &&
-        session.collected._ticketConfirmed
-      ) {
+      // If create_ticket passes the gate (user confirmed), clear pending state
+      if (fn === "create_ticket" && session.collected._ticketConfirmed) {
         pendingTicketArgs = null;
         pendingTicketConfirmation = false;
       }
@@ -6913,13 +6963,14 @@ Do NOT wait for any user input. Do NOT ask for confirmation. Just say the messag
           systemHint += `\nTOOL RESULT: create_ticket BLOCKED — email missing. Ask for email NOW by voice spelling. Read back letter-by-letter. Confirm YES before proceeding.`;
         } else if (parsedResult?.success) {
           salesStep = "done";
+          // Clear ticket confirmation state after success
           pendingTicketConfirmation = false;
           pendingTicketArgs = null;
           TimerManager.releaseFinalLock();
           const ticketId = parsedResult.ticket_id;
           const isSales = parsedResult._isSalesTicket === true || !ticketId;
           if (isSales) {
-            systemHint += `\nTOOL RESULT: Sales enquiry submitted successfully. Say EXACTLY: "Awesome, you're all set! Our sales team will be in touch via email shortly to get everything finalised. They're a great bunch and will take really good care of you. Is there anything else I can help you with today?"`;
+            systemHint += `\nTOOL RESULT: Sales enquiry submitted. Say: "Awesome, you're all set! Our sales team will be in touch via email shortly."`;
           } else {
             systemHint += `\nTOOL RESULT: Support ticket #${ticketId} created. Say: "Brilliant, all done! Ticket #${ticketId} raised — details sent via email."`;
           }
@@ -6948,7 +6999,6 @@ Do NOT wait for any user input. Do NOT ask for confirmation. Just say the messag
           systemHint += `\nWEBSITE CHECK DONE: Do NOT ask again. Proceed with order collection.`;
         }
 
-        // If we're in sales and all details are collected + confirmed, trigger ticket immediately
         if (
           salesStep === "createTicket" &&
           c.phone &&
@@ -6956,7 +7006,7 @@ Do NOT wait for any user input. Do NOT ask for confirmation. Just say the messag
           c.leadInterest &&
           c._ticketConfirmed
         ) {
-          systemHint += `\n\nCRITICAL: All details collected and email confirmed. Say: "Perfect, I've got all the details I need! Let me get that sorted for you right now and initiate a sales enquiry." Then call create_ticket RIGHT NOW.`;
+          systemHint += `\n\nCRITICAL: Customer has CONFIRMED. Call create_ticket RIGHT NOW. Do not say anything to the user first.`;
         }
 
         if (c._emailStepComplete) {
@@ -7119,10 +7169,10 @@ Do NOT wait for any user input. Do NOT ask for confirmation. Just say the messag
       }
 
       if (fn === "customer_lookup") {
-        const isSalesLookup =
+        const isSalesFlow =
           !!session.collected?.leadInterest &&
           !session.collected?._emailVerifiedCustomerId;
-        if (isSalesLookup) {
+        if (isSalesFlow) {
           return JSON.stringify({
             success: false,
             _blocked: true,
@@ -7414,12 +7464,10 @@ Do NOT wait for any user input. Do NOT ask for confirmation. Just say the messag
         const parsedEmail = parseVoiceEmail(value) || value;
         session.collected.email = parsedEmail;
         session.collected._emailStepComplete = true;
-        session.collected._ticketConfirmed = true; // auto-confirm for sales
         pendingEmailConfirmation = null;
         emailConfirmationAsked = false;
         sessions.set(session.id, session);
         if (salesStep === "email") advanceSalesStep("email");
-        salesStep = "createTicket";
 
         awaitingStructuredInput = false;
         structuredInputField = null;
@@ -7440,14 +7488,10 @@ Do NOT wait for any user input. Do NOT ask for confirmation. Just say the messag
               },
             }),
           );
-          const c = session.collected || {};
           const salesHint = buildSalesStepHint() || "";
           const hint =
-            `Customer email confirmed via typed input: ${parsedEmail}. _emailStepComplete=true. _ticketConfirmed=true. ` +
-            `Do NOT ask about email again. ` +
-            `ALL sales details collected — Name: ${c._firstName || ""} ${c._lastName || ""}, Phone: ${c.phone || ""}, Email: ${parsedEmail}, Plan: ${c.leadInterest || ""}. ` +
-            `Say immediately: "Perfect, I've got all the details I need! Let me get that sorted for you right now and initiate a sales enquiry." ` +
-            `Then call extract_call_fields then create_ticket immediately. Do NOT ask for any confirmation. ${salesHint}`;
+            `Customer email confirmed via typed input: ${parsedEmail}. _emailStepComplete=true. ` +
+            `Do NOT ask about email again. Do NOT call extract_call_fields with email. ${salesHint}`;
           openaiWs.send(
             JSON.stringify({
               type: "conversation.item.create",
