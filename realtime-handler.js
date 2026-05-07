@@ -5751,16 +5751,13 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
     function detectEmailReadbackQuestion(text) {
       if (!text) return false;
       const lower = text.toLowerCase();
-      // Detect email readback questions with natural language variations
-      // Examples: "is that correct?", "does that sound right?", "confirm that email", etc.
       return (
-        lower.includes("correct") ||
-        lower.includes("right") ||
-        lower.includes("does that sound") ||
-        lower.includes("is that") ||
-        (lower.includes("email") && lower.includes("confirm")) ||
-        (lower.includes("confirm") &&
-          (lower.includes("at") || lower.includes("@")))
+        (lower.includes("is that correct") ||
+          lower.includes("correct?") ||
+          lower.includes("is that right") ||
+          lower.includes("shall i use")) &&
+        lower.includes("at") &&
+        (lower.includes("dot") || lower.includes("."))
       );
     }
 
@@ -6224,18 +6221,16 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
               session.messages.push({ role: "user", content: cleaned });
               sessions.set(session.id, session);
               TimerManager.resetSilence();
-              pendingPostDoneCreate = false;
-              pendingPostDoneHint = null;
 
               if (pendingTicketArgs) {
                 // Re-trigger create_ticket via LLM
                 const hint = `Customer has CONFIRMED ticket creation. Call create_ticket NOW immediately. Do NOT ask anything else.`;
-                scheduleResponseCreate(hint, 0, true);
+                scheduleResponseCreate(hint);
               } else {
                 const nextHint =
                   buildSalesStepHint() ||
                   "Customer confirmed. Call create_ticket NOW.";
-                scheduleResponseCreate(nextHint, 0, true);
+                scheduleResponseCreate(nextHint);
               }
               break;
             } else if (ticketConfResult === "no") {
@@ -6248,12 +6243,8 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
               session.messages.push({ role: "user", content: cleaned });
               sessions.set(session.id, session);
               TimerManager.resetSilence();
-              pendingPostDoneCreate = false;
-              pendingPostDoneHint = null;
               scheduleResponseCreate(
                 `Customer said NO to ticket creation. Ask warmly: "No worries at all! What would you like to change?" Wait for their answer.`,
-                0,
-                true,
               );
               break;
             }
