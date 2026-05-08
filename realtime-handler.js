@@ -11242,9 +11242,9 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
 
             if (
               salesStep === "email" &&
-              // !session.collected._emailStepComplete &&
+              !session.collected._emailStepComplete &&
               detectEmailReadbackQuestion(event.text)
-              // pendingEmailConfirmation
+              pendingEmailConfirmation
             ) {
               emailConfirmationAsked = true;
               emailConfirmationAskedAt = Date.now();
