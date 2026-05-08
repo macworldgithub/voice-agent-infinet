@@ -918,12 +918,14 @@ registerProcessor("pcm16", PCM16Processor);
           });
 
           socket.on("audio_done", () => {
-            if (!startupGreetingPending) return;
-            startupGreetingPending = false;
-            console.log("🔊 Initial greeting finished — enabling mic");
-            const btn = document.getElementById("mic-button");
-            btn.disabled = false;
-            if (!isMicOpen) startMic();
+            // Only lock mic for startup greeting, after that no locking
+            if (startupGreetingPending) {
+              startupGreetingPending = false;
+              console.log("🔊 Initial greeting finished — enabling mic");
+              const btn = document.getElementById("mic-button");
+              btn.disabled = false;
+              if (!isMicOpen) startMic();
+            }
           });
 
           // ── Interrupts ─────────────────────────────────────────
