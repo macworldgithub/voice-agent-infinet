@@ -10545,6 +10545,15 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
       return null;
     }
 
+    function resetAssistantVoiceState() {
+      assistantSpeaking = false;
+      safeSetElevenLabsStreaming(false);
+      cancelPending = false;
+      pendingPostDoneCreate = false;
+      pendingPostDoneHint = null;
+      socket.emit("status", "listening");
+    }
+
     function detectSalesStepAnswer(text) {
       if (
         !salesStep ||
@@ -11063,6 +11072,7 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
               session.messages.push({ role: "user", content: cleaned });
               sessions.set(session.id, session);
               TimerManager.resetSilence();
+              resetAssistantVoiceState();
               pendingPostDoneCreate = false;
               pendingPostDoneHint = null;
               const nextStepHint =
@@ -11086,6 +11096,7 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
               session.messages.push({ role: "user", content: cleaned });
               sessions.set(session.id, session);
               TimerManager.resetSilence();
+              resetAssistantVoiceState();
               pendingPostDoneCreate = false;
               pendingPostDoneHint = null;
               scheduleResponseCreate(
@@ -11243,7 +11254,7 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
             if (
               salesStep === "email" &&
               !session.collected._emailStepComplete &&
-              detectEmailReadbackQuestion(event.text)
+              detectEmailReadbackQuestion(event.text) &&
               pendingEmailConfirmation
             ) {
               emailConfirmationAsked = true;
@@ -11699,6 +11710,7 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           pendingTicketConfirmation = false;
           pendingTicketArgs = null;
           TimerManager.releaseFinalLock();
+          resetAssistantVoiceState();
           const ticketId = parsedResult.ticket_id;
           const isSales = parsedResult._isSalesTicket === true || !ticketId;
           if (isSales) {
