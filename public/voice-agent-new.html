@@ -78,6 +78,7 @@
         border-radius: 4px;
       }
 
+      /* ── Fallback text input ── */
       #structured-input-container {
         position: fixed;
         bottom: 0;
@@ -213,6 +214,7 @@
   <body
     class="bg-slate-950 text-slate-100 min-h-screen flex flex-col overflow-hidden"
   >
+    <!-- Header -->
     <div
       class="bg-slate-900 border-b border-slate-800 px-8 py-5 flex items-center justify-between"
     >
@@ -237,6 +239,7 @@
 
     <div class="flex-1 flex flex-col items-center justify-center px-6 relative">
       <div class="flex flex-col items-center gap-y-8">
+        <!-- Status -->
         <div
           id="status-text"
           class="text-2xl font-medium text-slate-300 text-center min-h-[64px] flex items-center"
@@ -244,6 +247,7 @@
           Initializing connections...
         </div>
 
+        <!-- Big Mic Button -->
         <button
           onclick="toggleMic()"
           id="mic-button"
@@ -252,6 +256,7 @@
           🎤
         </button>
 
+        <!-- Live Volume Indicator -->
         <div
           id="volume-container"
           class="flex items-end gap-x-1 h-16 opacity-0 transition-opacity"
@@ -263,6 +268,7 @@
           <div id="bar5" class="volume-bar h-8"></div>
         </div>
 
+        <!-- Live Transcript -->
         <div
           id="transcript-box"
           class="w-full max-w-md max-h-40 overflow-y-auto bg-slate-900/60 border border-slate-800 rounded-2xl p-4 text-sm text-slate-300 leading-relaxed hidden"
@@ -271,6 +277,7 @@
         </div>
       </div>
 
+      <!-- Floating End Call Button -->
       <button
         onclick="endCall()"
         id="end-call-btn"
@@ -281,6 +288,7 @@
       </button>
     </div>
 
+    <!-- Fallback Text Input (email only — shown after 3 voice failures) -->
     <div id="structured-input-container">
       <div class="si-backdrop px-6 py-6">
         <div class="max-w-md mx-auto">
@@ -314,12 +322,16 @@
       </div>
     </div>
 
+    <!-- Footer -->
     <div class="py-6 text-center text-xs text-slate-500">
       Powered by InfiNET Broadband
     </div>
 
     <script>
       (function () {
+        // ─────────────────────────────────────────────────────────
+        //  STATE
+        // ─────────────────────────────────────────────────────────
         let socket = null;
         let micStream = null;
         let audioCtx = null;
@@ -330,27 +342,41 @@
         let volumeInterval = null;
         let micMutedForInput = false;
 
+        // Playback state
         let playbackCtx = null;
         let nextPlayTime = 0;
         let activeSources = [];
         let pcmPlaying = false;
+        let assistantFullText = "";
 
+        // ─── First-message buffering ──────────────────────────────
+        //
+        // For the very first AI response after session start, we buffer
+        // all incoming PCM chunks and delay playback by FIRST_MSG_BUFFER_MS
+        // so the beginning of "Welcome to InfiNET Broadband..." is never
+        // clipped by audio context startup latency.
+        //
+        // isFirstMessage   – true until the first response fully begins
+        // firstMsgBuffer   – holds {base64, sampleRate} chunks while buffering
+        // firstMsgTimer    – timeout that flushes the buffer and starts playback
+        // ─────────────────────────────────────────────────────────
+        const FIRST_MSG_BUFFER_MS = 800; // ms to buffer before playing first message
+        let isFirstMessage = true;
+        let firstMsgBuffer = [];
+        let firstMsgTimer = null;
+        let firstMsgFlushed = false;
+
+        // ─── audio_done tracking ──────────────────────────────────
         let streamComplete = false;
         let audioDoneSent = false;
         let audioDoneTimer = null;
 
-        let audioUnlocked = false;
         const SAMPLE_RATE = 24000;
         const PCM_SAMPLE_RATE = 16000;
-        const INITIAL_PLAYBACK_BUFFER_MS = 120;
 
-        let awaitingInitialGreeting = true;
-        let greetingFallbackTimer = null;
-
-        let assistantLiveLine = null;
-        let assistantLiveTextEl = null;
-        let assistantBuffer = "";
-
+        // ─────────────────────────────────────────────────────────
+        //  UI HELPERS
+        // ─────────────────────────────────────────────────────────
         function setStatus(msg, state) {
           const el = document.getElementById("status-text");
           const btn = document.getElementById("mic-button");
@@ -395,135 +421,23 @@
           }
         }
 
-        function escapeText(text) {
-          const div = document.createElement("div");
-          div.textContent = text;
-          return div.innerHTML;
-        }
-
-        function ensureTranscriptVisible() {
-          document.getElementById("transcript-box").classList.remove("hidden");
-        }
-
         function appendTranscript(role, text) {
-          if (!text || !text.trim()) return;
-          ensureTranscriptVisible();
+          const box = document.getElementById("transcript-box");
           const content = document.getElementById("transcript-content");
-
+          box.classList.remove("hidden");
           const line = document.createElement("div");
           line.className =
             role === "user" ? "mb-2 text-cyan-300" : "mb-2 text-slate-200";
-
-          const label = document.createElement("span");
-          label.className =
-            "font-semibold text-xs uppercase tracking-wide " +
-            (role === "user" ? "text-cyan-500" : "text-emerald-500");
-          label.textContent = role === "user" ? "You:" : "AI:";
-
-          const message = document.createElement("span");
-          message.className = "whitespace-pre-wrap";
-          message.innerHTML = " " + escapeText(text.trim());
-
-          line.appendChild(label);
-          line.appendChild(message);
+          line.innerHTML = `<span class="font-semibold text-xs uppercase tracking-wide ${
+            role === "user" ? "text-cyan-500" : "text-emerald-500"
+          }">${role === "user" ? "You" : "AI"}:</span> ${text}`;
           content.appendChild(line);
-          document.getElementById("transcript-box").scrollTop =
-            document.getElementById("transcript-box").scrollHeight;
+          box.scrollTop = box.scrollHeight;
         }
 
-        function beginAssistantLiveTurn() {
-          if (assistantLiveLine) return;
-
-          ensureTranscriptVisible();
-          const content = document.getElementById("transcript-content");
-
-          assistantLiveLine = document.createElement("div");
-          assistantLiveLine.className = "mb-2 text-slate-200";
-
-          const label = document.createElement("span");
-          label.className =
-            "font-semibold text-xs uppercase tracking-wide text-emerald-500";
-          label.textContent = "AI:";
-
-          assistantLiveTextEl = document.createElement("span");
-          assistantLiveTextEl.className = "whitespace-pre-wrap";
-          assistantLiveTextEl.textContent = " ";
-
-          assistantLiveLine.appendChild(label);
-          assistantLiveLine.appendChild(assistantLiveTextEl);
-          content.appendChild(assistantLiveLine);
-        }
-
-        function updateAssistantLiveText(delta) {
-          if (!delta) return;
-          beginAssistantLiveTurn();
-          assistantBuffer += delta;
-          assistantLiveTextEl.textContent = " " + assistantBuffer;
-          document.getElementById("transcript-box").scrollTop =
-            document.getElementById("transcript-box").scrollHeight;
-        }
-
-        function finalizeAssistantLiveText(finalText) {
-          const text =
-            (finalText && finalText.trim()) || assistantBuffer.trim();
-          if (!text) {
-            assistantLiveLine = null;
-            assistantLiveTextEl = null;
-            assistantBuffer = "";
-            return;
-          }
-
-          if (assistantLiveTextEl) {
-            assistantLiveTextEl.textContent = " " + text;
-          } else {
-            appendTranscript("assistant", text);
-          }
-
-          assistantLiveLine = null;
-          assistantLiveTextEl = null;
-          assistantBuffer = "";
-        }
-
-        function clearGreetingFallbackTimer() {
-          if (greetingFallbackTimer) {
-            clearTimeout(greetingFallbackTimer);
-            greetingFallbackTimer = null;
-          }
-        }
-
-        function startGreetingFallbackTimer() {
-          clearGreetingFallbackTimer();
-          greetingFallbackTimer = setTimeout(() => {
-            if (isReady && !isMicOpen && !micMutedForInput) {
-              startMic();
-            }
-          }, 6500);
-        }
-
-        async function unlockAudioOnce() {
-          if (audioUnlocked) return;
-          audioUnlocked = true;
-
-          try {
-            const a = new Audio();
-            a.muted = true;
-            a.src = "data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAA";
-            await a.play().catch(() => {});
-            try {
-              a.pause();
-            } catch (_) {}
-
-            if (!playbackCtx) {
-              playbackCtx = new (
-                window.AudioContext || window.webkitAudioContext
-              )();
-            }
-            if (playbackCtx.state === "suspended") {
-              await playbackCtx.resume().catch(() => {});
-            }
-          } catch (_) {}
-        }
-
+        // ─────────────────────────────────────────────────────────
+        //  PCM16 CAPTURE
+        // ─────────────────────────────────────────────────────────
         async function startMic() {
           if (isMicOpen) return;
 
@@ -567,6 +481,7 @@ registerProcessor("pcm16", PCM16Processor);
             await audioCtx.audioWorklet.addModule(URL.createObjectURL(blob));
             pcmWorklet = new AudioWorkletNode(audioCtx, "pcm16");
           } catch (e) {
+            // Fallback: ScriptProcessor (deprecated but safe)
             const processor = audioCtx.createScriptProcessor(4096, 1, 1);
             processor.port = { onmessage: null };
             processor.onaudioprocess = (ev) => {
@@ -632,16 +547,13 @@ registerProcessor("pcm16", PCM16Processor);
         function startVolumeViz() {
           if (volumeInterval) clearInterval(volumeInterval);
           if (!audioCtx || !micSource) return;
-
           const analyser = audioCtx.createAnalyser();
           analyser.fftSize = 64;
           micSource.connect(analyser);
-
           const data = new Uint8Array(analyser.frequencyBinCount);
           const bars = [1, 2, 3, 4, 5].map((i) =>
             document.getElementById("bar" + i),
           );
-
           volumeInterval = setInterval(() => {
             if (!isMicOpen) return;
             analyser.getByteFrequencyData(data);
@@ -650,12 +562,82 @@ registerProcessor("pcm16", PCM16Processor);
             avg /= 8;
             const level = Math.min(Math.floor(avg / 3), 100);
             bars.forEach((bar, i) => {
-              bar.style.height = `${Math.max(
-                8,
-                Math.floor(level * (0.6 + i * 0.1)),
-              )}px`;
+              bar.style.height = `${Math.max(8, Math.floor(level * (0.6 + i * 0.1)))}px`;
             });
           }, 60);
+        }
+
+        // ─────────────────────────────────────────────────────────
+        //  PCM16 AUDIO PLAYBACK + audio_done EMISSION
+        // ─────────────────────────────────────────────────────────
+
+        let audioUnlocked = false;
+
+        async function unlockAudioOnce() {
+          if (audioUnlocked) return;
+          audioUnlocked = true;
+          try {
+            const a = new Audio();
+            a.muted = true;
+            a.src = "data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAA";
+            await a.play().catch(() => {});
+            try {
+              a.pause();
+            } catch (_) {}
+            if (!playbackCtx)
+              playbackCtx = new (
+                window.AudioContext || window.webkitAudioContext
+              )();
+            if (playbackCtx.state === "suspended")
+              await playbackCtx.resume().catch(() => {});
+          } catch (_) {}
+        }
+
+        function maybeEmitAudioDone() {
+          if (audioDoneSent) return;
+          if (!streamComplete) return;
+          if (activeSources.length > 0) return;
+
+          audioDoneSent = true;
+          clearAudioDoneTimer();
+
+          console.log("🔊 [audio_done] Emitting — playback fully complete");
+          if (socket?.connected) {
+            socket.emit("audio_done");
+          }
+
+          if (isReady && isMicOpen && !micMutedForInput) {
+            setStatus("Listening... Speak now", "listening");
+          } else if (isReady) {
+            setStatus("Ready • Tap mic to speak", "idle");
+          }
+        }
+
+        function scheduleAudioDoneTimer() {
+          clearAudioDoneTimer();
+          if (audioDoneSent) return;
+
+          const ctx = playbackCtx;
+          if (!ctx) {
+            maybeEmitAudioDone();
+            return;
+          }
+          const remaining =
+            Math.max(0, (nextPlayTime - ctx.currentTime) * 1000) + 250;
+          console.log(
+            `⏱️  [audio_done] Safety-net timer: ${Math.round(remaining)}ms`,
+          );
+
+          audioDoneTimer = setTimeout(() => {
+            audioDoneTimer = null;
+            if (!audioDoneSent) {
+              console.log(
+                "⏰ [audio_done] Safety-net fired — forcing audio_done",
+              );
+              activeSources = [];
+              maybeEmitAudioDone();
+            }
+          }, remaining);
         }
 
         function clearAudioDoneTimer() {
@@ -671,54 +653,8 @@ registerProcessor("pcm16", PCM16Processor);
           clearAudioDoneTimer();
         }
 
-        function maybeEmitAudioDone() {
-          if (audioDoneSent) return;
-          if (!streamComplete) return;
-          if (activeSources.length > 0) return;
-
-          audioDoneSent = true;
-          clearAudioDoneTimer();
-
-          if (socket?.connected) {
-            socket.emit("audio_done");
-          }
-
-          if (awaitingInitialGreeting) {
-            awaitingInitialGreeting = false;
-            clearGreetingFallbackTimer();
-
-            if (isReady && !isMicOpen && !micMutedForInput) {
-              startMic();
-            }
-          } else {
-            if (isReady && isMicOpen && !micMutedForInput) {
-              setStatus("Listening... Speak now", "listening");
-            } else if (isReady) {
-              setStatus("Ready • Tap mic to speak", "idle");
-            }
-          }
-        }
-
-        function scheduleAudioDoneTimer() {
-          clearAudioDoneTimer();
-          if (audioDoneSent) return;
-
-          const ctx = playbackCtx;
-          if (!ctx) {
-            maybeEmitAudioDone();
-            return;
-          }
-
-          const remaining =
-            Math.max(0, (nextPlayTime - ctx.currentTime) * 1000) + 300;
-
-          audioDoneTimer = setTimeout(() => {
-            audioDoneTimer = null;
-            if (!audioDoneSent) {
-              activeSources = [];
-              maybeEmitAudioDone();
-            }
-          }, remaining);
+        function interruptPlayback() {
+          stopPcmPlayback();
         }
 
         function stopPcmPlayback() {
@@ -730,21 +666,22 @@ registerProcessor("pcm16", PCM16Processor);
             } catch (_) {}
           });
           activeSources = [];
+          // Also cancel any pending first-message buffer flush
+          if (firstMsgTimer) {
+            clearTimeout(firstMsgTimer);
+            firstMsgTimer = null;
+          }
+          firstMsgBuffer = [];
           resetAudioDoneState();
         }
 
-        function interruptPlayback() {
-          stopPcmPlayback();
-        }
-
-        function pushPcm16Chunk(base64, sampleRate) {
+        // ─── Schedule a single decoded chunk into the Web Audio timeline ──
+        function schedulePcmChunk(base64, sampleRate) {
           if (!base64) return;
-
-          if (!playbackCtx) {
+          if (!playbackCtx)
             playbackCtx = new (
               window.AudioContext || window.webkitAudioContext
             )();
-          }
 
           let bin;
           try {
@@ -777,8 +714,7 @@ registerProcessor("pcm16", PCM16Processor);
 
           const now = playbackCtx.currentTime;
           if (!pcmPlaying || nextPlayTime < now) {
-            nextPlayTime =
-              now + Math.max(0.02, INITIAL_PLAYBACK_BUFFER_MS / 1000);
+            nextPlayTime = now + 0.02; // 20 ms jitter buffer for subsequent messages
             pcmPlaying = true;
           }
 
@@ -793,6 +729,75 @@ registerProcessor("pcm16", PCM16Processor);
           };
         }
 
+        // ─── Flush the first-message buffer and play all held chunks ──
+        function flushFirstMsgBuffer() {
+          firstMsgTimer = null;
+          firstMsgFlushed = true;
+          console.log(
+            `▶️  [first-msg] Flushing ${firstMsgBuffer.length} buffered chunks`,
+          );
+
+          // Ensure playback context is running before we schedule
+          if (playbackCtx && playbackCtx.state === "suspended") {
+            playbackCtx.resume().catch(() => {});
+          }
+
+          // Schedule all buffered chunks back-to-back from "now + tiny offset"
+          // so the very first word is never clipped
+          pcmPlaying = false; // force nextPlayTime reset on first chunk
+          nextPlayTime = 0;
+
+          firstMsgBuffer.forEach(({ base64, sampleRate }) => {
+            schedulePcmChunk(base64, sampleRate);
+          });
+          firstMsgBuffer = [];
+        }
+
+        // ─── Public entry point — called for every audio_chunk_pcm ───
+        function pushPcm16Chunk(base64, sampleRate) {
+          if (!base64) return;
+
+          // Ensure playback context exists
+          if (!playbackCtx)
+            playbackCtx = new (
+              window.AudioContext || window.webkitAudioContext
+            )();
+
+          if (isFirstMessage && !firstMsgFlushed) {
+            // Buffer this chunk instead of playing immediately
+            firstMsgBuffer.push({ base64, sampleRate });
+
+            if (!firstMsgTimer) {
+              // Start the countdown on the very first chunk received
+              console.log(
+                `⏳ [first-msg] Buffering for ${FIRST_MSG_BUFFER_MS}ms before playback`,
+              );
+              firstMsgTimer = setTimeout(
+                flushFirstMsgBuffer,
+                FIRST_MSG_BUFFER_MS,
+              );
+            }
+            return;
+          }
+
+          // For all subsequent messages, play immediately as before
+          schedulePcmChunk(base64, sampleRate);
+        }
+
+        // Call this when a new AI response turn begins (after the first)
+        // to mark that the first-message buffering phase is over.
+        function markFirstMessageDone() {
+          if (isFirstMessage) {
+            isFirstMessage = false;
+            console.log(
+              "✅ [first-msg] First message complete — direct playback from now on",
+            );
+          }
+        }
+
+        // ─────────────────────────────────────────────────────────
+        //  FALLBACK STRUCTURED INPUT (email only)
+        // ─────────────────────────────────────────────────────────
         const siContainer = document.getElementById(
           "structured-input-container",
         );
@@ -802,8 +807,12 @@ registerProcessor("pcm16", PCM16Processor);
         const siHint = document.getElementById("si-hint");
 
         function showFallbackInput(field, prompt) {
-          if (field !== "email") return;
-
+          if (field !== "email") {
+            console.log(
+              `ℹ️  Ignoring fallback input for field: ${field} (voice only)`,
+            );
+            return;
+          }
           siInput.type = "email";
           siInput.placeholder = prompt || "your.email@example.com";
           siInput.inputMode = "email";
@@ -817,6 +826,7 @@ registerProcessor("pcm16", PCM16Processor);
           siInput.setAttribute("required", "");
 
           micMutedForInput = true;
+          console.log("🔇 Mic muted for fallback email input");
 
           requestAnimationFrame(() => {
             siContainer.classList.add("visible");
@@ -829,11 +839,11 @@ registerProcessor("pcm16", PCM16Processor);
           siInput.value = "";
           siContainer.dataset.field = "";
           micMutedForInput = false;
+          console.log("🔊 Mic unmuted after fallback input");
         }
 
         siForm.addEventListener("submit", (e) => {
           e.preventDefault();
-
           const field = siContainer.dataset.field;
           const value = siInput.value.trim();
 
@@ -842,7 +852,6 @@ registerProcessor("pcm16", PCM16Processor);
             setTimeout(() => siInput.classList.remove("si-shake"), 600);
             return;
           }
-
           if (field === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
             siInput.classList.add("si-shake");
             siHint.textContent =
@@ -876,90 +885,124 @@ registerProcessor("pcm16", PCM16Processor);
           if (e.key === "Escape") e.preventDefault();
         });
 
+        // ─────────────────────────────────────────────────────────
+        //  SOCKET.IO
+        // ─────────────────────────────────────────────────────────
         function connectSocket() {
           socket = io(window.location.origin, { transports: ["websocket"] });
 
           socket.on("connect", () => {
+            console.log("✅ Socket.IO connected");
             setStatus("Establishing AI connections...", "processing");
           });
 
           socket.on("connections_ready", () => {
+            console.log("✅ All connections ready");
             isReady = true;
             const btn = document.getElementById("mic-button");
             btn.disabled = false;
             btn.classList.remove("bg-slate-700");
             btn.classList.add("bg-[#00bfff]");
-
-            awaitingInitialGreeting = true;
-            clearGreetingFallbackTimer();
-            startGreetingFallbackTimer();
-
-            setStatus("Ready • waiting for greeting...", "idle");
+            if (!isMicOpen) startMic();
           });
 
           socket.on("status", (st) => {
+            // Don't override UI while user is typing in fallback input
             if (micMutedForInput && st === "listening") return;
 
-            if (st === "user_speaking") {
-              setStatus("Listening...", "listening");
-            } else if (st === "processing") {
+            if (st === "user_speaking") setStatus("Listening...", "listening");
+            else if (st === "processing")
               setStatus("Thinking...", "processing");
-            } else if (st === "speaking") {
-              clearGreetingFallbackTimer();
+            else if (st === "speaking")
               setStatus("AI is speaking...", "speaking");
-            } else if (st === "listening" && isReady) {
+            else if (st === "listening" && isReady)
               setStatus("Listening... Speak now", "listening");
-            }
           });
 
           socket.on("user_transcript", (text) =>
             appendTranscript("user", text),
           );
-
           socket.on("assistant_text_delta", (delta) => {
-            clearGreetingFallbackTimer();
-            if (awaitingInitialGreeting) awaitingInitialGreeting = true;
-            updateAssistantLiveText(delta);
+            assistantFullText += delta;
           });
-
           socket.on("assistant_text_done", (text) => {
-            clearGreetingFallbackTimer();
-            finalizeAssistantLiveText(text);
+            assistantFullText = "";
+            appendTranscript("assistant", text);
+            // Mark first message done once the first full response is complete
+            markFirstMessageDone();
           });
 
+          // ── PCM audio chunks from ElevenLabs ──────────────────
           socket.on("audio_chunk_pcm", (payload) => {
-            clearGreetingFallbackTimer();
             setStatus("AI is speaking...", "speaking");
             pushPcm16Chunk(payload?.audio, payload?.sampleRate);
           });
 
+          // ── audio_stream_complete: server finished sending chunks ──
           socket.on("audio_stream_complete", () => {
+            console.log(
+              "📦 [audio_stream_complete] All chunks received — waiting for playback to finish",
+            );
             streamComplete = true;
+
+            // If the first-message buffer hasn't flushed yet, flush it now
+            // so audio_done isn't blocked waiting on the timer
+            if (isFirstMessage && !firstMsgFlushed && firstMsgTimer) {
+              clearTimeout(firstMsgTimer);
+              flushFirstMsgBuffer();
+            }
+
             scheduleAudioDoneTimer();
             maybeEmitAudioDone();
           });
 
+          // ── Interrupts ─────────────────────────────────────────
           socket.on("interrupt", () => {
             interruptPlayback();
-            if (isReady && isMicOpen && !micMutedForInput) {
-              setStatus("Listening... Speak now", "listening");
+            // If interrupted during first message, reset so next attempt buffers cleanly
+            if (isFirstMessage) {
+              firstMsgFlushed = false;
+              firstMsgBuffer = [];
             }
+            if (isReady && isMicOpen && !micMutedForInput)
+              setStatus("Listening... Speak now", "listening");
           });
 
           socket.on("audio_interrupt", () => {
             stopPcmPlayback();
-            if (isReady && isMicOpen && !micMutedForInput) {
+            if (isFirstMessage) {
+              firstMsgFlushed = false;
+              firstMsgBuffer = [];
+            }
+            if (isReady && isMicOpen && !micMutedForInput)
               setStatus("Listening... Speak now", "listening");
+          });
+
+          // ── response.created: new AI turn starting ─────────────
+          socket.on("assistant_text_delta", () => {
+            if (!streamComplete && !audioDoneSent) return;
+            resetAudioDoneState();
+          });
+
+          socket.on("status", (st) => {
+            if (st === "speaking") {
+              resetAudioDoneState();
             }
           });
 
+          // ── Fallback input ─────────────────────────────────────
           socket.on("request_structured_input", (payload) => {
+            console.log("📋 Fallback input requested:", payload);
             showFallbackInput(payload.field, payload.prompt);
           });
 
-          socket.on("structured_input_accepted", () => {});
+          socket.on("structured_input_accepted", (payload) => {
+            console.log("✅ Input accepted:", payload);
+          });
 
+          // ── Errors & disconnect ────────────────────────────────
           socket.on("error_msg", (msg) => {
+            console.error("Server error:", msg);
             setStatus("Error: " + msg, "idle");
           });
 
@@ -967,20 +1010,20 @@ registerProcessor("pcm16", PCM16Processor);
             isReady = false;
             hideFallbackInput();
             resetAudioDoneState();
-            clearGreetingFallbackTimer();
             setStatus("Reconnecting to server...", "processing");
           });
         }
 
+        // ─────────────────────────────────────────────────────────
+        //  CONTROLS
+        // ─────────────────────────────────────────────────────────
         window.toggleMic = function () {
           unlockAudioOnce();
-
           if (!isReady && !socket) {
             beginSession();
             return;
           }
           if (!isReady) return;
-
           if (isMicOpen) {
             stopMic();
             setStatus("Mic off • Tap to resume", "idle");
@@ -1002,16 +1045,11 @@ registerProcessor("pcm16", PCM16Processor);
           interruptPlayback();
           hideFallbackInput();
           micMutedForInput = false;
-          clearGreetingFallbackTimer();
-
           if (socket) {
             socket.disconnect();
             socket = null;
           }
-
           isReady = false;
-          awaitingInitialGreeting = true;
-
           const btn = document.getElementById("mic-button");
           btn.disabled = false;
           btn.classList.remove("bg-slate-700");
@@ -1024,65 +1062,32 @@ registerProcessor("pcm16", PCM16Processor);
             socket.disconnect();
             socket = null;
           }
-
           stopMic();
           interruptPlayback();
           hideFallbackInput();
           micMutedForInput = false;
-          clearGreetingFallbackTimer();
-
           isReady = false;
-          awaitingInitialGreeting = true;
-          assistantBuffer = "";
-          assistantLiveLine = null;
-          assistantLiveTextEl = null;
-
+          assistantFullText = "";
+          // Reset first-message state for the new session
+          isFirstMessage = true;
+          firstMsgBuffer = [];
+          firstMsgFlushed = false;
+          if (firstMsgTimer) {
+            clearTimeout(firstMsgTimer);
+            firstMsgTimer = null;
+          }
           document.getElementById("transcript-content").innerHTML = "";
           document.getElementById("transcript-box").classList.add("hidden");
-
           const btn = document.getElementById("mic-button");
           btn.disabled = false;
           btn.classList.remove("bg-slate-700");
           btn.classList.add("bg-[#00bfff]");
-
           setStatus("Tap the microphone to begin", "idle");
         };
 
         window.addEventListener("load", () => {
           setStatus("Tap the microphone to begin", "idle");
         });
-
-        function beginAssistantLiveTurnIfNeeded() {
-          if (!assistantLiveLine) {
-            beginAssistantLiveTurn();
-          }
-        }
-
-        function beginAssistantLiveTurn() {
-          if (assistantLiveLine) return;
-
-          ensureTranscriptVisible();
-          const content = document.getElementById("transcript-content");
-
-          assistantLiveLine = document.createElement("div");
-          assistantLiveLine.className = "mb-2 text-slate-200";
-
-          const label = document.createElement("span");
-          label.className =
-            "font-semibold text-xs uppercase tracking-wide text-emerald-500";
-          label.textContent = "AI:";
-
-          assistantLiveTextEl = document.createElement("span");
-          assistantLiveTextEl.className = "whitespace-pre-wrap";
-          assistantLiveTextEl.textContent = " ";
-
-          assistantLiveLine.appendChild(label);
-          assistantLiveLine.appendChild(assistantLiveTextEl);
-          content.appendChild(assistantLiveLine);
-        }
-
-        // expose helper used above before declaration order is a concern
-        window.__noop = beginAssistantLiveTurnIfNeeded;
       })();
     </script>
   </body>
