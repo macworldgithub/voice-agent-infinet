@@ -349,27 +349,23 @@
         let pcmPlaying = false;
         let assistantFullText = "";
 
-        // ─── First-message buffering ──────────────────────────────
-        //
-        // For the very first AI response after session start, we buffer
-        // all incoming PCM chunks and delay playback by FIRST_MSG_BUFFER_MS
-        // so the beginning of "Welcome to InfiNET Broadband..." is never
-        // clipped by audio context startup latency.
-        //
-        // isFirstMessage   – true until the first response fully begins
-        // firstMsgBuffer   – holds {base64, sampleRate} chunks while buffering
-        // firstMsgTimer    – timeout that flushes the buffer and starts playback
-        // ─────────────────────────────────────────────────────────
-        const FIRST_MSG_BUFFER_MS = 5000; // ms to buffer before playing first message
-        let isFirstMessage = true;
-        let firstMsgBuffer = [];
-        let firstMsgTimer = null;
-        let firstMsgFlushed = false;
-
         // ─── audio_done tracking ──────────────────────────────────
-        let streamComplete = false;
-        let audioDoneSent = false;
-        let audioDoneTimer = null;
+        //
+        // The server emits "audio_stream_complete" when ElevenLabs
+        // sends its isFinal flag — meaning ALL audio chunks have been
+        // sent to the frontend.  We then watch activeSources and emit
+        // "audio_done" to the server only when the LAST scheduled
+        // AudioBufferSourceNode finishes playing.
+        //
+        // Key variables:
+        //   streamComplete  – set true when server says all chunks sent
+        //   audioDoneSent   – guards against emitting audio_done twice
+        //                     for the same response turn
+        //   audioDoneTimer  – safety-net timeout in case onended misfires
+        // ─────────────────────────────────────────────────────────
+        let streamComplete = false; // server signalled all chunks sent
+        let audioDoneSent = false; // prevent double-emit per turn
+        let audioDoneTimer = null; // safety-net timeout
 
         const SAMPLE_RATE = 24000;
         const PCM_SAMPLE_RATE = 16000;
@@ -569,6 +565,32 @@ registerProcessor("pcm16", PCM16Processor);
 
         // ─────────────────────────────────────────────────────────
         //  PCM16 AUDIO PLAYBACK + audio_done EMISSION
+        //
+        //  How it works:
+        //
+        //  1. Each audio_chunk_pcm → pushPcm16Chunk() schedules a
+        //     AudioBufferSourceNode at nextPlayTime and tracks it in
+        //     activeSources[].  src.onended removes it from the list
+        //     and calls maybeEmitAudioDone().
+        //
+        //  2. Server emits "audio_stream_complete" when ElevenLabs
+        //     isFinal fires (all chunks sent).  We set streamComplete=true
+        //     and call maybeEmitAudioDone().
+        //
+        //  3. maybeEmitAudioDone() fires socket.emit("audio_done") only
+        //     when BOTH conditions are true:
+        //       a) streamComplete === true  (server sent everything)
+        //       b) activeSources.length === 0  (browser finished playing)
+        //
+        //  4. A safety-net timer fires 500 ms after streamComplete in case
+        //     the last onended callback never fires (e.g. interrupted
+        //     source).  It checks the scheduled end time directly via
+        //     playbackCtx.currentTime.
+        //
+        //  5. On interrupt / stopPcmPlayback, we reset streamComplete and
+        //     audioDoneSent so the next turn starts clean.  We do NOT emit
+        //     audio_done on interrupt — the server handles that via
+        //     input_audio_buffer.speech_started already.
         // ─────────────────────────────────────────────────────────
 
         let audioUnlocked = false;
@@ -593,11 +615,14 @@ registerProcessor("pcm16", PCM16Processor);
           } catch (_) {}
         }
 
+        // Called whenever a source ends OR when stream is marked complete.
+        // Emits audio_done exactly once per AI turn.
         function maybeEmitAudioDone() {
           if (audioDoneSent) return;
           if (!streamComplete) return;
           if (activeSources.length > 0) return;
 
+          // All chunks have finished playing and server said stream is done
           audioDoneSent = true;
           clearAudioDoneTimer();
 
@@ -606,6 +631,7 @@ registerProcessor("pcm16", PCM16Processor);
             socket.emit("audio_done");
           }
 
+          // Update UI to listening state
           if (isReady && isMicOpen && !micMutedForInput) {
             setStatus("Listening... Speak now", "listening");
           } else if (isReady) {
@@ -613,10 +639,15 @@ registerProcessor("pcm16", PCM16Processor);
           }
         }
 
+        // Safety-net: fires after streamComplete + small buffer.
+        // Handles edge case where the last onended never fires.
         function scheduleAudioDoneTimer() {
           clearAudioDoneTimer();
           if (audioDoneSent) return;
 
+          // Calculate how long until the last scheduled audio finishes.
+          // nextPlayTime is the end timestamp in playbackCtx time.
+          // Add 250 ms buffer for speaker hardware latency.
           const ctx = playbackCtx;
           if (!ctx) {
             maybeEmitAudioDone();
@@ -634,6 +665,7 @@ registerProcessor("pcm16", PCM16Processor);
               console.log(
                 "⏰ [audio_done] Safety-net fired — forcing audio_done",
               );
+              // Clear activeSources so maybeEmitAudioDone passes
               activeSources = [];
               maybeEmitAudioDone();
             }
@@ -647,6 +679,7 @@ registerProcessor("pcm16", PCM16Processor);
           }
         }
 
+        // Reset all audio_done tracking state for a new turn
         function resetAudioDoneState() {
           streamComplete = false;
           audioDoneSent = false;
@@ -666,17 +699,11 @@ registerProcessor("pcm16", PCM16Processor);
             } catch (_) {}
           });
           activeSources = [];
-          // Also cancel any pending first-message buffer flush
-          if (firstMsgTimer) {
-            clearTimeout(firstMsgTimer);
-            firstMsgTimer = null;
-          }
-          firstMsgBuffer = [];
+          // Reset tracking — don't emit audio_done on interrupt
           resetAudioDoneState();
         }
 
-        // ─── Schedule a single decoded chunk into the Web Audio timeline ──
-        function schedulePcmChunk(base64, sampleRate) {
+        function pushPcm16Chunk(base64, sampleRate) {
           if (!base64) return;
           if (!playbackCtx)
             playbackCtx = new (
@@ -714,7 +741,7 @@ registerProcessor("pcm16", PCM16Processor);
 
           const now = playbackCtx.currentTime;
           if (!pcmPlaying || nextPlayTime < now) {
-            nextPlayTime = now + 0.02; // 20 ms jitter buffer for subsequent messages
+            nextPlayTime = now + 0.02; // 20 ms initial jitter buffer
             pcmPlaying = true;
           }
 
@@ -724,75 +751,11 @@ registerProcessor("pcm16", PCM16Processor);
           activeSources.push(src);
 
           src.onended = () => {
+            // Remove this source from the active list
             activeSources = activeSources.filter((s) => s !== src);
+            // Check if this was the last source AND stream is complete
             maybeEmitAudioDone();
           };
-        }
-
-        // ─── Flush the first-message buffer and play all held chunks ──
-        function flushFirstMsgBuffer() {
-          firstMsgTimer = null;
-          firstMsgFlushed = true;
-          console.log(
-            `▶️  [first-msg] Flushing ${firstMsgBuffer.length} buffered chunks`,
-          );
-
-          // Ensure playback context is running before we schedule
-          if (playbackCtx && playbackCtx.state === "suspended") {
-            playbackCtx.resume().catch(() => {});
-          }
-
-          // Schedule all buffered chunks back-to-back from "now + tiny offset"
-          // so the very first word is never clipped
-          pcmPlaying = false; // force nextPlayTime reset on first chunk
-          nextPlayTime = 0;
-
-          firstMsgBuffer.forEach(({ base64, sampleRate }) => {
-            schedulePcmChunk(base64, sampleRate);
-          });
-          firstMsgBuffer = [];
-        }
-
-        // ─── Public entry point — called for every audio_chunk_pcm ───
-        function pushPcm16Chunk(base64, sampleRate) {
-          if (!base64) return;
-
-          // Ensure playback context exists
-          if (!playbackCtx)
-            playbackCtx = new (
-              window.AudioContext || window.webkitAudioContext
-            )();
-
-          if (isFirstMessage && !firstMsgFlushed) {
-            // Buffer this chunk instead of playing immediately
-            firstMsgBuffer.push({ base64, sampleRate });
-
-            if (!firstMsgTimer) {
-              // Start the countdown on the very first chunk received
-              console.log(
-                `⏳ [first-msg] Buffering for ${FIRST_MSG_BUFFER_MS}ms before playback`,
-              );
-              firstMsgTimer = setTimeout(
-                flushFirstMsgBuffer,
-                FIRST_MSG_BUFFER_MS,
-              );
-            }
-            return;
-          }
-
-          // For all subsequent messages, play immediately as before
-          schedulePcmChunk(base64, sampleRate);
-        }
-
-        // Call this when a new AI response turn begins (after the first)
-        // to mark that the first-message buffering phase is over.
-        function markFirstMessageDone() {
-          if (isFirstMessage) {
-            isFirstMessage = false;
-            console.log(
-              "✅ [first-msg] First message complete — direct playback from now on",
-            );
-          }
         }
 
         // ─────────────────────────────────────────────────────────
@@ -928,8 +891,6 @@ registerProcessor("pcm16", PCM16Processor);
           socket.on("assistant_text_done", (text) => {
             assistantFullText = "";
             appendTranscript("assistant", text);
-            // Mark first message done once the first full response is complete
-            markFirstMessageDone();
           });
 
           // ── PCM audio chunks from ElevenLabs ──────────────────
@@ -939,53 +900,46 @@ registerProcessor("pcm16", PCM16Processor);
           });
 
           // ── audio_stream_complete: server finished sending chunks ──
+          //
+          // This fires when ElevenLabs emits isFinal.  At this point all
+          // chunks have been SENT but may not yet be PLAYED.  We set the
+          // streamComplete flag and schedule the safety-net timer.
+          // maybeEmitAudioDone() will fire audio_done when the last
+          // AudioBufferSourceNode's onended callback runs.
           socket.on("audio_stream_complete", () => {
             console.log(
               "📦 [audio_stream_complete] All chunks received — waiting for playback to finish",
             );
             streamComplete = true;
-
-            // If the first-message buffer hasn't flushed yet, flush it now
-            // so audio_done isn't blocked waiting on the timer
-            if (isFirstMessage && !firstMsgFlushed && firstMsgTimer) {
-              clearTimeout(firstMsgTimer);
-              flushFirstMsgBuffer();
-            }
-
-            scheduleAudioDoneTimer();
-            maybeEmitAudioDone();
+            scheduleAudioDoneTimer(); // safety-net in case onended misfires
+            maybeEmitAudioDone(); // fires immediately if already nothing playing
           });
 
           // ── Interrupts ─────────────────────────────────────────
           socket.on("interrupt", () => {
             interruptPlayback();
-            // If interrupted during first message, reset so next attempt buffers cleanly
-            if (isFirstMessage) {
-              firstMsgFlushed = false;
-              firstMsgBuffer = [];
-            }
             if (isReady && isMicOpen && !micMutedForInput)
               setStatus("Listening... Speak now", "listening");
           });
 
           socket.on("audio_interrupt", () => {
             stopPcmPlayback();
-            if (isFirstMessage) {
-              firstMsgFlushed = false;
-              firstMsgBuffer = [];
-            }
             if (isReady && isMicOpen && !micMutedForInput)
               setStatus("Listening... Speak now", "listening");
           });
 
           // ── response.created: new AI turn starting ─────────────
+          // Reset audio_done tracking so we're clean for this turn
           socket.on("assistant_text_delta", () => {
-            if (!streamComplete && !audioDoneSent) return;
+            // First delta signals a new response is streaming
+            if (!streamComplete && !audioDoneSent) return; // already reset
             resetAudioDoneState();
           });
 
+          // Reset when server starts a new response cycle
           socket.on("status", (st) => {
             if (st === "speaking") {
+              // New AI turn — reset tracking for fresh audio_done cycle
               resetAudioDoneState();
             }
           });
@@ -1068,14 +1022,6 @@ registerProcessor("pcm16", PCM16Processor);
           micMutedForInput = false;
           isReady = false;
           assistantFullText = "";
-          // Reset first-message state for the new session
-          isFirstMessage = true;
-          firstMsgBuffer = [];
-          firstMsgFlushed = false;
-          if (firstMsgTimer) {
-            clearTimeout(firstMsgTimer);
-            firstMsgTimer = null;
-          }
           document.getElementById("transcript-content").innerHTML = "";
           document.getElementById("transcript-box").classList.add("hidden");
           const btn = document.getElementById("mic-button");
