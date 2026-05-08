@@ -1,6 +1,5 @@
 // // import WebSocket from "ws";
 
-
 // // // ═══════════════════════════════════════════════════════════════════════════
 // // //  DEBUG LOGGER — structured, timestamped, flow-aware
 // // // ═══════════════════════════════════════════════════════════════════════════
@@ -11243,9 +11242,9 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
 
             if (
               salesStep === "email" &&
-              !session.collected._emailStepComplete &&
-              detectEmailReadbackQuestion(event.text) &&
-              pendingEmailConfirmation
+              // !session.collected._emailStepComplete &&
+              detectEmailReadbackQuestion(event.text)
+              // pendingEmailConfirmation
             ) {
               emailConfirmationAsked = true;
               emailConfirmationAskedAt = Date.now();
