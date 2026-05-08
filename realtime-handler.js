@@ -15122,7 +15122,7 @@ export function setupRealtimeVoice(io, deps) {
             pendingPostDoneCreate = true;
             pendingPostDoneHint =
               `All details collected. Say "Perfect, just a moment while I get that submitted for you..." ` +
-              `then IMMEDIATELY call create_ticket. Do NOT ask any more questions.`;
+              `then IMMEDIATELY call create_ticket. Then, mmediately say do you need any more assistance?`;
           } else {
             autoTicketScheduled = false;
           }
@@ -15147,7 +15147,7 @@ export function setupRealtimeVoice(io, deps) {
                     `[SYSTEM_CONTEXT]: ${hint}\n\n` +
                     `All required details are now collected (name, phone, email, plan). ` +
                     `Say something warm like "Perfect, just bear with me a moment while I get that submitted for you..." ` +
-                    `then IMMEDIATELY call create_ticket. Do NOT wait for user input. Do NOT ask any more questions.`,
+                    `then IMMEDIATELY call create_ticket. Do NOT wait for user input. Then, mmediately say do you need any more assistance?`,
                 },
               ],
             },
@@ -15351,7 +15351,7 @@ export function setupRealtimeVoice(io, deps) {
             `[FLOW:sales][STEP:create_ticket][STATUS:execute]\n` +
               `Name: ${c._firstName || ""} ${c._lastName || ""} | Phone: ${c.phone} | Email: ${c.email} | Plan: ${c.leadInterest}\n` +
               `Say "Perfect, just bear with me a moment while I get that submitted for you..." ` +
-              `then IMMEDIATELY call create_ticket. Do NOT ask any more questions.`,
+              `then IMMEDIATELY call create_ticket. Then, mmediately say do you need any more assistance?`,
           );
         }
         default:
@@ -15789,7 +15789,7 @@ export function setupRealtimeVoice(io, deps) {
             "\n\nFIELD COLLECTION: ONE field per turn. Wait for answer before proceeding." +
             "\n\nPACKAGE RULE: Present ALL options. NEVER auto-select. Ask 'Which catches your eye?' and WAIT." +
             "\n\nEMAIL FLOW: Spell letter by letter → read back letter-by-letter → 'Is that correct?' → YES → call extract_call_fields ONCE → do NOT call it again with same email." +
-            "\n\nAUTO-TICKET: When you receive [SYSTEM_CONTEXT] saying all details are collected, say something warm then IMMEDIATELY call create_ticket without asking any further questions.";
+            "\n\nAUTO-TICKET: When you receive [SYSTEM_CONTEXT] saying all details are collected, say something warm then IMMEDIATELY call create_ticket.Then, mmediately say do you need any more assistance?";
           openaiWs.send(
             JSON.stringify({
               type: "session.update",
@@ -16420,7 +16420,7 @@ export function setupRealtimeVoice(io, deps) {
           c.email &&
           c.leadInterest
         ) {
-          sysHint += `\n\nAll details collected. Say something warm then IMMEDIATELY call create_ticket. Do NOT wait for user input.`;
+          sysHint += `\n\nAll details collected. Say something warm then IMMEDIATELY call create_ticket. Then, mmediately say do you need any more assistance?`;
         }
         const sh = buildSalesStepHint();
         if (sh) sysHint += `\n\n${sh}`;
@@ -16877,7 +16877,7 @@ export function setupRealtimeVoice(io, deps) {
     });
 
     // ═══════════════════════════════════════════════════════════════════════
-    //  CLEANUPPP
+    //  CLEANUP
     // ═══════════════════════════════════════════════════════════════════════
     socket.on("disconnect", () => {
       console.log(`🔌 Disconnected: ${socket.id}`);
