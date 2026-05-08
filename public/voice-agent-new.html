@@ -360,7 +360,7 @@
         // firstMsgBuffer   – holds {base64, sampleRate} chunks while buffering
         // firstMsgTimer    – timeout that flushes the buffer and starts playback
         // ─────────────────────────────────────────────────────────
-        const FIRST_MSG_BUFFER_MS = 800; // ms to buffer before playing first message
+        const FIRST_MSG_BUFFER_MS = 2000; // ms to buffer before playing first message
         let isFirstMessage = true;
         let firstMsgBuffer = [];
         let firstMsgTimer = null;
