@@ -341,6 +341,7 @@
         let isReady = false;
         let volumeInterval = null;
         let micMutedForInput = false;
+        let startupGreetingPending = false;
 
         // Playback state
         let playbackCtx = null;
@@ -862,11 +863,12 @@ registerProcessor("pcm16", PCM16Processor);
           socket.on("connections_ready", () => {
             console.log("✅ All connections ready");
             isReady = true;
+            startupGreetingPending = true;
             const btn = document.getElementById("mic-button");
-            btn.disabled = false;
+            btn.disabled = true;
             btn.classList.remove("bg-slate-700");
             btn.classList.add("bg-[#00bfff]");
-            if (!isMicOpen) startMic();
+            setStatus("Playing welcome message...", "speaking");
           });
 
           socket.on("status", (st) => {
@@ -913,6 +915,15 @@ registerProcessor("pcm16", PCM16Processor);
             streamComplete = true;
             scheduleAudioDoneTimer(); // safety-net in case onended misfires
             maybeEmitAudioDone(); // fires immediately if already nothing playing
+          });
+
+          socket.on("audio_done", () => {
+            if (!startupGreetingPending) return;
+            startupGreetingPending = false;
+            console.log("🔊 Initial greeting finished — enabling mic");
+            const btn = document.getElementById("mic-button");
+            btn.disabled = false;
+            if (!isMicOpen) startMic();
           });
 
           // ── Interrupts ─────────────────────────────────────────
@@ -1020,6 +1031,7 @@ registerProcessor("pcm16", PCM16Processor);
           interruptPlayback();
           hideFallbackInput();
           micMutedForInput = false;
+          startupGreetingPending = false;
           isReady = false;
           assistantFullText = "";
           document.getElementById("transcript-content").innerHTML = "";

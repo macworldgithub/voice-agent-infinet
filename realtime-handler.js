@@ -14884,6 +14884,7 @@ export function setupRealtimeVoice(io, deps) {
     let salesStep = null;
     let lastResponseWasPackage = false;
     let finalMessageLock = false;
+    let startupGreetingPending = false;
 
     // ── Email confirmation state ──────────────────────────────────────────
     let pendingEmailConfirmation = null; // { raw, parsed }
@@ -15852,6 +15853,13 @@ export function setupRealtimeVoice(io, deps) {
           break;
 
         case "input_audio_buffer.speech_started": {
+          if (startupGreetingPending) {
+            if (openaiWs?.readyState === WebSocket.OPEN)
+              openaiWs.send(
+                JSON.stringify({ type: "input_audio_buffer.clear" }),
+              );
+            break;
+          }
           if (
             awaitingStructuredInput ||
             pendingFunctionCalls > 0 ||
@@ -16796,6 +16804,7 @@ export function setupRealtimeVoice(io, deps) {
       console.log(`🔊 audio_done — playback complete`);
       assistantSpeaking = false;
       elevenLabsStreaming = false;
+      if (startupGreetingPending) startupGreetingPending = false;
       const pkg = lastResponseWasPackage;
       lastResponseWasPackage = false;
       TimerManager.startSilence(pkg);
@@ -16909,10 +16918,12 @@ export function setupRealtimeVoice(io, deps) {
         else console.log(`✅ ElevenLabs ready after ${elWait}ms`);
         if (!session.hasGreeted) {
           session.hasGreeted = true;
+          startupGreetingPending = true;
           if (openaiWs?.readyState === WebSocket.OPEN)
             openaiWs.send(JSON.stringify({ type: "response.create" }));
           sessions.set(session.id, session);
         } else {
+          startupGreetingPending = false;
           socket.emit("status", "listening");
         }
       } catch (err) {
