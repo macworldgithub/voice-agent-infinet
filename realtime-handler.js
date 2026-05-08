@@ -9530,9 +9530,8 @@
 //   });
 // }
 import WebSocket from "ws";
-
 // ═══════════════════════════════════════════════════════════════════════════
-//  DEBUG LOGGER
+//  DEBUG LOGGER — structured, timestamped, flow-aware
 // ═══════════════════════════════════════════════════════════════════════════
 function dbg(flow, step, status, data = {}) {
   const ts = new Date().toISOString();
@@ -9545,7 +9544,7 @@ function dbg(flow, step, status, data = {}) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  VOICE EMAIL PARSER
+//  VOICE EMAIL CAPTURE — NATO PHONETIC PARSER + ASSEMBLER
 // ═══════════════════════════════════════════════════════════════════════════
 const DOMAIN_SHORTCUTS = {
   gmail: "gmail.com",
@@ -9569,6 +9568,7 @@ const DOMAIN_SHORTCUTS = {
   tpg: "tpg.com.au",
   bele: "bele.ai",
 };
+
 const NATO_MAP = {
   zero: "0",
   one: "1",
@@ -9587,14 +9587,33 @@ const NATO_MAP = {
   plus: "+",
 };
 
+function stripEmailFillers(text) {
+  if (!text) return text;
+  return text
+    .replace(
+      /\b(of\s+ai|for\s+example|for\s+instance|listen\s*,?|go\s+ahead|spelling\s+mode|letter\s+by\s+letter)\b/gi,
+      " ",
+    )
+    .replace(
+      /\b(okay|ok|my email(?: address| is)?|the email(?: address| is)?|email is|address is|it'?s|it is|so|well|right|sure|actually|basically|i think|i believe|let me|let's see|umm?|uh+|hmm?|ah+)\b/gi,
+      " ",
+    )
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 function parseVoiceEmail(transcript) {
   if (!transcript) return null;
   let raw = transcript.toLowerCase().trim();
+
   const directEmail = raw.match(/\b([^\s@]+@[^\s@]+\.[^\s@]{2,})\b/);
   if (directEmail) return directEmail[1].toLowerCase();
-  raw = raw.replace(/(?<![a-z0-9])([a-z])(?:-([a-z]))+(?![a-z0-9])/gi, (m) =>
-    m.toLowerCase().split("-").join(" "),
+
+  raw = raw.replace(
+    /(?<![a-z0-9])([a-z])(?:-([a-z]))+(?![a-z0-9])/gi,
+    (match) => match.toLowerCase().split("-").join(" "),
   );
+
   raw = raw
     .replace(/\bfull\s+stop\b/gi, " dot ")
     .replace(/\bat\s+sign\b/gi, " at ")
@@ -9605,13 +9624,19 @@ function parseVoiceEmail(transcript) {
     .replace(/[,;'"]/g, " ")
     .replace(/\s{2,}/g, " ")
     .trim();
+
+  let domainReplaced = raw;
   for (const [spoken, actual] of Object.entries(DOMAIN_SHORTCUTS)) {
     const re = new RegExp(`\\b${spoken.replace(/\./g, "\\.")}\\b`, "gi");
-    raw = raw.replace(re, actual);
+    domainReplaced = domainReplaced.replace(re, actual);
   }
+  raw = domainReplaced;
+
   const tokens = raw.split(/\s+/).filter(Boolean);
   const parts = [];
-  for (const tok of tokens) {
+
+  for (let i = 0; i < tokens.length; i++) {
+    const tok = tokens[i];
     if (tok === "at") {
       parts.push("@");
       continue;
@@ -9633,7 +9658,8 @@ function parseVoiceEmail(transcript) {
       continue;
     }
     if (NATO_MAP.hasOwnProperty(tok)) {
-      if (NATO_MAP[tok] !== null) parts.push(NATO_MAP[tok]);
+      const val = NATO_MAP[tok];
+      if (val !== null) parts.push(val);
       continue;
     }
     if (/^[a-z]{2,6}(\.[a-z]{2,6})?$/.test(tok)) {
@@ -9642,19 +9668,22 @@ function parseVoiceEmail(transcript) {
     }
     parts.push(tok);
   }
-  let email = parts
-    .join("")
+
+  let email = parts.join("");
+  email = email
     .replace(/@+/g, "@")
     .replace(/\.{2,}/g, ".")
     .replace(/^[.\-_]+/, "")
     .replace(/[.\-_]+@/, "@")
     .replace(/@[.\-_]+/, "@")
     .replace(/[.\-_]+$/, "");
+
   if (!email.includes("@")) return null;
   const [local, domain] = email.split("@");
   if (!local || local.length < 1) return null;
   if (!domain || !domain.includes(".")) return null;
   if (domain.endsWith(".")) return null;
+
   return email.toLowerCase();
 }
 
@@ -9675,15 +9704,13 @@ function looksLikeVoiceEmailSpelling(text) {
   ).length;
   if (natoCount >= 2 && /\bat\b/.test(lower)) return true;
   const words = lower.split(/\s+/);
-  const hasAt = words.includes("at"),
-    hasDot =
-      words.includes("dot") ||
-      words.includes("period") ||
-      words.includes("stop");
+  const hasAt = words.includes("at");
+  const hasDot =
+    words.includes("dot") || words.includes("period") || words.includes("stop");
   const singleLetterCount = words.filter((w) => /^[a-z]$/.test(w)).length;
   if (hasAt && hasDot && singleLetterCount >= 2) return true;
-  const hyphenCount = (lower.match(/\b[a-z]-[a-z]\b/g) || []).length;
-  if (hyphenCount >= 2 && hasAt) return true;
+  const hyphenSpellingCount = (lower.match(/\b[a-z]-[a-z]\b/g) || []).length;
+  if (hyphenSpellingCount >= 2 && hasAt) return true;
   return false;
 }
 
@@ -9694,6 +9721,7 @@ export function setupRealtimeVoice(io, deps) {
     ELEVENLABS_API_KEY,
     ELEVENLABS_VOICE_ID,
     SYSTEM_PROMPT,
+    LOCATIONS,
     tools,
     mkSession,
     sessions,
@@ -9701,6 +9729,7 @@ export function setupRealtimeVoice(io, deps) {
     normalizePhone,
     safeParseJSON,
     applyExtractionToSession,
+    fetchTariffs,
     customerLookup,
     objectToUrlEncoded,
     splynx,
@@ -9717,17 +9746,16 @@ export function setupRealtimeVoice(io, deps) {
 
   io.on("connection", (socket) => {
     console.log(`🔌 Voice client connected: ${socket.id}`);
+
     const session = mkSession();
     let openaiWs = null;
 
-    // ── ElevenLabs state ─────────────────────────────────────────────────
     let elevenLabsWs = null;
     let elevenLabsReady = false;
     let textBuffer = [];
     let elevenLabsStreaming = false;
+    let elevenLabsInitialized = false;
     let elevenLabsStreamingTimeout = null;
-    // FIX ISSUE 2: repriming flag prevents text being sent before re-prime flushes
-    let elevenLabsRepriming = false;
 
     function safeSetElevenLabsStreaming(val) {
       if (elevenLabsStreamingTimeout) {
@@ -9738,7 +9766,9 @@ export function setupRealtimeVoice(io, deps) {
       if (val) {
         elevenLabsStreamingTimeout = setTimeout(() => {
           if (elevenLabsStreaming) {
-            console.warn(`⚠️ [EL] streaming force-cleared after 15s`);
+            console.warn(
+              `⚠️ [EL] elevenLabsStreaming force-cleared after 15s safety timeout`,
+            );
             elevenLabsStreaming = false;
             assistantSpeaking = false;
           }
@@ -9746,118 +9776,132 @@ export function setupRealtimeVoice(io, deps) {
       }
     }
 
-    // ── General state ─────────────────────────────────────────────────────
     let assistantTextBuffer = "";
     let pendingFunctionCalls = 0;
+    let lastTtsText = "";
     let isResponseActive = false;
     let assistantSpeaking = false;
     let awaitingStructuredInput = false;
+    let structuredInputField = null;
+
     const PCM_SAMPLE_RATE = 16000;
     let lastAssistantText = "";
+
     let emptyResponseCount = 0;
     const MAX_EMPTY_RETRIES = 3;
+
     let cancelPending = false;
+
+    let currentResponseId = null;
     let currentResponseHadOutput = false;
+
     let pendingPostDoneCreate = false;
     let pendingPostDoneHint = null;
+
     let salesStep = null;
+
     let lastResponseWasPackage = false;
-    let finalMessageLock = false;
 
-    // ── Email confirmation state ──────────────────────────────────────────
-    let pendingEmailConfirmation = null; // { raw, parsed }
+    // ─── Email confirmation state ──────────────────────────────────
+    let pendingEmailConfirmation = null;
     let emailConfirmationAsked = false;
+    let emailConfirmationAskedAt = 0;
 
-    // ── Phone verification buffer ─────────────────────────────────────────
-    let rawPhoneBuffer = null;
-    let rawPhoneBufferTimestamp = 0;
-    let awaitingPhoneVerification = false;
+    // ─── Ticket confirmation state (ALL FLOWS) ────────────────────
+    let pendingTicketConfirmation = false;
+    let pendingTicketArgs = null;
 
-    // ── Response-create gate ──────────────────────────────────────────────
-    let responseCreatePending = false;
-
-    // FIX ISSUE 1: prevent double-fire of auto-ticket trigger
-    let autoTicketScheduled = false;
-
-    // ═══════════════════════════════════════════════════════════════════════
-    //  DEBUG
-    // ═══════════════════════════════════════════════════════════════════════
-    function debugState(label = "snapshot") {
+    // ═══════════════════════════════════════════════════════════════
+    //  DEBUG STATE
+    // ═══════════════════════════════════════════════════════════════
+    function debugState(label = "state_snapshot") {
       const c = session.collected || {};
       dbg(c.intent || "unknown", label, "snapshot", {
         salesStep,
         pendingFunctionCalls,
         isResponseActive,
         assistantSpeaking,
-        elReady: elevenLabsReady,
-        elRepriming: elevenLabsRepriming,
-        elStreaming: elevenLabsStreaming,
-        email: c.email || "",
-        phone: c.phone || "",
-        _first: c._firstName || "",
-        _emailDone: c._emailStepComplete || false,
-        pendingEmail: pendingEmailConfirmation?.parsed || "",
+        elevenLabsStreaming,
+        elevenLabsReady,
+        intent: c.intent || "none",
+        leadInterest: c.leadInterest || "none",
+        websiteCheckDone: c._websiteCheckDone || false,
+        websiteCheckAsked: c._websiteCheckAsked || false,
+        "collected.email": c.email || "",
+        "collected.phone": c.phone || "",
+        _firstName: c._firstName || "",
+        _lastName: c._lastName || "",
+        _emailStepComplete: c._emailStepComplete || false,
+        pendingEmailConfirmation: pendingEmailConfirmation?.parsed || "",
         emailConfirmationAsked,
-        autoTicketScheduled,
+        pendingTicketConfirmation,
+        _ticketConfirmed: c._ticketConfirmed || false,
       });
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  TIMER MANAGER
-    // ═══════════════════════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════════
+    //  CENTRAL TIMER MANAGER
+    // ═══════════════════════════════════════════════════════════════
     const TimerManager = (() => {
-      let _st = null,
-        _ft = null,
-        _wt = null;
-      const SNORM = 15000,
-        SPKG = 20000,
-        WDOG = 8000;
-      const clrS = () => {
-        if (_st) {
-          clearTimeout(_st);
-          _st = null;
+      let _silenceTimer = null;
+      let _finalMessageTimer = null;
+      let _watchdogTimer = null;
+
+      const SILENCE_NORMAL_MS = 15000;
+      const SILENCE_PACKAGE_MS = 20000;
+      const WATCHDOG_MS = 8000;
+
+      function _clearSilence() {
+        if (_silenceTimer) {
+          clearTimeout(_silenceTimer);
+          _silenceTimer = null;
+          console.log(`⏱️  [TMgr] Silence timer CLEARED`);
         }
-      };
-      const clrF = () => {
-        if (_ft) {
-          clearTimeout(_ft);
-          _ft = null;
+      }
+      function _clearFinalMessage() {
+        if (_finalMessageTimer) {
+          clearTimeout(_finalMessageTimer);
+          _finalMessageTimer = null;
         }
-      };
-      const clrW = () => {
-        if (_wt) {
-          clearTimeout(_wt);
-          _wt = null;
+      }
+      function _clearWatchdog() {
+        if (_watchdogTimer) {
+          clearTimeout(_watchdogTimer);
+          _watchdogTimer = null;
         }
-      };
+      }
+
       return {
-        startSilence(pkg = false) {
-          clrS();
-          if (
-            assistantSpeaking ||
-            pendingFunctionCalls > 0 ||
-            awaitingStructuredInput ||
-            finalMessageLock ||
-            session.finalLock ||
-            elevenLabsStreaming
-          )
+        startSilence(isPackage = false) {
+          _clearSilence();
+          if (assistantSpeaking) {
             return;
-          const ms = pkg ? SPKG : SNORM;
-          console.log(`⏱️ Silence START ${ms / 1000}s`);
-          _st = setTimeout(() => {
-            _st = null;
-            if (
-              assistantSpeaking ||
-              pendingFunctionCalls > 0 ||
-              awaitingStructuredInput ||
-              finalMessageLock ||
-              session.finalLock ||
-              elevenLabsStreaming
-            )
-              return;
-            const nudge = pkg
-              ? "[CRITICAL_SILENCE_NUDGE] User has NOT responded after plans presented. DO NOT auto-select. Ask: 'Which plan would you like?' and WAIT."
-              : "[SILENCE_NUDGE] User has not responded. REPEAT your last question. Do NOT move forward.";
+          }
+          if (pendingFunctionCalls > 0) {
+            return;
+          }
+          if (awaitingStructuredInput) return;
+          if (finalMessageLock || session.finalLock) return;
+          if (elevenLabsStreaming) {
+            return;
+          }
+
+          const timeoutMs = isPackage ? SILENCE_PACKAGE_MS : SILENCE_NORMAL_MS;
+          console.log(`⏱️  [TMgr] Silence timer START: ${timeoutMs / 1000}s`);
+
+          _silenceTimer = setTimeout(() => {
+            _silenceTimer = null;
+            if (awaitingStructuredInput) return;
+            if (finalMessageLock || session.finalLock) return;
+            if (pendingFunctionCalls > 0) return;
+            if (assistantSpeaking) return;
+            if (elevenLabsStreaming) return;
+
+            const nudgeText = isPackage
+              ? "[CRITICAL_SILENCE_NUDGE] User has NOT responded after you presented plans. ABSOLUTELY DO NOT auto-select or assume a plan. User MUST explicitly tell you which plan they want. Ask clearly: 'Which of these plans would you like to go with?' and WAIT for their explicit choice."
+              : "[SILENCE_NUDGE] The user has not responded. REPEAT your last question. Do NOT move forward.";
+
+            console.log(`⏰ [TMgr] Silence fired — nudging AI`);
             if (openaiWs?.readyState === WebSocket.OPEN) {
               openaiWs.send(
                 JSON.stringify({
@@ -9865,195 +9909,141 @@ export function setupRealtimeVoice(io, deps) {
                   item: {
                     type: "message",
                     role: "user",
-                    content: [{ type: "input_text", text: nudge }],
+                    content: [{ type: "input_text", text: nudgeText }],
                   },
                 }),
               );
               scheduleResponseCreate();
             }
-          }, ms);
+          }, timeoutMs);
         },
+
         resetSilence() {
-          clrS();
+          _clearSilence();
         },
-        clearSilence: clrS,
+        clearSilence: _clearSilence,
+
         startWatchdog() {
-          clrW();
-          _wt = setTimeout(() => {
-            _wt = null;
-            if (
-              !isResponseActive &&
-              pendingFunctionCalls === 0 &&
-              openaiWs?.readyState === WebSocket.OPEN
-            ) {
-              console.warn(`⚠️ Watchdog fired`);
-              openaiWs.send(
-                JSON.stringify({
-                  type: "conversation.item.create",
-                  item: {
-                    type: "message",
-                    role: "user",
-                    content: [
-                      {
-                        type: "input_text",
-                        text: "[SYSTEM_CONTEXT]: Please respond immediately.",
-                      },
-                    ],
-                  },
-                }),
-              );
-              scheduleResponseCreate(null, 0, true);
+          _clearWatchdog();
+          _watchdogTimer = setTimeout(() => {
+            _watchdogTimer = null;
+            if (!isResponseActive && pendingFunctionCalls === 0) {
+              console.warn(`⚠️ [TMgr] Watchdog fired — agent stuck`);
+              if (openaiWs?.readyState === WebSocket.OPEN) {
+                openaiWs.send(
+                  JSON.stringify({
+                    type: "conversation.item.create",
+                    item: {
+                      type: "message",
+                      role: "user",
+                      content: [
+                        {
+                          type: "input_text",
+                          text: "[SYSTEM_CONTEXT]: Please respond immediately to the last user message.",
+                        },
+                      ],
+                    },
+                  }),
+                );
+                scheduleResponseCreate(null, 0, true);
+              }
             }
-          }, WDOG);
+          }, WATCHDOG_MS);
         },
-        clearWatchdog: clrW,
-        startFinalLock(ms = 15000, cb) {
-          clrF();
+
+        clearWatchdog: _clearWatchdog,
+
+        startFinalLock(durationMs = 15000, onRelease) {
+          _clearFinalMessage();
           finalMessageLock = true;
           session.finalLock = true;
-          clrS();
-          console.log(`🔒 finalLock ON (${ms}ms)`);
-          _ft = setTimeout(() => {
-            _ft = null;
+          _clearSilence();
+          console.log(`🔒 [TMgr] Final message lock ON (${durationMs}ms)`);
+          _finalMessageTimer = setTimeout(() => {
+            _finalMessageTimer = null;
             finalMessageLock = false;
             session.finalLock = false;
-            console.log("🔓 finalLock auto-released");
+            console.log("🔓 [TMgr] Final message lock auto-released");
             socket.emit("status", "listening");
-            if (cb) cb();
-          }, ms);
+            if (onRelease) onRelease();
+          }, durationMs);
         },
+
         releaseFinalLock() {
           if (!finalMessageLock && !session.finalLock) return;
           finalMessageLock = false;
           session.finalLock = false;
-          clrF();
-          console.log("🔓 finalLock released");
+          _clearFinalMessage();
+          console.log("🔓 [TMgr] Final message lock released");
         },
+
         clearAll() {
-          clrS();
-          clrF();
-          clrW();
+          _clearSilence();
+          _clearFinalMessage();
+          _clearWatchdog();
         },
+
         get hasSilenceTimer() {
-          return _st !== null;
+          return _silenceTimer !== null;
         },
       };
     })();
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  SALES STEP MACHINE
-    // ═══════════════════════════════════════════════════════════════════════
-    function initSalesStepMachine() {
-      if (salesStep !== null) return;
-      const c = session.collected || {};
-      if (!c.leadInterest || !c._websiteCheckDone) return;
-      const hasFirst =
-        c._firstName ||
-        c.preferredName ||
-        (c.name && c.name.trim().length >= 2);
-      const hasLast =
-        c._lastName || (c.name && c.name.trim().split(/\s+/).length >= 2);
-      if (!hasFirst) salesStep = "firstName";
-      else if (!hasLast) salesStep = "lastName";
-      else if (!c.phone) salesStep = "phone";
-      else if (!c.email || !c._emailStepComplete) salesStep = "email";
-      else salesStep = "createTicket";
-      dbg("sales", "initSalesStepMachine", "init", { salesStep });
-      // FIX ISSUE 1: auto-fire ticket if we land here with all details already present
-      if (salesStep === "createTicket") scheduleAutoTicket();
-    }
+    let finalMessageLock = false;
 
-    // ─── FIX ISSUE 1: Auto-ticket trigger ────────────────────────────────
-    // When salesStep reaches "createTicket", the agent must fire the ticket
-    // WITHOUT waiting for user voice input. This function does that.
-    function scheduleAutoTicket() {
-      if (autoTicketScheduled) return;
-      const c = session.collected || {};
-      if (salesStep !== "createTicket") return;
-      const hasName = c._firstName || c.name || c.preferredName;
-      if (!hasName || !c.phone || !c.email || !c.leadInterest) {
-        dbg("sales", "scheduleAutoTicket", "skipped", {
-          hasName: !!hasName,
-          phone: !!c.phone,
-          email: !!c.email,
-          plan: !!c.leadInterest,
-        });
+    // ─── Sales step machine ────────────────────────────────────────
+    function initSalesStepMachine() {
+      if (salesStep !== null) {
         return;
       }
-      autoTicketScheduled = true;
-      dbg("sales", "scheduleAutoTicket", "SCHEDULED", {
-        name: c._firstName || c.name,
-        phone: c.phone,
-        email: c.email,
-        plan: c.leadInterest,
-      });
-      // Small delay: let any in-flight response.done processing settle first
-      setTimeout(() => {
-        if (
-          salesStep !== "createTicket" ||
-          session.finalLock ||
-          finalMessageLock ||
-          isResponseActive
-        ) {
-          // If a response is already active (e.g. LLM already acknowledged the email),
-          // queue for after it completes rather than dropping it
-          if (isResponseActive) {
-            pendingPostDoneCreate = true;
-            pendingPostDoneHint =
-              `All details collected. Say "Perfect, just a moment while I get that submitted for you..." ` +
-              `then IMMEDIATELY call create_ticket. Do NOT ask any more questions.`;
-          } else {
-            autoTicketScheduled = false;
-          }
-          return;
-        }
-        if (openaiWs?.readyState !== WebSocket.OPEN) {
-          autoTicketScheduled = false;
-          return;
-        }
-        const hint = buildSalesStepHint() || "";
-        console.log("🎟️ AUTO-TICKET: firing automatically");
-        openaiWs.send(
-          JSON.stringify({
-            type: "conversation.item.create",
-            item: {
-              type: "message",
-              role: "user",
-              content: [
-                {
-                  type: "input_text",
-                  text:
-                    `[SYSTEM_CONTEXT]: ${hint}\n\n` +
-                    `All required details are now collected (name, phone, email, plan). ` +
-                    `Say something warm like "Perfect, just bear with me a moment while I get that submitted for you..." ` +
-                    `then IMMEDIATELY call create_ticket. Do NOT wait for user input. Do NOT ask any more questions.`,
-                },
-              ],
-            },
-          }),
-        );
-        scheduleResponseCreate(null, 0, true);
-      }, 500);
+      const c = session.collected || {};
+
+      if (c.leadInterest && c._websiteCheckDone) {
+        const hasFirstName =
+          c._firstName ||
+          c.preferredName ||
+          (c.name && c.name.trim().length >= 2);
+        const hasLastName =
+          c._lastName || (c.name && c.name.trim().split(/\s+/).length >= 2);
+
+        if (!hasFirstName) salesStep = "firstName";
+        else if (!hasLastName) salesStep = "lastName";
+        else if (!c.phone) salesStep = "phone";
+        else if (!c.email || !c._emailStepComplete) salesStep = "email";
+        else if (!c._ticketConfirmed) salesStep = "confirmTicket";
+        else salesStep = "createTicket";
+
+        dbg("sales", "initSalesStepMachine", "initialized", {
+          startStep: salesStep,
+        });
+      }
     }
 
     function advanceSalesStep(completedStep) {
       const c = session.collected || {};
-      if (salesStep !== completedStep) return;
+      if (salesStep !== completedStep) {
+        return;
+      }
+
       const order = [
         "firstName",
         "lastName",
         "phone",
         "email",
+        "confirmTicket",
         "createTicket",
         "done",
       ];
       const idx = order.indexOf(completedStep);
-      if (idx === -1) return;
+      if (idx === -1) {
+        return;
+      }
       const next = order[idx + 1];
       if (!next) {
         salesStep = "done";
         return;
       }
+
       if (next === "lastName" && c._lastName) {
         salesStep = "lastName";
         advanceSalesStep("lastName");
@@ -10069,36 +10059,52 @@ export function setupRealtimeVoice(io, deps) {
         advanceSalesStep("email");
         return;
       }
+      if (next === "confirmTicket" && c._ticketConfirmed) {
+        salesStep = "confirmTicket";
+        advanceSalesStep("confirmTicket");
+        return;
+      }
+
       const hasName =
         (c._firstName && c._lastName) ||
         (c.name && c.name.trim().split(/\s+/).length >= 2) ||
         (c._firstName && c.name) ||
         c.preferredName;
+
       if (
         next === "createTicket" &&
         hasName &&
         c.phone &&
         c.email &&
-        c._emailStepComplete
+        c._emailStepComplete &&
+        c._ticketConfirmed
       ) {
         salesStep = "createTicket";
+      } else if (
+        next === "confirmTicket" &&
+        hasName &&
+        c.phone &&
+        c.email &&
+        c._emailStepComplete
+      ) {
+        salesStep = "confirmTicket";
       } else {
         salesStep = next;
       }
-      dbg("sales", "advanceSalesStep", "advanced", {
+
+      dbg("sales", "advanceSalesStep_RESULT", "advanced", {
         from: completedStep,
         to: salesStep,
       });
-      // FIX ISSUE 1: auto-trigger ticket as soon as step becomes createTicket
-      if (salesStep === "createTicket") scheduleAutoTicket();
     }
 
     function buildSalesStepHint() {
       const c = session.collected || {};
-      const _log = (label, val) => {
-        dbg("sales", "hint", label, {
+
+      const _logAndReturn = (label, val) => {
+        dbg("sales", "buildSalesStepHint_RETURN", label, {
           salesStep,
-          val: String(val || "").substring(0, 100),
+          hint: String(val || "").substring(0, 150),
         });
         return val;
       };
@@ -10108,32 +10114,41 @@ export function setupRealtimeVoice(io, deps) {
         c._websiteCheckRequired &&
         !c._websiteCheckDone &&
         !c._websiteCheckAsked
-      )
-        return _log(
-          "website_check_unasked",
-          `SALES STEP [website_check]: MUST ask "Just out of curiosity — have you had a chance to check out our website and seen the plans or pricing?" before collecting name/phone/email.`,
+      ) {
+        return _logAndReturn(
+          "website_check_not_asked",
+          `SALES STEP [website_check]: You MUST ask: "Just out of curiosity — have you had a chance to check out our website and seen the plans or pricing?" Do NOT proceed to collect name, phone, or email until this question is asked and answered.`,
         );
+      }
+
       if (
         c.leadInterest &&
         c._websiteCheckRequired &&
         c._websiteCheckAsked &&
         !c._websiteCheckDone
-      )
-        return _log(
-          "website_check_pending",
-          `SALES STEP [website_check_pending]: Already asked. DO NOT ask again. Wait for answer.`,
+      ) {
+        return _logAndReturn(
+          "website_check_asked_awaiting_answer",
+          `SALES STEP [website_check_pending]: Website check was already asked. DO NOT ask again. Wait for customer to answer.`,
         );
+      }
 
-      if (salesStep === null && c.leadInterest && c._websiteCheckDone)
+      if (salesStep === null && c.leadInterest && c._websiteCheckDone) {
         initSalesStepMachine();
-      if (!salesStep || salesStep === "done") return _log("done", null);
+      }
+
+      if (!salesStep || salesStep === "done") {
+        return _logAndReturn("null_no_salesstep", null);
+      }
 
       const name = c._firstName || c.preferredName || "";
+
       switch (salesStep) {
         case "firstName": {
           if (c.preferredName || (c.name && c.name.trim().length >= 2)) {
-            const d = c.preferredName || c.name.trim().split(/\s+/)[0];
-            const INV = new Set([
+            const derivedFirst =
+              c.preferredName || c.name.trim().split(/\s+/)[0];
+            const INVALID = new Set([
               "yes",
               "yeah",
               "no",
@@ -10148,18 +10163,23 @@ export function setupRealtimeVoice(io, deps) {
               "hi",
               "hello",
             ]);
-            if (d && d.length >= 2 && !INV.has(d.toLowerCase())) {
-              session.collected._firstName = d;
+            if (
+              derivedFirst &&
+              derivedFirst.length >= 2 &&
+              !INVALID.has(derivedFirst.toLowerCase())
+            ) {
+              session.collected._firstName = derivedFirst;
               sessions.set(session.id, session);
               advanceSalesStep("firstName");
               return buildSalesStepHint();
             }
           }
-          return _log(
-            "firstName",
-            `[FLOW:sales][STEP:firstName][STATUS:pending] Ask ONLY for first name.`,
+          return _logAndReturn(
+            "step_firstName",
+            `[FLOW: sales][STEP: firstName][STATUS: pending] Ask ONLY for the customer's first name. Say something like "Could I start with your first name?" Say NOTHING else.`,
           );
         }
+
         case "lastName": {
           if (
             !c._lastName &&
@@ -10167,8 +10187,8 @@ export function setupRealtimeVoice(io, deps) {
             c.name.trim().split(/\s+/).length >= 2
           ) {
             const parts = c.name.trim().split(/\s+/);
-            const d = parts[parts.length - 1];
-            const INV = new Set([
+            const derivedLast = parts[parts.length - 1];
+            const INVALID = new Set([
               "yes",
               "yeah",
               "no",
@@ -10181,89 +10201,185 @@ export function setupRealtimeVoice(io, deps) {
               "a",
               "an",
             ]);
-            if (d && d.length >= 2 && !INV.has(d.toLowerCase())) {
-              session.collected._lastName = d;
+            if (
+              derivedLast &&
+              derivedLast.length >= 2 &&
+              !INVALID.has(derivedLast.toLowerCase())
+            ) {
+              session.collected._lastName = derivedLast;
               sessions.set(session.id, session);
               advanceSalesStep("lastName");
               return buildSalesStepHint();
             }
           }
-          return _log(
-            "lastName",
-            `[FLOW:sales][STEP:lastName][STATUS:pending] Have first name (${c._firstName || "?"}). Ask ONLY for last name.`,
+          return _logAndReturn(
+            "step_lastName",
+            `[FLOW: sales][STEP: lastName][STATUS: pending] You have their first name (${c._firstName || "collected"}). Ask ONLY for their last name.`,
           );
         }
+
         case "phone":
-          return _log(
-            "phone",
-            `[FLOW:sales][STEP:phone][STATUS:pending] Have name (${name}). Ask ONLY for mobile number.`,
+          return _logAndReturn(
+            "step_phone",
+            `[FLOW: sales][STEP: phone][STATUS: pending] You have their name (${name}). Ask ONLY for their mobile phone number.`,
           );
+
         case "email": {
           if (c._emailStepComplete) {
+            dbg(
+              "sales",
+              "buildSalesStepHint_email",
+              "already_confirmed_skipping",
+              {
+                email: c.email,
+                _emailStepComplete: true,
+              },
+            );
             advanceSalesStep("email");
             return buildSalesStepHint();
           }
-          if (emailConfirmationAsked && pendingEmailConfirmation)
-            return _log(
-              "email_wait",
-              `[FLOW:sales][STEP:email][STATUS:awaiting_confirmation] Already read back "${pendingEmailConfirmation.parsed}". WAIT for YES or NO. Do NOT re-ask.`,
+
+          if (emailConfirmationAsked && pendingEmailConfirmation) {
+            return _logAndReturn(
+              "step_email_awaiting_confirmation",
+              `[FLOW: sales][STEP: email][STATUS: awaiting_confirmation] You already read the email back as "${pendingEmailConfirmation.parsed}". WAIT for the user to say YES or NO. Do NOT ask for the email again. Do NOT re-read it. Just wait.`,
             );
-          return _log(
-            "email_ask",
-            `[FLOW:sales][STEP:email][STATUS:pending] Ask for email letter by letter. Read back letter-by-letter. Ask "Is that correct?" Only proceed after YES.`,
+          }
+
+          return _logAndReturn(
+            "step_email_ask",
+            `[FLOW: sales][STEP: email][STATUS: pending] Ask for email: "Could I grab your email address? Please spell it letter by letter — for at the rate say 'at', for dots say 'dot'. Example: john dot doe at gmail dot com." Then read it back letter-by-letter and ask "Is that correct?" Only proceed after user confirms YES.`,
           );
         }
+
+        case "confirmTicket": {
+          const fullName =
+            [c._firstName, c._lastName].filter(Boolean).join(" ") ||
+            c.name ||
+            c.preferredName ||
+            "N/A";
+          return _logAndReturn(
+            "step_confirmTicket",
+            `[FLOW: sales][STEP: confirmTicket][STATUS: pending] ALL details have been collected. Now you MUST summarise and ask for confirmation before creating the ticket.
+Say something like: "Alright, so just to confirm — I have your name as ${fullName}, phone number ${c.phone || "on file"}, email ${c.email || "on file"}, and you're interested in the ${c.leadInterest || "selected plan"}${c.address ? " at " + c.address : ""}. Shall I go ahead and submit this for you?"
+WAIT for the customer to say YES or NO. Do NOT call create_ticket until they confirm.`,
+          );
+        }
+
         case "createTicket": {
-          const miss = [];
-          if (!c._firstName && !c.name && !c.preferredName) miss.push("name");
-          if (!c.phone) miss.push("phone");
-          if (!c.email) miss.push("email");
-          if (!c.leadInterest) miss.push("plan");
-          if (miss.length > 0) {
+          const missing = [];
+          if (!c._firstName && !c.name && !c.preferredName)
+            missing.push("name");
+          if (!c.phone) missing.push("phone");
+          if (!c.email) missing.push("email");
+          if (!c.leadInterest) missing.push("selected plan");
+
+          if (missing.length > 0) {
             if (!c.phone) salesStep = "phone";
             else if (!c.email || !c._emailStepComplete) salesStep = "email";
-            autoTicketScheduled = false;
             return buildSalesStepHint();
           }
-          return _log(
-            "createTicket",
-            `[FLOW:sales][STEP:create_ticket][STATUS:execute]\n` +
-              `Name: ${c._firstName || ""} ${c._lastName || ""} | Phone: ${c.phone} | Email: ${c.email} | Plan: ${c.leadInterest}\n` +
-              `Say "Perfect, just bear with me a moment while I get that submitted for you..." ` +
-              `then IMMEDIATELY call create_ticket. Do NOT ask any more questions.`,
+
+          return _logAndReturn(
+            "step_createTicket_execute",
+            `[FLOW: sales][STEP: create_ticket][STATUS: execute] Customer has CONFIRMED they want to proceed. ALL required details collected:
+- Name: ${c._firstName || ""} ${c._lastName || ""} / ${c.name || ""}
+- Phone: ${c.phone}
+- Email: ${c.email}
+- Plan: ${c.leadInterest}
+- Address: ${c.address || "provided earlier"}
+
+STEP 1: Call extract_call_fields to save any recently collected details.
+STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user first. CALL THE TOOLS.`,
           );
         }
+
         default:
-          return _log("unknown", null);
+          return _logAndReturn("unknown_step", null);
       }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  SCHEDULE RESPONSE CREATE
-    // ═══════════════════════════════════════════════════════════════════════
+    // ─── Ticket confirmation detection helpers ─────────────────────
+    function detectTicketConfirmation(text) {
+      if (!text) return null;
+      const lower = text.toLowerCase().trim();
+      if (
+        /\b(yes|yeah|yep|yup|sure|go ahead|go for it|submit|do it|please|absolutely|definitely|correct|confirmed|confirm|that's right|sounds good|perfect|let's do it|proceed)\b/.test(
+          lower,
+        )
+      )
+        return "yes";
+      if (
+        /\b(no|nope|wait|hold on|cancel|stop|don't|not yet|change|actually|hang on|let me think)\b/.test(
+          lower,
+        )
+      )
+        return "no";
+      return null;
+    }
+
+    function detectTicketConfirmationQuestion(text) {
+      if (!text) return false;
+      const lower = text.toLowerCase();
+      return (
+        (lower.includes("shall i") &&
+          (lower.includes("submit") ||
+            lower.includes("go ahead") ||
+            lower.includes("create"))) ||
+        (lower.includes("want me to") &&
+          (lower.includes("submit") ||
+            lower.includes("go ahead") ||
+            lower.includes("create"))) ||
+        (lower.includes("ready to") && lower.includes("submit")) ||
+        (lower.includes("go ahead and") &&
+          (lower.includes("submit") ||
+            lower.includes("create") ||
+            lower.includes("raise"))) ||
+        (lower.includes("should i") &&
+          (lower.includes("submit") ||
+            lower.includes("create") ||
+            lower.includes("raise")))
+      );
+    }
+
+    // ─── Raw phone buffer ──────────────────────────────────────────
+    let rawPhoneBuffer = null;
+    let rawPhoneBufferTimestamp = 0;
+    let awaitingPhoneVerification = false;
+
+    // ─── Single pending response.create gate ──────────────────────
+    let responseCreatePending = false;
+
     function scheduleResponseCreate(
       contextHint = null,
       delayMs = 0,
-      force = false,
+      forceNow = false,
     ) {
-      if (isResponseActive && !force) {
+      if (isResponseActive && !forceNow) {
         if (contextHint) pendingPostDoneHint = contextHint;
         pendingPostDoneCreate = true;
         return;
       }
-      if (responseCreatePending && !force) return;
+      if (responseCreatePending && !forceNow) {
+        return;
+      }
       responseCreatePending = true;
+
       const send = () => {
         responseCreatePending = false;
         if (openaiWs?.readyState !== WebSocket.OPEN) return;
-        if (isResponseActive && !force) {
+        if (isResponseActive && !forceNow) {
           pendingPostDoneCreate = true;
           if (contextHint) pendingPostDoneHint = contextHint;
           return;
         }
+
         const salesHint = buildSalesStepHint();
-        const combined = [contextHint, salesHint].filter(Boolean).join("\n\n");
-        if (combined)
+        const combinedHint = [contextHint, salesHint]
+          .filter(Boolean)
+          .join("\n\n");
+
+        if (combinedHint) {
           openaiWs.send(
             JSON.stringify({
               type: "conversation.item.create",
@@ -10271,43 +10387,59 @@ export function setupRealtimeVoice(io, deps) {
                 type: "message",
                 role: "user",
                 content: [
-                  { type: "input_text", text: `[SYSTEM_CONTEXT]: ${combined}` },
+                  {
+                    type: "input_text",
+                    text: `[SYSTEM_CONTEXT]: ${combinedHint}`,
+                  },
                 ],
               },
             }),
           );
-        console.log("📤 response.create");
+        }
+
+        console.log("📤 Sending response.create to OpenAI");
         openaiWs.send(JSON.stringify({ type: "response.create" }));
         TimerManager.startWatchdog();
       };
+
       if (delayMs > 0) setTimeout(send, delayMs);
       else send();
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  DETECTION HELPERS
-    // ═══════════════════════════════════════════════════════════════════════
+    // ─── Detection helpers ─────────────────────────────────────────
     function detectPhoneVerificationRequest(text) {
       if (!text) return false;
-      const l = text.toLowerCase(),
-        c = session.collected || {};
-      if (!c._emailVerifiedCustomerId || c._phoneVerified) return false;
+      const lower = text.toLowerCase();
+      const c = session.collected || {};
+      if (!c._emailVerifiedCustomerId) return false;
+      if (c._phoneVerified) return false;
       return (
-        l.includes("phone") ||
-        l.includes("contact number") ||
-        l.includes("mobile number") ||
-        l.includes("number on the account")
+        lower.includes("phone") ||
+        lower.includes("contact number") ||
+        lower.includes("mobile number") ||
+        lower.includes("number on the account")
       );
     }
+
     function mapOrdinalNetworkChoice(text) {
       const t = (text || "").toLowerCase().trim();
       if (/\bnbn\b/.test(t) || /\b(opti\s*comm|opticomm)\b/.test(t))
         return null;
-      if (/\b(first|1st|one|1|option\s*1|the\s*first)\b/.test(t)) return "NBN";
-      if (/\b(second|2nd|two|2|option\s*2|the\s*second|to)\b/.test(t))
+      if (
+        /\b(first|1st|one|1|option\s*1|option\s*one|number\s*1|the\s*first)\b/.test(
+          t,
+        )
+      )
+        return "NBN";
+      if (
+        /\b(second|2nd|two|2|option\s*2|option\s*two|number\s*2|the\s*second|to)\b/.test(
+          t,
+        )
+      )
         return "Opticomm";
       return null;
     }
+
     function wasLastMessageNetworkQuestion() {
       const msgs = session.messages || [];
       for (let i = msgs.length - 1; i >= 0; i--) {
@@ -10315,95 +10447,119 @@ export function setupRealtimeVoice(io, deps) {
           const t = (msgs[i].content || "").toLowerCase();
           return (
             (t.includes("nbn") && t.includes("opticomm")) ||
-            t.includes("nbn or opticomm")
+            t.includes("nbn or opticomm") ||
+            t.includes("which one would you prefer")
           );
         }
         if (msgs[i].role === "user") break;
       }
       return false;
     }
+
     function detectPlanPresentation(text) {
       if (!text) return false;
-      const l = text.toLowerCase();
+      const lower = text.toLowerCase();
       return (
-        (l.includes("mbps") && (l.includes("$") || l.includes("per month"))) ||
-        l.includes("catches your eye") ||
-        l.includes("here are the plans")
+        (lower.includes("mbps") &&
+          (lower.includes("$") ||
+            lower.includes("per month") ||
+            lower.includes("/m"))) ||
+        (lower.includes("plan") && lower.includes("available")) ||
+        lower.includes("here are the plans") ||
+        lower.includes("which of those plans") ||
+        lower.includes("catches your eye")
       );
     }
+
     function detectWebsiteCheckQuestion(text) {
       if (!text) return false;
-      const l = text.toLowerCase();
+      const lower = text.toLowerCase();
       return (
-        l.includes("check out our website") ||
-        l.includes("visited our website") ||
-        l.includes("had a chance to check out") ||
-        l.includes("seen the plans or pricing") ||
-        (l.includes("website") &&
-          (l.includes("plans") || l.includes("pricing")))
+        lower.includes("check out our website") ||
+        lower.includes("visited our website") ||
+        lower.includes("had a chance to check out") ||
+        lower.includes("seen the plans or pricing") ||
+        lower.includes("look at the plans or pricing") ||
+        (lower.includes("website") &&
+          (lower.includes("plans") || lower.includes("pricing")))
       );
     }
+
     function detectWebsiteCheckAnswer(text) {
       if (!text) return false;
-      const l = text.toLowerCase().trim();
+      const lower = text.toLowerCase().trim();
       if (
         /\b(yes|yeah|yep|yup|i have|i did|already|looked|checked|seen|saw|visited)\b/.test(
-          l,
+          lower,
         )
       )
         return true;
-      if (/\b(no|nope|not yet|haven't|didn't|i haven't|i didn't)\b/.test(l))
+      if (
+        /\b(no|nope|not yet|haven't|didn't|i haven't|i didn't|no i haven't)\b/.test(
+          lower,
+        )
+      )
         return true;
       return false;
     }
+
     function wasLastAssistantMessageWebsiteCheck() {
       const msgs = session.messages || [];
       for (let i = msgs.length - 1; i >= 0; i--) {
-        if (msgs[i].role === "assistant")
+        if (msgs[i].role === "assistant") {
           return detectWebsiteCheckQuestion(msgs[i].content || "");
+        }
         if (msgs[i].role === "user") break;
       }
       return false;
     }
+
     function detectEmailReadbackQuestion(text) {
       if (!text) return false;
-      const l = text.toLowerCase();
+      const lower = text.toLowerCase();
       return (
-        (l.includes("is that correct") ||
-          l.includes("correct?") ||
-          l.includes("is that right")) &&
-        l.includes("at") &&
-        (l.includes("dot") || l.includes("."))
+        (lower.includes("is that correct") ||
+          lower.includes("correct?") ||
+          lower.includes("is that right") ||
+          lower.includes("shall i use")) &&
+        lower.includes("at") &&
+        (lower.includes("dot") || lower.includes("."))
       );
     }
+
     function detectEmailConfirmation(text) {
       if (!text) return null;
-      const l = text.toLowerCase().trim();
+      const lower = text.toLowerCase().trim();
       if (
-        /\b(yes|yeah|yep|yup|correct|that's right|that is correct|perfect|looks good|confirmed|confirm)\b/.test(
-          l,
+        /\b(yes|yeah|yep|yup|correct|that's right|that is correct|that's correct|perfect|looks good|confirmed|confirm)\b/.test(
+          lower,
         )
       )
         return "yes";
       if (
-        /\b(no|nope|wrong|incorrect|that's wrong|change it|try again|re-spell|different)\b/.test(
-          l,
+        /\b(no|nope|wrong|incorrect|that's wrong|that is wrong|change it|try again|re-spell|different)\b/.test(
+          lower,
         )
       )
         return "no";
       return null;
     }
+
     function detectSalesStepAnswer(text) {
       if (
         !salesStep ||
         salesStep === "done" ||
         salesStep === "createTicket" ||
-        salesStep === "email"
+        salesStep === "confirmTicket"
       )
         return;
+
       const c = session.collected || {};
-      if (!c._websiteCheckDone) return;
-      const INV = new Set([
+      if (!c._websiteCheckDone) {
+        return;
+      }
+
+      const INVALID_NAME_WORDS = new Set([
         "yes",
         "yeah",
         "yep",
@@ -10430,52 +10586,63 @@ export function setupRealtimeVoice(io, deps) {
         "thank",
         "thanks",
       ]);
+
       if (salesStep === "firstName") {
-        const f = text
-          .trim()
-          .split(/\s+/)[0]
-          ?.replace(/[^a-zA-Z'-]/g, "");
-        if (f && f.length >= 2 && !INV.has(f.toLowerCase())) {
-          session.collected._firstName = f;
+        const words = text.trim().split(/\s+/);
+        const firstName = words[0]?.replace(/[^a-zA-Z'-]/g, "");
+        if (
+          firstName &&
+          firstName.length >= 2 &&
+          !INVALID_NAME_WORDS.has(firstName.toLowerCase())
+        ) {
+          session.collected._firstName = firstName;
           sessions.set(session.id, session);
           advanceSalesStep("firstName");
         }
       } else if (salesStep === "lastName") {
         const words = text.trim().split(/\s+/);
-        const l = words[words.length - 1]?.replace(/[^a-zA-Z'-]/g, "");
-        if (l && l.length >= 2 && !INV.has(l.toLowerCase())) {
-          session.collected._lastName = l;
-          session.collected.name = `${c._firstName || ""} ${l}`.trim();
-          session.collected.preferredName = c._firstName || l;
+        const lastName = words[words.length - 1]?.replace(/[^a-zA-Z'-]/g, "");
+        if (
+          lastName &&
+          lastName.length >= 2 &&
+          !INVALID_NAME_WORDS.has(lastName.toLowerCase())
+        ) {
+          session.collected._lastName = lastName;
+          session.collected.name = `${c._firstName || ""} ${lastName}`.trim();
+          session.collected.preferredName = c._firstName || lastName;
           sessions.set(session.id, session);
           advanceSalesStep("lastName");
         }
       } else if (salesStep === "phone") {
-        const d = text.replace(/\D/g, "");
-        if (d.length >= 8) {
-          session.collected.phone = d;
+        const digits = text.replace(/\D/g, "");
+        if (digits.length >= 8) {
+          session.collected.phone = digits;
           sessions.set(session.id, session);
           advanceSalesStep("phone");
         }
       }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  ELEVENLABS — persistent connection with re-prime buffering
-    // ═══════════════════════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════════
+    //  ElevenLabs — persistent single connection
+    // ═══════════════════════════════════════════════════════════════
     function openElevenLabsStream(force = false) {
       if (
         !force &&
         elevenLabsWs &&
         (elevenLabsWs.readyState === WebSocket.OPEN ||
           elevenLabsWs.readyState === WebSocket.CONNECTING)
-      )
+      ) {
         return;
+      }
+
       closeElevenLabsWs();
+
       const wsUrl = `wss://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}/stream-input?model_id=eleven_flash_v2_5&output_format=pcm_16000`;
       const elWs = new WebSocket(wsUrl);
+
       elWs.on("open", () => {
-        console.log(`✅ [EL] Connected`);
+        console.log(`✅ [EL] ElevenLabs WebSocket connected`);
         elWs.send(
           JSON.stringify({
             text: " ",
@@ -10487,90 +10654,70 @@ export function setupRealtimeVoice(io, deps) {
             xi_api_key: ELEVENLABS_API_KEY,
           }),
         );
+
         if (elevenLabsWs === elWs) {
           elevenLabsReady = true;
-          elevenLabsRepriming = false;
-          console.log(
-            `✅ [EL] Ready, flushing ${textBuffer.length} buffered items`,
-          );
+          elevenLabsInitialized = true;
           if (textBuffer.length > 0) {
-            for (const t of textBuffer) sendTextToElevenLabs(t);
+            for (const text of textBuffer) sendTextToElevenLabs(text);
             textBuffer = [];
           }
         }
       });
+
       elWs.on("message", (data) => {
         try {
           const msg = JSON.parse(data.toString());
-          if (msg.audio)
+          if (msg.audio) {
             socket.emit("audio_chunk_pcm", {
               sampleRate: PCM_SAMPLE_RATE,
               audio: msg.audio,
             });
-          if (
-            msg.isFinal === true ||
-            msg.is_final === true ||
-            msg.final === true
-          ) {
+          }
+          const isFinal =
+            msg.isFinal === true || msg.is_final === true || msg.final === true;
+          if (isFinal) {
             safeSetElevenLabsStreaming(false);
             socket.emit("audio_stream_complete");
           }
-        } catch (e) {
-          console.error(`⚠️ [EL] parse:`, e.message);
+        } catch (err) {
+          console.error(`⚠️ [EL] Message parse error:`, err.message);
         }
       });
+
       elWs.on("error", (err) => {
-        console.warn(`⚠️ [EL] error: ${err.message}`);
+        console.warn(`⚠️ [EL] WS error: ${err.message}`);
         elevenLabsStreaming = false;
         elevenLabsReady = false;
-        elevenLabsRepriming = false;
-        if (elevenLabsWs === elWs)
+        if (elevenLabsWs === elWs) {
           setTimeout(() => {
             if (elevenLabsWs === elWs || !elevenLabsWs)
               openElevenLabsStream(true);
           }, 500);
+        }
       });
+
       elWs.on("close", (code) => {
         if (elevenLabsWs === elWs) {
           elevenLabsReady = false;
           elevenLabsStreaming = false;
-          elevenLabsRepriming = false;
           setTimeout(() => {
             if (!elevenLabsReady && elevenLabsWs === elWs)
               openElevenLabsStream(true);
           }, 200);
         }
       });
+
       elevenLabsWs = elWs;
     }
 
-    // ─── FIX ISSUE 2: interruptElevenLabsStream ──────────────────────────
-    // Problem: After an interrupt, interruptElevenLabsStream() re-primed the EL
-    // stream and set elevenLabsReady=true synchronously. But the new response's
-    // text.delta events could arrive within the same JS tick, before EL has
-    // actually processed the re-prime frame. Those deltas were buffered but the
-    // buffer flush never happened because elevenLabsReady was already true.
-    //
-    // Fix: Set elevenLabsRepriming=true DURING re-prime. sendTextToElevenLabs()
-    // buffers text when elevenLabsRepriming=true. After 80ms (enough for EL to
-    // process the frame), mark ready and flush the buffer.
     function interruptElevenLabsStream() {
       safeSetElevenLabsStreaming(false);
-      textBuffer = []; // discard any in-flight text from cancelled response
-
+      textBuffer = [];
       if (!elevenLabsWs || elevenLabsWs.readyState !== WebSocket.OPEN) {
-        console.warn(`[EL] Not open during interrupt — reconnecting`);
-        elevenLabsReady = false;
-        elevenLabsRepriming = false;
         openElevenLabsStream(true);
         return;
       }
-
-      // Mark repriming so any text arriving during this window is buffered
-      elevenLabsReady = false;
-      elevenLabsRepriming = true;
-      console.log(`🔄 [EL] Interrupt: sending re-prime frame`);
-
       try {
         elevenLabsWs.send(
           JSON.stringify({
@@ -10583,24 +10730,9 @@ export function setupRealtimeVoice(io, deps) {
             xi_api_key: ELEVENLABS_API_KEY,
           }),
         );
-        // After 80ms EL has processed the re-prime; mark ready and flush buffered text
-        setTimeout(() => {
-          if (elevenLabsRepriming) {
-            elevenLabsRepriming = false;
-            elevenLabsReady = true;
-            console.log(
-              `✅ [EL] Re-prime complete. Flushing ${textBuffer.length} buffered items`,
-            );
-            if (textBuffer.length > 0) {
-              const toFlush = [...textBuffer];
-              textBuffer = [];
-              for (const t of toFlush) sendTextToElevenLabs(t);
-            }
-          }
-        }, 80);
+        elevenLabsReady = true;
+        elevenLabsStreaming = false;
       } catch (e) {
-        console.warn("[EL] re-prime failed:", e.message);
-        elevenLabsRepriming = false;
         elevenLabsReady = false;
         openElevenLabsStream(true);
       }
@@ -10608,13 +10740,11 @@ export function setupRealtimeVoice(io, deps) {
 
     function sendTextToElevenLabs(text) {
       if (!text) return;
-      // FIX ISSUE 2: Buffer if not ready OR currently repriming
-      if (
-        !elevenLabsWs ||
-        elevenLabsWs.readyState !== WebSocket.OPEN ||
-        !elevenLabsReady ||
-        elevenLabsRepriming
-      ) {
+      if (!elevenLabsWs || elevenLabsWs.readyState !== WebSocket.OPEN) {
+        textBuffer.push(text);
+        return;
+      }
+      if (!elevenLabsReady) {
         textBuffer.push(text);
         return;
       }
@@ -10622,33 +10752,29 @@ export function setupRealtimeVoice(io, deps) {
     }
 
     function flushElevenLabsStream() {
-      if (
-        elevenLabsWs?.readyState === WebSocket.OPEN &&
-        elevenLabsReady &&
-        !elevenLabsRepriming
-      )
+      if (elevenLabsWs?.readyState === WebSocket.OPEN && elevenLabsReady) {
         elevenLabsWs.send(JSON.stringify({ text: " ", flush: true }));
+      }
     }
 
     function closeElevenLabsWs() {
       if (elevenLabsWs) {
         elevenLabsStreaming = false;
         elevenLabsReady = false;
-        elevenLabsRepriming = false;
         try {
           if (elevenLabsWs.readyState === WebSocket.CONNECTING)
             elevenLabsWs.terminate();
           else if (elevenLabsWs.readyState === WebSocket.OPEN)
             elevenLabsWs.close(1000);
-        } catch (_) {}
+        } catch (err) {
+          /* ignore */
+        }
         elevenLabsWs = null;
         textBuffer = [];
       }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  OPENAI REALTIME CONNECTION
-    // ═══════════════════════════════════════════════════════════════════════
+    // ═══════════════ OpenAI Realtime API ════════════════
     function connectOpenAI() {
       return new Promise((resolve, reject) => {
         openaiWs = new WebSocket(
@@ -10660,15 +10786,31 @@ export function setupRealtimeVoice(io, deps) {
             },
           },
         );
+
         openaiWs.on("open", () => {
-          console.log("✅ [WS-1] OpenAI connected");
+          console.log("✅ [WS-1] OpenAI Realtime connected");
           const instructions =
             SYSTEM_PROMPT +
             "\n\nCRITICAL: Always respond in English only." +
-            "\n\nFIELD COLLECTION: ONE field per turn. Wait for answer before proceeding." +
-            "\n\nPACKAGE RULE: Present ALL options. NEVER auto-select. Ask 'Which catches your eye?' and WAIT." +
-            "\n\nEMAIL FLOW: Spell letter by letter → read back letter-by-letter → 'Is that correct?' → YES → call extract_call_fields ONCE → do NOT call it again with same email." +
-            "\n\nAUTO-TICKET: When you receive [SYSTEM_CONTEXT] saying all details are collected, say something warm then IMMEDIATELY call create_ticket without asking any further questions.";
+            "\n\nFIELD COLLECTION RULE: Collect ONE field per turn. Wait for answer before moving on." +
+            "\n\nPACKAGE PRESENTATION RULE (CRITICAL):" +
+            "\n- When presenting plans/packages to the customer, present ALL available options clearly." +
+            "\n- ABSOLUTELY DO NOT auto-select or assume which plan the customer wants." +
+            "\n- After presenting packages, ask explicitly: 'Which of these plans catches your eye?'" +
+            "\n- WAIT for the customer to explicitly say WHICH PLAN they choose." +
+            "\n\nTICKET CONFIRMATION RULE (CRITICAL - ALL FLOWS):" +
+            "\n- Before calling create_ticket, you MUST summarise ALL collected details and ask: 'Shall I go ahead and submit this for you?'" +
+            "\n- WAIT for the customer to explicitly say YES before calling create_ticket." +
+            "\n- If customer says NO or wants to change something, ask what they'd like to change." +
+            "\n- This applies to ALL flows: sales, support, accounts, and moving/relocating." +
+            "\n- NEVER call create_ticket without explicit customer confirmation." +
+            "\n\nEMAIL COLLECTION FLOW:" +
+            "\n1. Ask for email spelling letter by letter." +
+            "\n2. Parse and read back letter-by-letter: 'So that's s-h-a-u-n at b-e-l-e dot a-i — is that right?'" +
+            "\n3. Wait for YES or NO. If YES → call extract_call_fields with the email ONCE. If NO → ask to re-spell." +
+            "\n4. After extract_call_fields confirms email saved, do NOT call it again with the same email." +
+            "\n5. NEVER use NATO names when reading back. Spell s-h-a-u-n not sierra-hotel-alpha-uniform-november.";
+
           openaiWs.send(
             JSON.stringify({
               type: "session.update",
@@ -10688,21 +10830,24 @@ export function setupRealtimeVoice(io, deps) {
               },
             }),
           );
+
           openElevenLabsStream();
         });
+
         let resolved = false;
         openaiWs.on("message", (raw) => {
           try {
-            const d = JSON.parse(raw.toString());
+            const data = JSON.parse(raw.toString());
             if (!resolved) {
               resolved = true;
               resolve();
             }
-            handleOpenAIEvent(d);
+            handleOpenAIEvent(data);
           } catch (e) {
-            console.error("[WS-1] parse:", e.message);
+            console.error("[WS-1] parse error:", e.message);
           }
         });
+
         openaiWs.on("error", (err) => {
           if (!resolved) {
             resolved = true;
@@ -10716,15 +10861,15 @@ export function setupRealtimeVoice(io, deps) {
       });
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  OPENAI EVENT HANDLER
-    // ═══════════════════════════════════════════════════════════════════════
+    // ═══════════════ OpenAI Event Handler ════════════════
     let lastEventLog = "";
+
     function handleOpenAIEvent(event) {
       if (event.type !== lastEventLog) {
-        console.log(`📡 ${event.type}`);
+        console.log(`📡 [WS-1] Event: ${event.type}`);
         lastEventLog = event.type;
       }
+
       switch (event.type) {
         case "session.created":
         case "session.updated":
@@ -10737,25 +10882,31 @@ export function setupRealtimeVoice(io, deps) {
             session.finalLock ||
             finalMessageLock
           ) {
-            if (openaiWs?.readyState === WebSocket.OPEN)
+            if (openaiWs?.readyState === WebSocket.OPEN) {
               openaiWs.send(
                 JSON.stringify({ type: "input_audio_buffer.clear" }),
               );
+            }
             break;
           }
-          console.log(`🎙️ INTERRUPT`);
+
+          console.log(`🎙️ USER INTERRUPTED -> Stopping AI Voice`);
           socket.emit("status", "user_speaking");
           socket.emit("interrupt");
           socket.emit("audio_interrupt");
+
           TimerManager.resetSilence();
           TimerManager.clearWatchdog();
+
           if (isResponseActive) {
             cancelPending = true;
             openaiWs.send(JSON.stringify({ type: "response.cancel" }));
           }
-          // FIX ISSUE 2: interrupt now uses re-prime buffering
+
           interruptElevenLabsStream();
+
           assistantTextBuffer = "";
+          lastTtsText = "";
           assistantSpeaking = false;
           lastResponseWasPackage = false;
           emptyResponseCount = 0;
@@ -10771,21 +10922,37 @@ export function setupRealtimeVoice(io, deps) {
 
         case "conversation.item.input_audio_transcription.completed": {
           if (!event.transcript) break;
+
           const cleaned = normalizeText(event.transcript);
           if (!cleaned) break;
-          console.log(`📊 TRANSCRIPT: "${cleaned}"`);
+
+          console.log(`📊 [TRANSCRIPT] "${cleaned}"`);
+
           TimerManager.clearWatchdog();
-          if (pendingFunctionCalls > 0 || finalMessageLock || session.finalLock)
-            break;
-          if (assistantSpeaking) assistantSpeaking = false;
+
+          const looksLikeEmail = /\b[^\s@]+@[^\s@]+\.[^\s@]+\b/i.test(cleaned);
+          const digitCount = (cleaned.match(/\d/g) || []).length;
+          const looksLikePhone = digitCount >= 6;
+          const looksLikeSpelling = looksLikeVoiceEmailSpelling(cleaned);
+          const isPurePhoneNumber =
+            looksLikePhone && !looksLikeEmail && !looksLikeSpelling;
 
           if (
-            awaitingPhoneVerification &&
-            (cleaned.match(/\d/g) || []).length >= 6
+            pendingFunctionCalls > 0 ||
+            finalMessageLock ||
+            session.finalLock
           ) {
-            const d = cleaned.replace(/\D/g, "");
-            if (d.length >= 6) {
-              rawPhoneBuffer = d;
+            break;
+          }
+
+          if (assistantSpeaking) {
+            assistantSpeaking = false;
+          }
+
+          if (awaitingPhoneVerification && looksLikePhone) {
+            const digits = cleaned.replace(/\D/g, "");
+            if (digits.length >= 6) {
+              rawPhoneBuffer = digits;
               rawPhoneBufferTimestamp = Date.now();
             }
           }
@@ -10793,57 +10960,149 @@ export function setupRealtimeVoice(io, deps) {
           console.log(`👤 User: "${cleaned}"`);
           socket.emit("user_transcript", cleaned);
 
-          // ── Email confirmation gate ─────────────────────────────────────
+          // ══════════════════════════════════════════════════════════
+          // TICKET CONFIRMATION CHECK (ALL FLOWS) — runs FIRST
+          // ══════════════════════════════════════════════════════════
+          if (pendingTicketConfirmation) {
+            const ticketConfResult = detectTicketConfirmation(cleaned);
+            dbg(
+              session.collected?.intent || "unknown",
+              "ticket_confirmation_check",
+              ticketConfResult || "not_clear",
+              {
+                cleaned: cleaned.substring(0, 60),
+              },
+            );
+
+            if (ticketConfResult === "yes") {
+              session.collected._ticketConfirmed = true;
+              pendingTicketConfirmation = false;
+              sessions.set(session.id, session);
+              dbg("ticket", "ticket_confirmed_YES", "proceeding", {});
+
+              if (salesStep === "confirmTicket") {
+                advanceSalesStep("confirmTicket");
+              }
+
+              session.messages.push({ role: "user", content: cleaned });
+              sessions.set(session.id, session);
+              TimerManager.resetSilence();
+
+              if (pendingTicketArgs) {
+                // Re-trigger create_ticket via LLM
+                const hint = `Customer has CONFIRMED ticket creation. Call create_ticket NOW immediately. Do NOT ask anything else.`;
+                scheduleResponseCreate(hint);
+              } else {
+                const nextHint =
+                  buildSalesStepHint() ||
+                  "Customer confirmed. Call create_ticket NOW.";
+                scheduleResponseCreate(nextHint);
+              }
+              break;
+            } else if (ticketConfResult === "no") {
+              pendingTicketConfirmation = false;
+              pendingTicketArgs = null;
+              delete session.collected._ticketConfirmed;
+              sessions.set(session.id, session);
+              dbg("ticket", "ticket_confirmed_NO", "asking_what_to_change", {});
+
+              session.messages.push({ role: "user", content: cleaned });
+              sessions.set(session.id, session);
+              TimerManager.resetSilence();
+              scheduleResponseCreate(
+                `Customer said NO to ticket creation. Ask warmly: "No worries at all! What would you like to change?" Wait for their answer.`,
+              );
+              break;
+            }
+            // Not a clear yes/no — fall through
+          }
+
+          // ══════════════════════════════════════════════════════════
+          // EMAIL CONFIRMATION CHECK
+          // ══════════════════════════════════════════════════════════
           if (
             salesStep === "email" &&
             emailConfirmationAsked &&
             pendingEmailConfirmation
           ) {
-            const conf = detectEmailConfirmation(cleaned);
-            dbg("sales", "email_conf_check", conf || "ambiguous", {
-              cleaned: cleaned.substring(0, 50),
-              pending: pendingEmailConfirmation.parsed,
-            });
-            if (conf === "yes") {
-              const confirmed = pendingEmailConfirmation.parsed;
-              session.collected.email = confirmed;
+            const confirmationResult = detectEmailConfirmation(cleaned);
+            dbg(
+              "sales",
+              "email_confirmation_check",
+              confirmationResult || "not_a_confirmation",
+              {
+                cleaned: cleaned.substring(0, 60),
+                pendingEmail: pendingEmailConfirmation.parsed,
+              },
+            );
+
+            if (confirmationResult === "yes") {
+              const confirmationAgeMs = emailConfirmationAskedAt
+                ? Date.now() - emailConfirmationAskedAt
+                : Number.POSITIVE_INFINITY;
+              if (confirmationAgeMs > 20000) {
+                dbg("sales", "email_confirmed_STALE", "ignored", {
+                  confirmationAgeMs,
+                  pendingEmail: pendingEmailConfirmation.parsed,
+                });
+                break;
+              }
+
+              const confirmedEmail = pendingEmailConfirmation.parsed;
+              session.collected.email = confirmedEmail;
               session.collected._emailStepComplete = true;
               pendingEmailConfirmation = null;
               emailConfirmationAsked = false;
+              emailConfirmationAskedAt = 0;
               sessions.set(session.id, session);
-              dbg("sales", "email_YES", "advancing", { email: confirmed });
+              dbg("sales", "email_confirmed_YES", "advancing", {
+                email: confirmedEmail,
+                _emailStepComplete: true,
+              });
               advanceSalesStep("email");
               session.messages.push({ role: "user", content: cleaned });
               sessions.set(session.id, session);
               TimerManager.resetSilence();
-              const nextHint = buildSalesStepHint() || "Proceed to next step.";
+              pendingPostDoneCreate = false;
+              pendingPostDoneHint = null;
+              const nextStepHint =
+                buildSalesStepHint() || "Proceed to the next step.";
               scheduleResponseCreate(
-                `Email confirmed as "${confirmed}". _emailStepComplete=true. ` +
-                  `Do NOT call extract_call_fields with this email again. Do NOT ask about email. ${nextHint}`,
+                `Email confirmed and saved as "${confirmedEmail}". ` +
+                  `_emailStepComplete=true. Do NOT call extract_call_fields with this email again. ` +
+                  `Do NOT ask about email again. ${nextStepHint}`,
+                0,
+                true,
               );
               break;
-            } else if (conf === "no") {
+            } else if (confirmationResult === "no") {
               pendingEmailConfirmation = null;
               emailConfirmationAsked = false;
+              emailConfirmationAskedAt = 0;
               delete session.collected.email;
               delete session.collected._emailStepComplete;
               sessions.set(session.id, session);
+              dbg("sales", "email_confirmed_NO", "clearing_and_re_asking", {});
               session.messages.push({ role: "user", content: cleaned });
               sessions.set(session.id, session);
               TimerManager.resetSilence();
+              pendingPostDoneCreate = false;
+              pendingPostDoneHint = null;
               scheduleResponseCreate(
-                `Email REJECTED. Say "No worries" and ask them to re-spell from the beginning.`,
+                `Email was REJECTED by user. Say "No worries, let me take that again" ` +
+                  `and ask them to re-spell their email letter by letter from the beginning.`,
+                0,
+                true,
               );
               break;
             }
           }
 
-          // ── Network ordinal ─────────────────────────────────────────────
-          const mappedNet = mapOrdinalNetworkChoice(cleaned);
-          if (mappedNet && wasLastMessageNetworkQuestion()) {
-            const txt = `I want ${mappedNet}`;
-            session.collected.networkPreference = mappedNet;
-            session.messages.push({ role: "user", content: txt });
+          const mappedNetwork = mapOrdinalNetworkChoice(cleaned);
+          if (mappedNetwork && wasLastMessageNetworkQuestion()) {
+            const clarified = `I want ${mappedNetwork}`;
+            session.collected.networkPreference = mappedNetwork;
+            session.messages.push({ role: "user", content: clarified });
             sessions.set(session.id, session);
             if (openaiWs?.readyState === WebSocket.OPEN) {
               openaiWs.send(
@@ -10852,7 +11111,7 @@ export function setupRealtimeVoice(io, deps) {
                   item: {
                     type: "message",
                     role: "user",
-                    content: [{ type: "input_text", text: txt }],
+                    content: [{ type: "input_text", text: clarified }],
                   },
                 }),
               );
@@ -10862,7 +11121,6 @@ export function setupRealtimeVoice(io, deps) {
             break;
           }
 
-          // ── Website check answer ────────────────────────────────────────
           if (
             session.collected._websiteCheckRequired &&
             !session.collected._websiteCheckDone &&
@@ -10871,22 +11129,24 @@ export function setupRealtimeVoice(io, deps) {
           ) {
             session.collected._websiteCheckDone = true;
             sessions.set(session.id, session);
-            dbg("sales", "website_check", "done", { answer: cleaned });
+            dbg("sales", "website_check_answered", "done", { answer: cleaned });
             initSalesStepMachine();
           }
 
           detectSalesStepAnswer(cleaned);
+
           session.messages.push({ role: "user", content: cleaned });
           sessions.set(session.id, session);
+
           TimerManager.resetSilence();
           break;
         }
 
         case "response.created":
           isResponseActive = true;
+          currentResponseId = event.response?.id || null;
           currentResponseHadOutput = false;
           cancelPending = false;
-          // FIX ISSUE 2: set EL streaming but do NOT reset elevenLabsReady/elevenLabsRepriming
           safeSetElevenLabsStreaming(true);
           assistantSpeaking = true;
           socket.emit("status", "speaking");
@@ -10898,7 +11158,6 @@ export function setupRealtimeVoice(io, deps) {
             currentResponseHadOutput = true;
             assistantTextBuffer += event.delta;
             socket.emit("assistant_text_delta", event.delta);
-            // FIX ISSUE 2: buffers automatically if elevenLabsRepriming=true
             sendTextToElevenLabs(event.delta);
           }
           break;
@@ -10906,56 +11165,63 @@ export function setupRealtimeVoice(io, deps) {
         case "response.text.done":
           if (event.text) {
             currentResponseHadOutput = true;
-            const nNorm = event.text
+            const newTextNorm = event.text
               .toLowerCase()
               .replace(/[^a-z0-9\s]/g, "")
               .trim();
-            const lNorm = lastAssistantText
+            const lastTextNorm = lastAssistantText
               .toLowerCase()
               .replace(/[^a-z0-9\s]/g, "")
               .trim();
-            const isDup =
-              nNorm.length > 20 &&
-              lNorm.length > 20 &&
-              (nNorm === lNorm ||
-                nNorm.includes(lNorm) ||
-                lNorm.includes(nNorm));
-            if (isDup) {
+            const isDuplicate =
+              newTextNorm.length > 20 &&
+              lastTextNorm.length > 20 &&
+              (newTextNorm === lastTextNorm ||
+                newTextNorm.includes(lastTextNorm) ||
+                lastTextNorm.includes(newTextNorm));
+
+            if (isDuplicate) {
               assistantTextBuffer = "";
               break;
             }
+
             lastAssistantText = event.text;
             console.log(`🤖 AI: "${event.text.substring(0, 100)}..."`);
             session.messages.push({ role: "assistant", content: event.text });
             sessions.set(session.id, session);
             socket.emit("assistant_text_done", event.text);
 
-            // Detect leadInterest from AI text if LLM skipped tool call
             if (!session.collected.leadInterest) {
-              const pm =
+              const planMatch =
                 event.text.match(
                   /\bOptiComm\s+[\w\s]+(?:Residential|Business|plan)\b/i,
                 ) ||
                 event.text.match(
                   /\bNBN\s+[\w\s]+(?:Residential|Business|plan|Mbps)\b/i,
                 );
-              if (pm) {
-                session.collected.leadInterest = pm[0].trim();
+              if (planMatch) {
+                const detectedPlan = planMatch[0].trim();
+                session.collected.leadInterest = detectedPlan;
                 session.collected._websiteCheckRequired = true;
-                if (session.collected._websiteCheckDone === undefined)
+                if (session.collected._websiteCheckDone === undefined) {
                   session.collected._websiteCheckDone = false;
+                }
                 sessions.set(session.id, session);
               }
             }
+
             flushElevenLabsStream();
-            if (detectPlanPresentation(event.text))
+
+            if (detectPlanPresentation(event.text)) {
               lastResponseWasPackage = true;
+            }
+
             if (detectPhoneVerificationRequest(event.text)) {
               awaitingPhoneVerification = true;
               rawPhoneBuffer = null;
               rawPhoneBufferTimestamp = 0;
             }
-            // Track when AI asks website check
+
             if (
               session.collected._websiteCheckRequired &&
               !session.collected._websiteCheckDone &&
@@ -10964,8 +11230,16 @@ export function setupRealtimeVoice(io, deps) {
             ) {
               session.collected._websiteCheckAsked = true;
               sessions.set(session.id, session);
+              dbg(
+                "sales",
+                "website_check_question_detected_from_ai_output",
+                "marked_asked",
+                {
+                  aiText: event.text.substring(0, 80),
+                },
+              );
             }
-            // Track email readback
+
             if (
               salesStep === "email" &&
               !session.collected._emailStepComplete &&
@@ -10973,9 +11247,26 @@ export function setupRealtimeVoice(io, deps) {
               pendingEmailConfirmation
             ) {
               emailConfirmationAsked = true;
-              dbg("sales", "email_readback", "awaiting", {
-                pending: pendingEmailConfirmation.parsed,
+              emailConfirmationAskedAt = Date.now();
+              dbg("sales", "email_readback_detected", "awaiting_confirmation", {
+                pendingEmail: pendingEmailConfirmation.parsed,
               });
+            }
+
+            // Detect when AI asks ticket confirmation question
+            if (
+              detectTicketConfirmationQuestion(event.text) &&
+              !session.collected._ticketConfirmed
+            ) {
+              pendingTicketConfirmation = true;
+              dbg(
+                "ticket",
+                "ticket_confirmation_question_detected",
+                "awaiting_answer",
+                {
+                  aiText: event.text.substring(0, 80),
+                },
+              );
             }
           }
           break;
@@ -10983,21 +11274,30 @@ export function setupRealtimeVoice(io, deps) {
         case "response.done": {
           isResponseActive = false;
           TimerManager.clearWatchdog();
-          debugState("response_done");
-          const oi = event.response?.output || [];
-          const hasText =
-            oi.some(
-              (i) =>
-                i.type === "message" &&
-                i.content?.some((c) => c.type === "text" && c.text?.trim()),
+          debugState("response_done_snapshot");
+
+          const outputItems = event.response?.output || [];
+          const hasTextOutput =
+            outputItems.some(
+              (item) =>
+                item.type === "message" &&
+                item.content?.some((c) => c.type === "text" && c.text?.trim()),
             ) || currentResponseHadOutput;
-          const hasFn = oi.some((i) => i.type === "function_call");
-          if (!hasFn && pendingFunctionCalls === 0 && !elevenLabsStreaming)
-            assistantSpeaking = false;
+          const hasFunctionCall = outputItems.some(
+            (item) => item.type === "function_call",
+          );
 
           if (
-            !hasFn &&
-            !hasText &&
+            !hasFunctionCall &&
+            pendingFunctionCalls === 0 &&
+            !elevenLabsStreaming
+          ) {
+            assistantSpeaking = false;
+          }
+
+          if (
+            !hasFunctionCall &&
+            !hasTextOutput &&
             pendingFunctionCalls === 0 &&
             !finalMessageLock
           ) {
@@ -11007,21 +11307,22 @@ export function setupRealtimeVoice(io, deps) {
               socket.emit("status", "listening");
               if (pendingPostDoneCreate) {
                 pendingPostDoneCreate = false;
-                const h = pendingPostDoneHint;
+                const hint = pendingPostDoneHint;
                 pendingPostDoneHint = null;
-                setTimeout(() => scheduleResponseCreate(h), 50);
+                setTimeout(() => scheduleResponseCreate(hint), 50);
               }
               break;
             }
-            if (elevenLabsStreaming) break;
+
+            if (elevenLabsStreaming) {
+              break;
+            }
+
             emptyResponseCount++;
             if (emptyResponseCount <= MAX_EMPTY_RETRIES) {
+              const retryDelay = 300 * Math.pow(2, emptyResponseCount - 1);
               assistantSpeaking = false;
-              scheduleResponseCreate(
-                null,
-                300 * Math.pow(2, emptyResponseCount - 1),
-                true,
-              );
+              scheduleResponseCreate(null, retryDelay, true);
             } else {
               emptyResponseCount = 0;
               assistantSpeaking = false;
@@ -11029,14 +11330,17 @@ export function setupRealtimeVoice(io, deps) {
             }
             break;
           }
+
           emptyResponseCount = 0;
+
           if (pendingPostDoneCreate && pendingFunctionCalls === 0) {
             pendingPostDoneCreate = false;
-            const h = pendingPostDoneHint;
+            const hint = pendingPostDoneHint;
             pendingPostDoneHint = null;
-            setTimeout(() => scheduleResponseCreate(h, 0, true), 50);
+            setTimeout(() => scheduleResponseCreate(hint, 0, true), 50);
             break;
           }
+
           if (!pendingFunctionCalls) socket.emit("status", "listening");
           assistantTextBuffer = "";
           currentResponseHadOutput = false;
@@ -11045,13 +11349,14 @@ export function setupRealtimeVoice(io, deps) {
 
         case "response.output_item.added":
           if (event.item?.type === "function_call") {
-            const fn = event.item.name || event.item.function_call?.name;
-            if (fn === "create_ticket") {
+            const fnName = event.item.name || event.item.function_call?.name;
+            if (fnName === "create_ticket") {
               TimerManager.startFinalLock(20000);
-              if (openaiWs?.readyState === WebSocket.OPEN)
+              if (openaiWs?.readyState === WebSocket.OPEN) {
                 openaiWs.send(
                   JSON.stringify({ type: "input_audio_buffer.clear" }),
                 );
+              }
             }
           }
           break;
@@ -11064,7 +11369,7 @@ export function setupRealtimeVoice(io, deps) {
           break;
 
         case "error":
-          console.error("[WS-1] error:", JSON.stringify(event.error));
+          console.error("[WS-1] OpenAI error:", JSON.stringify(event.error));
           socket.emit("error_msg", event.error?.message || "AI error");
           isResponseActive = false;
           pendingFunctionCalls = 0;
@@ -11073,57 +11378,97 @@ export function setupRealtimeVoice(io, deps) {
           pendingPostDoneCreate = false;
           elevenLabsStreaming = false;
           assistantSpeaking = false;
+          // Clear ticket confirmation state on error
+          pendingTicketConfirmation = false;
+          pendingTicketArgs = null;
           TimerManager.clearWatchdog();
           socket.emit("status", "listening");
           break;
       }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  HANDLE FUNCTION CALL
-    // ═══════════════════════════════════════════════════════════════════════
+    // ═══════════════ Tool Execution ════════════════
     async function handleFunctionCall(item) {
       const { call_id, name: fn, arguments: argsStr } = item;
       let args = safeParseJSON(argsStr) || {};
+
       dbg(
         session.collected?.intent || "unknown",
-        "handleFunctionCall",
+        "handleFunctionCall_ENTRY",
         "called",
-        { fn, args: JSON.stringify(args).substring(0, 150), salesStep },
+        {
+          fn,
+          argsPreview: JSON.stringify(args).substring(0, 150),
+          salesStep,
+        },
       );
 
-      // Redirect verify_phone for new sales customers
-      if (
-        fn === "verify_phone" &&
-        !session.collected._emailVerifiedCustomerId
-      ) {
-        const phoneToSave = args.phone || rawPhoneBuffer;
-        rawPhoneBuffer = null;
-        rawPhoneBufferTimestamp = 0;
-        awaitingPhoneVerification = false;
-        if (phoneToSave) {
-          session.collected.phone =
-            String(phoneToSave).replace(/\D/g, "") || phoneToSave;
-          sessions.set(session.id, session);
-          if (salesStep === "phone") advanceSalesStep("phone");
-        }
-        if (openaiWs?.readyState === WebSocket.OPEN)
+      // ══════════════════════════════════════════════════════════════
+      // TICKET CONFIRMATION GATE (ALL FLOWS)
+      // Intercept create_ticket calls if user hasn't confirmed yet
+      // ══════════════════════════════════════════════════════════════
+      if (fn === "create_ticket" && !session.collected._ticketConfirmed) {
+        dbg("ticket", "create_ticket_BLOCKED", "awaiting_confirmation", {
+          argsPreview: JSON.stringify(args).substring(0, 150),
+        });
+
+        // Store the args for later re-execution
+        pendingTicketArgs = { call_id, args };
+        pendingTicketConfirmation = true;
+
+        // Release the final lock since we're not creating yet
+        TimerManager.releaseFinalLock();
+        finalMessageLock = false;
+        session.finalLock = false;
+
+        // Send a fake successful result so LLM doesn't retry
+        const fakeResult = JSON.stringify({
+          success: false,
+          _blocked: true,
+          reason: "confirmation_required",
+          message:
+            "You MUST ask the customer to confirm before creating the ticket. Summarise all details and ask: 'Shall I go ahead and submit this for you?'",
+        });
+
+        if (openaiWs?.readyState === WebSocket.OPEN) {
           openaiWs.send(
             JSON.stringify({
               type: "conversation.item.create",
               item: {
                 type: "function_call_output",
                 call_id,
-                output: JSON.stringify({ success: true, _redirected: true }),
+                output: fakeResult,
               },
             }),
           );
+        }
+
         pendingFunctionCalls = Math.max(0, pendingFunctionCalls - 1);
-        if (
-          pendingFunctionCalls === 0 &&
-          openaiWs?.readyState === WebSocket.OPEN
-        ) {
-          const hint = buildSalesStepHint() || "";
+
+        // Build a summary of collected details for the confirmation prompt
+        const c = session.collected || {};
+        const fullName =
+          [c._firstName, c._lastName].filter(Boolean).join(" ") ||
+          c.name ||
+          c.preferredName ||
+          "";
+        const detailSummary = [
+          fullName ? `Name: ${fullName}` : null,
+          c.phone ? `Phone: ${c.phone}` : null,
+          c.email ? `Email: ${c.email}` : null,
+          c.leadInterest ? `Plan: ${c.leadInterest}` : null,
+          c.address ? `Address: ${c.address}` : null,
+          c.issueSummary ? `Issue: ${c.issueSummary}` : null,
+        ]
+          .filter(Boolean)
+          .join(", ");
+
+        const confirmHint =
+          `[TICKET CONFIRMATION REQUIRED] create_ticket was blocked because customer has NOT confirmed yet. ` +
+          `You MUST summarise the details (${detailSummary}) and ask: "Shall I go ahead and submit this for you?" ` +
+          `WAIT for the customer to say YES. Do NOT call create_ticket again until they confirm.`;
+
+        if (openaiWs?.readyState === WebSocket.OPEN) {
           openaiWs.send(
             JSON.stringify({
               type: "conversation.item.create",
@@ -11133,8 +11478,72 @@ export function setupRealtimeVoice(io, deps) {
                 content: [
                   {
                     type: "input_text",
-                    text: `[SYSTEM_CONTEXT]: Phone saved. ${hint} Proceed immediately.`,
+                    text: `[SYSTEM_CONTEXT]: ${confirmHint}`,
                   },
+                ],
+              },
+            }),
+          );
+          scheduleResponseCreate();
+        }
+        return;
+      }
+
+      // If create_ticket passes the gate (user confirmed), clear pending state
+      if (fn === "create_ticket" && session.collected._ticketConfirmed) {
+        pendingTicketArgs = null;
+        pendingTicketConfirmation = false;
+      }
+
+      // Redirect verify_phone for sales (non-verified) flow
+      if (
+        fn === "verify_phone" &&
+        !session.collected._emailVerifiedCustomerId
+      ) {
+        const llmPhone = args.phone;
+        const bufferPhone = rawPhoneBuffer;
+        const phoneToSave = llmPhone || bufferPhone;
+        rawPhoneBuffer = null;
+        rawPhoneBufferTimestamp = 0;
+        awaitingPhoneVerification = false;
+        if (phoneToSave) {
+          session.collected.phone =
+            String(phoneToSave).replace(/\D/g, "") || phoneToSave;
+          sessions.set(session.id, session);
+          if (salesStep === "phone") advanceSalesStep("phone");
+        }
+        const fakeResult = JSON.stringify({
+          success: true,
+          _redirected: true,
+          message: "Phone number saved.",
+        });
+        if (openaiWs?.readyState === WebSocket.OPEN) {
+          openaiWs.send(
+            JSON.stringify({
+              type: "conversation.item.create",
+              item: {
+                type: "function_call_output",
+                call_id,
+                output: fakeResult,
+              },
+            }),
+          );
+        }
+        pendingFunctionCalls = Math.max(0, pendingFunctionCalls - 1);
+        if (
+          pendingFunctionCalls === 0 &&
+          openaiWs?.readyState === WebSocket.OPEN
+        ) {
+          const salesHint = buildSalesStepHint() || "";
+          const hint = `Phone number has been saved. ${salesHint}\n\nProceed to the next step immediately.`;
+          openaiWs.send(
+            JSON.stringify({
+              type: "conversation.item.create",
+              item: {
+                type: "message",
+                role: "user",
+                content: [
+                  { type: "input_text", text: `[SYSTEM_CONTEXT]: ${hint}` },
                 ],
               },
             }),
@@ -11146,11 +11555,16 @@ export function setupRealtimeVoice(io, deps) {
 
       if (fn === "verify_phone") {
         if (rawPhoneBuffer) {
-          const lp = args.phone ? String(args.phone).replace(/\D/g, "") : null;
-          const bp = String(rawPhoneBuffer).replace(/\D/g, "");
-          const age = Date.now() - rawPhoneBufferTimestamp;
-          if (age <= 10000 || !lp || lp.length < 10)
-            args = { ...args, phone: bp };
+          const llmPhone = args.phone
+            ? String(args.phone).replace(/\D/g, "")
+            : null;
+          const bufPhone = String(rawPhoneBuffer).replace(/\D/g, "");
+          const bufferAge = Date.now() - rawPhoneBufferTimestamp;
+          const bufferIsStale = bufferAge > 10000;
+          const llmHasFullNumber = llmPhone && llmPhone.length >= 10;
+          if (!bufferIsStale || !llmHasFullNumber) {
+            args = { ...args, phone: bufPhone };
+          }
           rawPhoneBuffer = null;
           rawPhoneBufferTimestamp = 0;
           awaitingPhoneVerification = false;
@@ -11158,22 +11572,24 @@ export function setupRealtimeVoice(io, deps) {
           !args.phone ||
           String(args.phone).replace(/\D/g, "").length < 6
         ) {
-          if (openaiWs?.readyState === WebSocket.OPEN)
+          const noPhoneResult = JSON.stringify({
+            success: false,
+            verificationFailed: false,
+            message:
+              "Could not extract phone number from speech. Ask the customer to repeat their number clearly.",
+          });
+          if (openaiWs?.readyState === WebSocket.OPEN) {
             openaiWs.send(
               JSON.stringify({
                 type: "conversation.item.create",
                 item: {
                   type: "function_call_output",
                   call_id,
-                  output: JSON.stringify({
-                    success: false,
-                    verificationFailed: false,
-                    message:
-                      "Could not extract phone. Ask customer to repeat clearly.",
-                  }),
+                  output: noPhoneResult,
                 },
               }),
             );
+          }
           pendingFunctionCalls = Math.max(0, pendingFunctionCalls - 1);
           if (pendingFunctionCalls === 0) scheduleResponseCreate();
           return;
@@ -11181,29 +11597,35 @@ export function setupRealtimeVoice(io, deps) {
       }
 
       console.log(`🔧 Tool: ${fn}`, JSON.stringify(args).substring(0, 200));
+
+      let result;
       socket.emit("status", "processing");
       TimerManager.clearSilence();
       TimerManager.clearWatchdog();
-      if (openaiWs?.readyState === WebSocket.OPEN)
-        openaiWs.send(JSON.stringify({ type: "input_audio_buffer.clear" }));
 
-      const ttimer = setTimeout(() => {
-        console.warn(`⚠️ Tool ${fn} timed out`);
+      if (openaiWs?.readyState === WebSocket.OPEN) {
+        openaiWs.send(JSON.stringify({ type: "input_audio_buffer.clear" }));
+      }
+
+      const toolTimeout = setTimeout(() => {
+        console.warn(`⚠️ Tool ${fn} timed out after 30s`);
         pendingFunctionCalls = Math.max(0, pendingFunctionCalls - 1);
         if (pendingFunctionCalls === 0) socket.emit("status", "listening");
       }, 30000);
 
-      let result;
       try {
         result = await execTool(fn, args);
-        console.log(`🔧 DONE ${fn}: ${result.substring(0, 200)}`);
-      } catch (e) {
-        console.error(`🔧 ERR ${fn}:`, e.message);
-        result = JSON.stringify({ success: false, error: e.message });
+        console.log(
+          `🔧 [TOOL-END] ${fn} - result: ${result.substring(0, 200)}`,
+        );
+      } catch (err) {
+        console.error(`🔧 [TOOL-ERROR] ${fn}:`, err.message);
+        result = JSON.stringify({ success: false, error: err.message });
       }
-      clearTimeout(ttimer);
 
-      let sysHint = `[FLOW:${session.collected?.intent || "unknown"}] Collected: ${JSON.stringify(
+      clearTimeout(toolTimeout);
+
+      let systemHint = `[FLOW: ${session.collected?.intent || "unknown"}] Current collected fields: ${JSON.stringify(
         Object.fromEntries(
           Object.entries(session.collected || {}).filter(
             ([k]) => k !== "_registeredPhone" && k !== "_rp",
@@ -11212,101 +11634,126 @@ export function setupRealtimeVoice(io, deps) {
       )}.`;
 
       if (fn === "check_address_availability") {
-        let pr = null;
+        let parsedResult = null;
         try {
-          pr = JSON.parse(result);
+          parsedResult = JSON.parse(result);
         } catch (_) {}
-        if (pr) {
-          const net = pr.network || "network",
-            cnt = Array.isArray(pr.availablePlans)
-              ? pr.availablePlans.length
-              : 0;
-          if (pr.orderable === false)
-            sysHint += `\nNot serviceable. Tell customer.`;
-          else if (cnt > 0 && pr.requiresResidentialFilter)
-            sysHint += `\n${cnt} plans on "${net}". Ask "Home or business?" first.`;
-          else if (cnt > 0)
-            sysHint += `\n${cnt} plans on "${net}". Present ALL NOW using voice_description fields. End with "Which catches your eye?" LOCKED to ${net}.`;
-          else sysHint += `\nNo plans. Tell customer.`;
-          if (session.networkShown)
-            sysHint += `\nNETWORK LOCK: ${session.networkShown} ONLY.`;
+        if (parsedResult) {
+          const networkLabel = parsedResult.network || "the available network";
+          const planCount = Array.isArray(parsedResult.availablePlans)
+            ? parsedResult.availablePlans.length
+            : 0;
+          const requiresFilter =
+            parsedResult.requiresResidentialFilter === true;
+          if (parsedResult.orderable === false) {
+            systemHint += `\nTOOL RESULT: Address not serviceable. Tell customer empathetically and offer to take their details.`;
+          } else if (planCount > 0 && requiresFilter) {
+            systemHint += `\nTOOL RESULT: ${planCount} plans found on "${networkLabel}". Ask: "Is this for your home or a business?" before showing plans.`;
+          } else if (planCount > 0 && !requiresFilter) {
+            systemHint += `\nTOOL RESULT: ${planCount} plans found on "${networkLabel}". Present ALL plans NOW. Speak slowly using voice_description fields. End with "Which of these catches your eye?" LOCKED to ${networkLabel}.`;
+          } else {
+            systemHint += `\nTOOL RESULT: No plans returned. Tell customer and offer alternative help.`;
+          }
+          if (session.networkShown) {
+            systemHint += `\nNETWORK LOCK: Only ${session.networkShown} — NEVER mention the other network again.`;
+          }
         }
       }
 
       if (fn === "customer_lookup") {
-        let pr = null;
+        let parsedResult = null;
         try {
-          pr = JSON.parse(result);
+          parsedResult = JSON.parse(result);
         } catch (_) {}
-        if (pr?._blocked && pr?.reason === "sales_flow")
-          sysHint += `\nNew lead — new customer. Collect name/phone/email then create_ticket.`;
-        else if (pr?._invalidEmail)
-          sysHint += `\nInvalid email. Ask to spell whole email from scratch.`;
-        else if (pr?.success && pr?.customer) {
-          sysHint += `\nEmail found. Say "Perfect, I can see that account." Ask for phone. Call verify_phone.`;
+
+        if (parsedResult?._blocked && parsedResult?.reason === "sales_flow") {
+          systemHint += `\nTOOL RESULT: customer_lookup blocked — new sales lead. Treat as new customer. Collect name, phone, email one at a time, then call create_ticket.`;
+        } else if (parsedResult?._invalidEmail) {
+          systemHint += `\nTOOL RESULT: Email format invalid. Ask customer to spell the whole email from scratch, letter by letter.`;
+        } else if (parsedResult?.success && parsedResult?.customer) {
+          systemHint += `\nTOOL RESULT: Email lookup succeeded. Say "Perfect, I can see that account." Then ask for phone number. When they give it, call verify_phone.`;
           awaitingPhoneVerification = true;
           rawPhoneBuffer = null;
           rawPhoneBufferTimestamp = 0;
-        } else sysHint += `\nNot found. Ask to re-spell email.`;
+        } else {
+          systemHint += `\nTOOL RESULT: Customer not found. Ask customer to re-spell their email from scratch.`;
+        }
       }
 
       if (fn === "create_ticket") {
-        let pr = null;
+        let parsedResult = null;
         try {
-          pr = JSON.parse(result);
+          parsedResult = JSON.parse(result);
         } catch (_) {}
-        // FIX ISSUE 1: reset autoTicketScheduled so it can re-fire if needed
-        autoTicketScheduled = false;
-        if (pr?._blocked && pr?.reason === "email_missing") {
+
+        if (
+          parsedResult?._blocked &&
+          parsedResult?.reason === "email_missing"
+        ) {
           TimerManager.releaseFinalLock();
           salesStep = "email";
-          sysHint += `\ncreate_ticket BLOCKED — email missing. Ask for email NOW.`;
-        } else if (pr?.success) {
+          systemHint += `\nTOOL RESULT: create_ticket BLOCKED — email missing. Ask for email NOW by voice spelling. Read back letter-by-letter. Confirm YES before proceeding.`;
+        } else if (parsedResult?.success) {
           salesStep = "done";
+          // Clear ticket confirmation state after success
+          pendingTicketConfirmation = false;
+          pendingTicketArgs = null;
           TimerManager.releaseFinalLock();
-          if (pr._isSalesTicket)
-            sysHint += `\nSales submitted. Say "Awesome, you're all set! Our sales team will be in touch via email shortly. Is there anything else I can help you with?"`;
-          else
-            sysHint += `\nTicket #${pr.ticket_id} raised. Say "Brilliant, all done! Ticket raised and you'll get details via email. Is there anything else I can help with?"`;
+          const ticketId = parsedResult.ticket_id;
+          const isSales = parsedResult._isSalesTicket === true || !ticketId;
+          if (isSales) {
+            systemHint += `\nTOOL RESULT: Sales enquiry submitted. Say: "Awesome, you're all set! Our sales team will be in touch via email shortly."`;
+          } else {
+            systemHint += `\nTOOL RESULT: Support ticket #${ticketId} created. Say: "Brilliant, all done! Ticket #${ticketId} raised — details sent via email."`;
+          }
         } else {
           TimerManager.releaseFinalLock();
-          sysHint += `\nTicket FAILED: ${pr?.error || "unknown"}. Apologise and suggest 1300 101 414.`;
+          systemHint += `\nTOOL RESULT: Ticket FAILED — ${parsedResult?.error || "unknown error"}. Apologise and suggest calling 1300 101 414.`;
         }
       }
 
       if (fn === "extract_call_fields") {
         const c = session.collected || {};
-        if (c._emailStepComplete)
-          sysHint += `\nEMAIL CONFIRMED (_emailStepComplete=true). Do NOT ask about email. Do NOT call extract_call_fields with email again.`;
-        else if (pendingEmailConfirmation && salesStep === "email")
-          sysHint += `\nEMAIL PARSED as "${pendingEmailConfirmation.parsed}". Read back letter-by-letter. Ask "Is that correct?" Wait for YES.`;
-        const gate =
+
+        const shouldGate =
           c.leadInterest &&
           c._websiteCheckRequired &&
           !c._websiteCheckAsked &&
           !c._websiteCheckDone;
-        if (gate) sysHint += `\nMUST ask website check first.`;
+        if (shouldGate) {
+          systemHint += `\nCRITICAL GATE: You MUST ask about website check first before collecting any other details.`;
+        }
         if (
           c.leadInterest &&
           c._websiteCheckRequired &&
           (c._websiteCheckAsked || c._websiteCheckDone)
-        )
-          sysHint += `\nWebsite check done. Proceed with order.`;
-        // FIX ISSUE 1: if we're at createTicket, prime the auto-fire
+        ) {
+          systemHint += `\nWEBSITE CHECK DONE: Do NOT ask again. Proceed with order collection.`;
+        }
+
         if (
           salesStep === "createTicket" &&
           c.phone &&
           c.email &&
-          c.leadInterest
+          c.leadInterest &&
+          c._ticketConfirmed
         ) {
-          sysHint += `\n\nAll details collected. Say something warm then IMMEDIATELY call create_ticket. Do NOT wait for user input.`;
+          systemHint += `\n\nCRITICAL: Customer has CONFIRMED. Call create_ticket RIGHT NOW. Do not say anything to the user first.`;
         }
-        const sh = buildSalesStepHint();
-        if (sh) sysHint += `\n\n${sh}`;
+
+        if (c._emailStepComplete) {
+          systemHint += `\nEMAIL ALREADY CONFIRMED (_emailStepComplete=true). Do NOT ask about email again. Do NOT call extract_call_fields with email again.`;
+        } else if (pendingEmailConfirmation && salesStep === "email") {
+          systemHint += `\nEMAIL PARSED as "${pendingEmailConfirmation.parsed}". Read it back letter-by-letter and ask "Is that correct?" Do NOT proceed until user says YES.`;
+        }
+
+        const stepHint = buildSalesStepHint();
+        if (stepHint) systemHint += `\n\n${stepHint}`;
       }
 
-      if (fn === "send_portal_login_email")
-        sysHint += `\nPortal login email sent. Tell customer team will be in touch.`;
+      if (fn === "send_portal_login_email") {
+        systemHint += `\nTOOL RESULT: Portal login email sent. Tell customer the request was sent and team will be in touch.`;
+      }
 
       if (openaiWs?.readyState === WebSocket.OPEN) {
         await Promise.resolve();
@@ -11317,7 +11764,9 @@ export function setupRealtimeVoice(io, deps) {
           }),
         );
       }
+
       pendingFunctionCalls = Math.max(0, pendingFunctionCalls - 1);
+
       if (
         pendingFunctionCalls === 0 &&
         openaiWs?.readyState === WebSocket.OPEN
@@ -11331,31 +11780,33 @@ export function setupRealtimeVoice(io, deps) {
               content: [
                 {
                   type: "input_text",
-                  text: `[SYSTEM_CONTEXT]: ${sysHint}\n\nRespond immediately.`,
+                  text: `[SYSTEM_CONTEXT]: ${systemHint}\n\nIMPORTANT: Respond immediately based on the tool result above.`,
                 },
               ],
             },
           }),
         );
-        console.log(`📤 Tool complete (${fn}) → response.create`);
+
+        console.log(`📤 Tool complete (${fn}) — triggering response.create`);
         scheduleResponseCreate();
       }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  EXEC TOOL
-    // ═══════════════════════════════════════════════════════════════════════
     async function execTool(fn, args) {
       if (fn === "extract_call_fields") {
         if (args.email && typeof args.email === "string") {
-          const p = parseVoiceEmail(args.email);
-          if (p) args.email = p;
+          const parsed = parseVoiceEmail(args.email);
+          if (parsed) args.email = parsed;
         }
+
         applyExtractionToSession(session, args);
         const c = session.collected || {};
+
         if (salesStep === "firstName" && (args.preferredName || args.name)) {
-          const f = (args.preferredName || args.name || "").split(" ")[0];
-          const INV = new Set([
+          const firstName = (args.preferredName || args.name || "").split(
+            " ",
+          )[0];
+          const INVALID_NAME_WORDS = new Set([
             "yes",
             "yeah",
             "yep",
@@ -11365,105 +11816,157 @@ export function setupRealtimeVoice(io, deps) {
             "okay",
             "sure",
             "right",
+            "alright",
             "correct",
+            "true",
+            "false",
             "i",
             "my",
             "the",
             "a",
             "an",
           ]);
-          if (f && f.length >= 2 && !INV.has(f.toLowerCase())) {
-            session.collected._firstName = f;
+          if (
+            firstName &&
+            firstName.length >= 2 &&
+            !INVALID_NAME_WORDS.has(firstName.toLowerCase())
+          ) {
+            session.collected._firstName = firstName;
             sessions.set(session.id, session);
             advanceSalesStep("firstName");
           }
         }
         if (salesStep === "lastName" && args.name && args.name.includes(" ")) {
-          const pts = args.name.split(" ");
-          session.collected._lastName = pts[pts.length - 1];
+          const parts = args.name.split(" ");
+          session.collected._lastName = parts[parts.length - 1];
           sessions.set(session.id, session);
           advanceSalesStep("lastName");
         }
-        if (salesStep === "phone" && args.phone) advanceSalesStep("phone");
+        if (salesStep === "phone" && args.phone) {
+          advanceSalesStep("phone");
+        }
+
         if (args.leadInterest && !c.leadInterest) {
           session.collected.leadInterest = args.leadInterest;
           session.collected._websiteCheckRequired = true;
-          if (session.collected._websiteCheckDone === undefined)
+          if (session.collected._websiteCheckDone === undefined) {
             session.collected._websiteCheckDone = false;
+          }
           sessions.set(session.id, session);
         }
-        // Email guard — do not re-enter if step already complete
+
         if (args.email) {
-          const parsed = parseVoiceEmail(args.email) || args.email;
+          const parsedForExtract = parseVoiceEmail(args.email) || args.email;
+
           if (session.collected._emailStepComplete) {
-            dbg("sales", "extract_email_GUARDED", "no_op", {
-              reason: "_emailStepComplete=true",
+            dbg("sales", "extract_email_GUARDED_step_complete", "no_op", {
+              parsedForExtract,
+              savedEmail: session.collected.email,
+              reason:
+                "_emailStepComplete=true, not resetting confirmation state",
             });
           } else if (salesStep === "email") {
-            session.collected.email = parsed;
+            session.collected.email = parsedForExtract;
             sessions.set(session.id, session);
+
             if (!pendingEmailConfirmation) {
-              pendingEmailConfirmation = { raw: args.email, parsed };
+              pendingEmailConfirmation = {
+                raw: args.email,
+                parsed: parsedForExtract,
+              };
               emailConfirmationAsked = false;
-              dbg("sales", "email_pending", "new", { parsed });
-            } else if (pendingEmailConfirmation.parsed !== parsed) {
-              pendingEmailConfirmation = { raw: args.email, parsed };
+              emailConfirmationAskedAt = 0;
+              dbg("sales", "email_saved_awaiting_confirmation", "new", {
+                parsed: parsedForExtract,
+              });
+            } else if (pendingEmailConfirmation.parsed !== parsedForExtract) {
+              pendingEmailConfirmation = {
+                raw: args.email,
+                parsed: parsedForExtract,
+              };
               emailConfirmationAsked = false;
-              dbg("sales", "email_pending", "updated", { parsed });
-            } else dbg("sales", "email_same_SKIPPED", "no_op", { parsed });
+              emailConfirmationAskedAt = 0;
+              dbg("sales", "email_updated_new_value", "updated", {
+                parsed: parsedForExtract,
+              });
+            } else {
+              dbg("sales", "email_same_as_pending_SKIPPED", "no_op", {
+                parsed: parsedForExtract,
+                emailConfirmationAsked,
+                reason: "same email, preserving confirmation state",
+              });
+            }
           }
         }
+
         return JSON.stringify({ success: true });
       }
 
       if (fn === "customer_lookup") {
-        const isSales =
+        const isSalesFlow =
           !!session.collected?.leadInterest &&
           !session.collected?._emailVerifiedCustomerId;
-        if (isSales)
+        if (isSalesFlow) {
           return JSON.stringify({
             success: false,
             _blocked: true,
             reason: "sales_flow",
+            message:
+              "New sales lead — treat as new customer. Collect name, phone, email, then call create_ticket.",
           });
-        const la = { ...(args || {}) };
-        delete la.phone;
-        if (!la.email && !la.name)
-          return JSON.stringify({ success: false, message: "Email required" });
-        if (la.email && typeof la.email === "string") {
-          const p = parseVoiceEmail(la.email);
-          if (p) la.email = p;
-          else
+        }
+
+        const lookupArgs = { ...(args || {}) };
+        delete lookupArgs.phone;
+        if (!lookupArgs.email && !lookupArgs.name) {
+          return JSON.stringify({
+            success: false,
+            message: "Email is required for customer lookup",
+          });
+        }
+
+        if (lookupArgs.email && typeof lookupArgs.email === "string") {
+          const parsed = parseVoiceEmail(lookupArgs.email);
+          if (parsed) {
+            lookupArgs.email = parsed;
+          } else {
             return JSON.stringify({
               success: false,
               _invalidEmail: true,
-              message: "Invalid email",
+              message:
+                "Invalid email format — ask customer to spell the whole email from scratch.",
             });
+          }
         }
+
         try {
-          const r = await customerLookup(la);
-          if (r.success && r.customer) {
-            session.collected._emailVerifiedCustomerId = r.customer.id;
+          const result = await customerLookup(lookupArgs);
+          if (result.success && result.customer) {
+            session.collected._emailVerifiedCustomerId = result.customer.id;
             session.collected._registeredPhone =
-              r.customer.phone || r.customer.phone_mobile || null;
+              result.customer.phone || result.customer.phone_mobile || null;
             session.collected._rp = session.collected._registeredPhone;
             session.collected._phoneVerified = false;
-            session.collected.customer_id = r.customer.id;
+            session.collected.customer_id = result.customer.id;
             sessions.set(session.id, session);
-            const safe = { ...r, customer: { ...r.customer } };
-            delete safe.customer.phone;
-            delete safe.customer.phone_mobile;
-            delete safe.customer.mobile;
-            delete safe.customer.phone2;
-            return JSON.stringify(safe);
+            const safeResult = { ...result };
+            if (safeResult.customer) {
+              safeResult.customer = { ...safeResult.customer };
+              delete safeResult.customer.phone;
+              delete safeResult.customer.phone_mobile;
+              delete safeResult.customer.mobile;
+              delete safeResult.customer.phone2;
+            }
+            return JSON.stringify(safeResult);
           }
           delete session.collected.email;
           delete session.collected._emailVerifiedCustomerId;
           sessions.set(session.id, session);
           return JSON.stringify({
-            ...r,
+            ...result,
             _emailCleared: true,
-            message: "No account found.",
+            message:
+              "No account found with that email. Please check and try again.",
           });
         } catch (e) {
           return JSON.stringify({ success: false, error: e.message });
@@ -11476,41 +11979,46 @@ export function setupRealtimeVoice(io, deps) {
           return JSON.stringify({
             success: false,
             verificationFailed: true,
-            message: "No phone",
+            message: "No phone number provided.",
           });
-        const eid = session.collected._emailVerifiedCustomerId;
-        if (!eid)
+        const emailCustomerId = session.collected._emailVerifiedCustomerId;
+        if (!emailCustomerId)
           return JSON.stringify({
             success: false,
             verificationFailed: true,
-            message: "Email required first",
+            message: "Email verification must be completed first.",
           });
-        const reg = session.collected._registeredPhone || session.collected._rp;
-        if (!reg)
+        const registeredPhone =
+          session.collected._registeredPhone || session.collected._rp;
+        if (!registeredPhone) {
           return JSON.stringify({
             success: false,
             verificationFailed: true,
-            message: "No phone on account",
+            message: "No phone number registered on this account.",
           });
-        const norm =
+        }
+        const normalize =
           normalizePhone && typeof normalizePhone === "function"
             ? normalizePhone
             : (p) =>
                 String(p || "")
                   .replace(/\D/g, "")
                   .replace(/^61(\d{9})$/, "0$1");
-        if (norm(phone) !== norm(reg))
+        const normalizedInput = normalize(phone);
+        const normalizedRegistered = normalize(registeredPhone);
+        if (normalizedInput !== normalizedRegistered) {
           return JSON.stringify({
             success: false,
             verificationFailed: true,
-            message: "Phone mismatch",
+            message: "Phone number does not match.",
           });
+        }
         session.collected._phoneVerified = true;
         sessions.set(session.id, session);
         return JSON.stringify({
           success: true,
           verified: true,
-          customer_id: eid,
+          customer_id: emailCustomerId,
         });
       }
 
@@ -11518,10 +12026,10 @@ export function setupRealtimeVoice(io, deps) {
         try {
           if (args.address) session.collected.address = args.address;
           return await checkAddressAvailability(args, session);
-        } catch (e) {
+        } catch (err) {
           return JSON.stringify({
             success: false,
-            error: e.message,
+            error: err.message,
             address: args.address,
           });
         }
@@ -11531,98 +12039,98 @@ export function setupRealtimeVoice(io, deps) {
         let fa = { ...args };
         if (typeof fa.message === "string")
           fa.message = { message: fa.message };
-        const col = session.collected || {};
-        const hasCid = !!(fa.customer_id || col.customer_id);
-        const hasLead = !!(col.leadInterest || fa.leadInterest);
-        const isSupport = hasCid && !hasLead;
-        if (!isSupport && !col.email) {
+        const collected = session.collected || {};
+        const hasCustomerId = !!(fa.customer_id || collected.customer_id);
+        const hasLeadInterest = !!(collected.leadInterest || fa.leadInterest);
+        const isSupportTicket = hasCustomerId && !hasLeadInterest;
+
+        if (!isSupportTicket && !collected.email) {
           salesStep = "email";
           TimerManager.releaseFinalLock();
           finalMessageLock = false;
           session.finalLock = false;
-          autoTicketScheduled = false;
           return JSON.stringify({
             success: false,
             _blocked: true,
             reason: "email_missing",
+            message:
+              "Ask for email by voice spelling. Read back letter-by-letter and confirm with user before proceeding.",
           });
         }
-        const lines = [];
+
+        const detailLines = [];
         const fullName =
-          [col._firstName, col._lastName].filter(Boolean).join(" ") ||
-          col.name ||
-          col.preferredName;
-        if (fullName) lines.push(`Name: ${fullName}`);
-        if (col.email) lines.push(`Email: ${col.email}`);
-        if (col.phone) lines.push(`Phone: ${col.phone}`);
-        if (col.address) lines.push(`Address: ${col.address}`);
-        if (col.networkPreference)
-          lines.push(`Network: ${col.networkPreference}`);
-        if (col.residentialPreference)
-          lines.push(`Type: ${col.residentialPreference}`);
-        if (col.leadInterest || fa.leadInterest)
-          lines.push(`Selected Plan: ${col.leadInterest || fa.leadInterest}`);
-        const block =
-          lines.length > 0
-            ? `\n\n--- Customer Details ---\n${lines.join("\n")}`
+          [collected._firstName, collected._lastName]
+            .filter(Boolean)
+            .join(" ") ||
+          collected.name ||
+          collected.preferredName;
+        if (fullName) detailLines.push(`Name: ${fullName}`);
+        if (collected.email) detailLines.push(`Email: ${collected.email}`);
+        if (collected.phone) detailLines.push(`Phone: ${collected.phone}`);
+        if (collected.address)
+          detailLines.push(`Address: ${collected.address}`);
+        if (collected.networkPreference)
+          detailLines.push(`Network: ${collected.networkPreference}`);
+        if (collected.residentialPreference)
+          detailLines.push(`Type: ${collected.residentialPreference}`);
+        if (collected.leadInterest || fa.leadInterest)
+          detailLines.push(
+            `Selected Plan: ${collected.leadInterest || fa.leadInterest}`,
+          );
+
+        const detailsBlock =
+          detailLines.length > 0
+            ? `\n\n--- Customer Details ---\n${detailLines.join("\n")}`
             : "";
-        if (fa.message?.message) fa.message.message += block;
-        else if (block) fa.message = { message: block.trim() };
-        let res;
+        if (fa.message?.message) fa.message.message += detailsBlock;
+        else if (detailsBlock) fa.message = { message: detailsBlock.trim() };
+
+        let ticketResult;
         try {
-          if (isSupport) {
+          if (isSupportTicket) {
             const r = await splynx.request(
               "POST",
               "admin/support/tickets",
               objectToUrlEncoded(fa),
             );
-            const er = await sendTicketEmail(r.id, fa, col, true);
-            res = {
+            const emailResult = await sendTicketEmail(
+              r.id,
+              fa,
+              collected,
+              true,
+            );
+            ticketResult = {
               success: true,
               ticket_id: r.id,
-              email_sent: er.sent,
+              email_sent: emailResult.sent,
               _isSalesTicket: false,
               _ticketCompleted: true,
             };
           } else {
-            const er = await sendTicketEmail(null, fa, col, false);
-            res = {
+            const emailResult = await sendTicketEmail(
+              null,
+              fa,
+              collected,
+              false,
+            );
+            ticketResult = {
               success: true,
-              message: "Sales inquiry submitted",
-              email_sent: er.sent,
+              message: "Sales inquiry submitted successfully",
+              email_sent: emailResult.sent,
               _isSalesTicket: true,
               _ticketCompleted: true,
             };
           }
-        } catch (e) {
-          res = { success: false, error: e.message, _ticketCompleted: true };
+        } catch (err) {
+          ticketResult = {
+            success: false,
+            error: err.message || "Failed to process request",
+            _ticketCompleted: true,
+          };
         }
-        return JSON.stringify(res);
-      }
 
-      if (fn === "send_portal_login_email") {
-        const col = session.collected || {};
-        const lines = [];
-        if (col.preferredName || col.name)
-          lines.push(`Name: ${col.preferredName || col.name}`);
-        if (col.email) lines.push(`Email: ${col.email}`);
-        if (col.phone) lines.push(`Phone: ${col.phone}`);
-        if (col.customer_id) lines.push(`Customer ID: ${col.customer_id}`);
-        lines.push("Issue: Portal login assistance");
-        const ea = {
-          subject: "Support - Portal Login",
-          priority: "medium",
-          message: {
-            message: `${args.message || "Portal login request"}\n\n--- Customer Details ---\n${lines.join("\n")}`,
-          },
-          customer_id: col.customer_id || null,
-        };
-        try {
-          const er = await sendTicketEmail(null, ea, col, true);
-          return JSON.stringify({ success: true, email_sent: er.sent });
-        } catch (e) {
-          return JSON.stringify({ success: false, error: e.message });
-        }
+        return JSON.stringify(ticketResult);
       }
 
       if (fn === "get_ticket_types")
@@ -11643,62 +12151,66 @@ export function setupRealtimeVoice(io, deps) {
             "admin/support/tickets-statuses",
           ),
         });
+
       return JSON.stringify({ error: `Unknown tool: ${fn}` });
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  CLIENT AUDIO → OPENAI
-    // ═══════════════════════════════════════════════════════════════════════
+    // ═══════════════ Client Audio → OpenAI ════════════════
     let lastAudioLog = 0;
     socket.on("audio_chunk", (b64) => {
-      if (
+      const shouldSuppress =
         awaitingStructuredInput ||
         pendingFunctionCalls > 0 ||
         session.finalLock ||
-        finalMessageLock
-      )
-        return;
+        finalMessageLock;
+      if (shouldSuppress) return;
       const now = Date.now();
       if (now - lastAudioLog > 2000) {
-        console.log(
-          `🎤 [${socket.id}] [OpenAI:${["CONNECTING", "OPEN", "CLOSING", "CLOSED"][openaiWs?.readyState] || "?"}]`,
-        );
+        const state =
+          ["CONNECTING", "OPEN", "CLOSING", "CLOSED"][openaiWs?.readyState] ||
+          "UNKNOWN";
+        console.log(`🎤 [${socket.id}] [OpenAI: ${state}]`);
         lastAudioLog = now;
       }
-      if (openaiWs?.readyState === WebSocket.OPEN)
+      if (openaiWs?.readyState === WebSocket.OPEN) {
         openaiWs.send(
           JSON.stringify({ type: "input_audio_buffer.append", audio: b64 }),
         );
+      }
     });
 
     socket.on("audio_done", () => {
-      console.log(`🔊 audio_done — playback complete`);
+      console.log(`🔊 [FSM] Client audio_done — browser playback complete`);
       assistantSpeaking = false;
       elevenLabsStreaming = false;
-      const pkg = lastResponseWasPackage;
+
+      const isPackage = lastResponseWasPackage;
       lastResponseWasPackage = false;
-      TimerManager.startSilence(pkg);
+      TimerManager.startSilence(isPackage);
     });
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  STRUCTURED INPUT
-    // ═══════════════════════════════════════════════════════════════════════
+    // ═══════════════ Structured Input ══════════════════
     socket.on("structured_input", (payload) => {
       if (!payload || !payload.field || !payload.value) return;
       const { field, value } = payload;
+
       if (field === "email") {
-        const pe = parseVoiceEmail(value) || value;
-        session.collected.email = pe;
+        const parsedEmail = parseVoiceEmail(value) || value;
+        session.collected.email = parsedEmail;
         session.collected._emailStepComplete = true;
         pendingEmailConfirmation = null;
         emailConfirmationAsked = false;
         sessions.set(session.id, session);
         if (salesStep === "email") advanceSalesStep("email");
+
         awaitingStructuredInput = false;
-        const msg = `My email is ${pe}`;
-        session.messages.push({ role: "user", content: msg });
+        structuredInputField = null;
+
+        const userMessage = `My email is ${parsedEmail}`;
+        session.messages.push({ role: "user", content: userMessage });
         sessions.set(session.id, session);
-        socket.emit("user_transcript", msg);
+        socket.emit("user_transcript", userMessage);
+
         if (openaiWs?.readyState === WebSocket.OPEN) {
           openaiWs.send(
             JSON.stringify({
@@ -11706,11 +12218,14 @@ export function setupRealtimeVoice(io, deps) {
               item: {
                 type: "message",
                 role: "user",
-                content: [{ type: "input_text", text: msg }],
+                content: [{ type: "input_text", text: userMessage }],
               },
             }),
           );
-          const hint = buildSalesStepHint() || "";
+          const salesHint = buildSalesStepHint() || "";
+          const hint =
+            `Customer email confirmed via typed input: ${parsedEmail}. _emailStepComplete=true. ` +
+            `Do NOT ask about email again. Do NOT call extract_call_fields with email. ${salesHint}`;
           openaiWs.send(
             JSON.stringify({
               type: "conversation.item.create",
@@ -11718,26 +12233,28 @@ export function setupRealtimeVoice(io, deps) {
                 type: "message",
                 role: "user",
                 content: [
-                  {
-                    type: "input_text",
-                    text: `[SYSTEM_CONTEXT]: Email confirmed via typed input: ${pe}. _emailStepComplete=true. Do NOT ask about email. ${hint}`,
-                  },
+                  { type: "input_text", text: `[SYSTEM_CONTEXT]: ${hint}` },
                 ],
               },
             }),
           );
           scheduleResponseCreate();
         }
-        socket.emit("structured_input_accepted", { field, value: pe });
+
+        socket.emit("structured_input_accepted", { field, value: parsedEmail });
         socket.emit("status", "listening");
         return;
       }
+
       TimerManager.clearSilence();
       awaitingStructuredInput = false;
-      const msg = `My ${field} is ${value}`;
-      session.messages.push({ role: "user", content: msg });
+      structuredInputField = null;
+
+      const userMessage = `My ${field} is ${value}`;
+      session.messages.push({ role: "user", content: userMessage });
       sessions.set(session.id, session);
-      socket.emit("user_transcript", msg);
+      socket.emit("user_transcript", userMessage);
+
       if (openaiWs?.readyState === WebSocket.OPEN) {
         openaiWs.send(
           JSON.stringify({
@@ -11745,19 +12262,18 @@ export function setupRealtimeVoice(io, deps) {
             item: {
               type: "message",
               role: "user",
-              content: [{ type: "input_text", text: msg }],
+              content: [{ type: "input_text", text: userMessage }],
             },
           }),
         );
         scheduleResponseCreate();
       }
+
       socket.emit("structured_input_accepted", { field, value });
       socket.emit("status", "listening");
     });
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  CLEANUP
-    // ═══════════════════════════════════════════════════════════════════════
+    // ═══════════════ Cleanup ════════════════
     socket.on("disconnect", () => {
       console.log(`🔌 Disconnected: ${socket.id}`);
       TimerManager.clearAll();
@@ -11769,27 +12285,30 @@ export function setupRealtimeVoice(io, deps) {
       sessions.delete(session.id);
     });
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  BOOT
-    // ═══════════════════════════════════════════════════════════════════════
+    // ═══════════════ Boot ════════════════
     (async () => {
       try {
         console.log("⏳ Connecting OpenAI Realtime...");
         await connectOpenAI();
-        console.log("✅ OpenAI connected. Waiting for ElevenLabs...");
+        console.log("✅ OpenAI connected! Waiting for ElevenLabs...");
         socket.emit("connections_ready");
-        let elWait = 0;
-        while (!elevenLabsReady && elWait < 3000) {
+
+        let elWaitMs = 0;
+        while (!elevenLabsReady && elWaitMs < 3000) {
           await new Promise((r) => setTimeout(r, 100));
-          elWait += 100;
+          elWaitMs += 100;
         }
-        if (!elevenLabsReady)
-          console.warn(`⚠️ ElevenLabs not ready after ${elWait}ms`);
-        else console.log(`✅ ElevenLabs ready after ${elWait}ms`);
+        if (!elevenLabsReady) {
+          console.warn(
+            `⚠️ ElevenLabs not ready after ${elWaitMs}ms — proceeding anyway`,
+          );
+        }
+
         if (!session.hasGreeted) {
           session.hasGreeted = true;
-          if (openaiWs?.readyState === WebSocket.OPEN)
+          if (openaiWs?.readyState === WebSocket.OPEN) {
             openaiWs.send(JSON.stringify({ type: "response.create" }));
+          }
           sessions.set(session.id, session);
         } else {
           socket.emit("status", "listening");
