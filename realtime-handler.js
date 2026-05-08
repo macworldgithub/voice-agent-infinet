@@ -15392,14 +15392,43 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
     }
 
     // ── Detect user confirming email (YES) or rejecting (NO)
+    // function detectEmailConfirmation(text) {
+    //   if (!text) return null;
+    //   const lower = text.toLowerCase().trim();
+    //   if (/\b(yes|yeah|yep|yup|correct|that's right|that is correct|that's correct|perfect|looks good|confirmed|confirm)\b/.test(lower)) return "yes";
+    //   if (/\b(no|nope|wrong|incorrect|that's wrong|that is wrong|change it|try again|re-spell|different)\b/.test(lower)) return "no";
+    //   return null;
+    // }
     function detectEmailConfirmation(text) {
-      if (!text) return null;
-      const lower = text.toLowerCase().trim();
-      if (/\b(yes|yeah|yep|yup|correct|that's right|that is correct|that's correct|perfect|looks good|confirmed|confirm)\b/.test(lower)) return "yes";
-      if (/\b(no|nope|wrong|incorrect|that's wrong|that is wrong|change it|try again|re-spell|different)\b/.test(lower)) return "no";
-      return null;
-    }
+  if (!text) return null;
 
+  const lower = text.toLowerCase().trim();
+
+  const yesPatterns = [
+    /\b(yes|yeah|yep|yup|correct|confirmed|confirm|perfect|looks good|sounds good|okay|ok|right|true|exactly|absolutely|definitely|certainly|sure|indeed)\b/i,
+    /\b(yes\s+(?:it'?s\s+)?correct)\b/i,
+    /\b(yes\s+(?:that'?s\s+|this\s+is\s+)?correct)\b/i,
+    /\b(that'?s\s+right)\b/i,
+    /\b(that'?s\s+correct)\b/i,
+    /\b(that\s+is\s+correct)\b/i,
+    /\b(it'?s\s+correct)\b/i,
+    /\b(it\s+is\s+correct)\b/i,
+    /\b(looks\s+correct)\b/i,
+    /\b(exactly\s+right)\b/i,
+    /\b(all\s+good)\b/i,
+    /\b(go\s+ahead)\b/i,
+    /\b(proceed)\b/i
+  ];
+
+  const noPatterns = [
+    /\b(no|nope|wrong|incorrect|change it|try again|re-spell|different|not correct|that'?s wrong|that is wrong|not right|fix it)\b/i
+  ];
+
+  if (yesPatterns.some((re) => re.test(lower))) return "yes";
+  if (noPatterns.some((re) => re.test(lower))) return "no";
+
+  return null;
+}
     function detectSalesStepAnswer(text) {
       if (!salesStep || salesStep === "done" || salesStep === "createTicket") return;
 
