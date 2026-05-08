@@ -10527,6 +10527,20 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
       );
     }
 
+    function extractEmailFromConversation() {
+      const msgs = session.messages || [];
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        const content = msgs[i].content || "";
+        const match = content.match(
+          /\b([a-z0-9._+-]+@[a-z0-9.-]+\.[a-z]{2,})\b/i,
+        );
+        if (match) {
+          return match[1].toLowerCase();
+        }
+      }
+      return null;
+    }
+
     function detectEmailConfirmation(text) {
       if (!text) return null;
       const lower = text.toLowerCase().trim();
@@ -11027,8 +11041,26 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
           }
 
           // ══════════════════════════════════════════════════════════
-          // EMAIL CONFIRMATION CHECK
+          // EMAIL CONFIRMATION CHECK (with fallback extraction)
           // ══════════════════════════════════════════════════════════
+          if (salesStep === "email") {
+            if (!pendingEmailConfirmation && emailConfirmationAsked) {
+              const fallbackEmail = extractEmailFromConversation();
+              if (fallbackEmail) {
+                pendingEmailConfirmation = {
+                  raw: fallbackEmail,
+                  parsed: fallbackEmail,
+                };
+                dbg(
+                  "sales",
+                  "email_fallback_extracted_from_conversation",
+                  "restored",
+                  { email: fallbackEmail },
+                );
+              }
+            }
+          }
+
           if (
             salesStep === "email" &&
             emailConfirmationAsked &&
@@ -11504,6 +11536,19 @@ STEP 2: THEN call create_ticket IMMEDIATELY. Do NOT say anything to the user fir
       if (fn === "create_ticket" && session.collected._ticketConfirmed) {
         pendingTicketArgs = null;
         pendingTicketConfirmation = false;
+      }
+
+      // AUTO-EXTRACT EMAIL from conversation if missing (no gate, just capture it)
+      if (fn === "create_ticket" && !session.collected.email) {
+        const autoEmail = extractEmailFromConversation();
+        if (autoEmail) {
+          session.collected.email = autoEmail;
+          session.collected._emailStepComplete = true;
+          sessions.set(session.id, session);
+          dbg("sales", "email_auto_extracted_for_create_ticket", "auto_saved", {
+            email: autoEmail,
+          });
+        }
       }
 
       // Redirect verify_phone for sales (non-verified) flow
